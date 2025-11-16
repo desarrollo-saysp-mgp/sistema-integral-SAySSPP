@@ -37,7 +37,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 - [ ] Create database schema in Supabase using scripts from `docs/database.md`
 - [ ] Set up Row Level Security (RLS) policies
 - [x] Configure authentication with Supabase Auth
-- [ ] Create user context and authentication hooks
+- [x] Create user context and authentication hooks
 - [x] Set up protected routes middleware
 - [ ] Create base layout components (header, sidebar, footer)
 
@@ -544,12 +544,21 @@ After completing each task:
 
 **Current Phase**: Phase 1 - Project Setup & Infrastructure
 
-**Completed Tasks**: 5/9 Phase 1 tasks complete
+**Completed Tasks**: 6/9 Phase 1 tasks complete
+
+**Latest Completed**: User context and authentication hooks (feat/user-context-hooks)
+- ✅ UserContext provider with role detection implemented
+- ✅ useUser hook created and tested (7/7 tests passing)
+- ✅ Comprehensive test suite with mocked Supabase client
+- ✅ TypeScript strict mode compliance verified
+
+**Next Task**: Create base layout components (header, sidebar, footer)
 
 **Notes**:
 - ✅ Next.js 15, TypeScript, Tailwind CSS, and shadcn/ui configured
 - ✅ Supabase clients and authentication infrastructure set up
 - ✅ Login page implemented with email/password authentication
-- ✅ Basic middleware for session management in place
-- ⏳ Remaining: Database schema creation, RLS policies, user context hooks, and layout components
+- ✅ Session management middleware in place
+- ✅ Client-side auth context with role-based access control
+- ⏳ Remaining: Database schema creation, RLS policies, and layout components
 - 📝 Database schema and RLS policies require manual SQL execution in Supabase dashboard
