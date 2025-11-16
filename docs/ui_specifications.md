@@ -8,21 +8,80 @@
 - **Fast**: Optimized loading and interactions
 - **User-Friendly**: Clear navigation and intuitive forms
 
-## Color Scheme (Suggested)
+## 🎨 Paleta de Colores Institucional
+
+### Colores Principales
+
+- **Azul claro institucional** (Primary)
+  - HEX: `#5CADEB`
+  - RGB: `92, 173, 235`
+  - Uso: Botones primarios, enlaces, encabezados destacados
+
+- **Azul oscuro** (Primary Dark)
+  - HEX: `#0E3F75`
+  - RGB: `14, 63, 117`
+  - Uso: Header, navegación, footer, textos importantes
+
+- **Azul medio / celeste** (Secondary)
+  - HEX: `#88C1ED`
+  - RGB: `136, 193, 237`
+  - Uso: Elementos secundarios, hover states, badges
+
+### Colores de Superficie y Texto
+
+- **Gris muy claro** (Background)
+  - HEX: `#F5F6F8`
+  - RGB: `245, 246, 248`
+  - Uso: Fondo de página, áreas de contenido
+
+- **Gris claro** (Border/Divider)
+  - HEX: `#D9DDE3`
+  - RGB: `217, 221, 227`
+  - Uso: Bordes, divisores, elementos deshabilitados
+
+- **Negro / gris oscuro** (Text)
+  - HEX: `#333333`
+  - RGB: `51, 51, 51`
+  - Uso: Texto principal, contenido
+
+### Variables CSS
 
 ```css
 :root {
-  --primary: #2563eb;      /* Blue for primary actions */
-  --secondary: #64748b;    /* Gray for secondary elements */
-  --success: #10b981;      /* Green for success states */
-  --warning: #f59e0b;      /* Orange for warnings */
-  --danger: #ef4444;       /* Red for errors/critical actions */
-  --background: #f8fafc;   /* Light background */
-  --surface: #ffffff;      /* Card/surface background */
-  --text: #1e293b;         /* Primary text */
-  --text-muted: #64748b;   /* Secondary text */
+  /* Institutional Colors */
+  --primary: #5CADEB;           /* Azul claro institucional */
+  --primary-dark: #0E3F75;      /* Azul oscuro */
+  --secondary: #88C1ED;         /* Azul medio / celeste */
+
+  /* Neutral Colors */
+  --background: #F5F6F8;        /* Gris muy claro */
+  --surface: #FFFFFF;           /* Blanco para cards */
+  --border: #D9DDE3;            /* Gris claro */
+  --text: #333333;              /* Negro / gris oscuro */
+  --text-muted: #64748b;        /* Texto secundario */
+
+  /* Status Colors (complement institutional palette) */
+  --success: #10b981;           /* Verde para estados exitosos */
+  --warning: #f59e0b;           /* Naranja para advertencias */
+  --danger: #ef4444;            /* Rojo para errores */
 }
 ```
+
+### Guía de Uso
+
+**Botones:**
+- Primarios: `--primary` (#5CADEB) con hover en `--primary-dark` (#0E3F75)
+- Secundarios: `--secondary` (#88C1ED)
+- Destructivos: `--danger` (#ef4444)
+
+**Navegación:**
+- Header/Sidebar: `--primary-dark` (#0E3F75)
+- Elementos activos: `--primary` (#5CADEB)
+
+**Formularios:**
+- Campos: Borde `--border` (#D9DDE3)
+- Focus: `--primary` (#5CADEB)
+- Error: `--danger` (#ef4444)
 
 ## Layout Structure
 
