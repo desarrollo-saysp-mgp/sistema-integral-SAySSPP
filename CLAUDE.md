@@ -44,7 +44,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 ### Phase 2: Authentication & User Management
 
 - [x] Implement login page with email/password
-- [ ] Implement password reset flow
+- [x] Implement password reset flow
 - [ ] Create user context provider with role detection
 - [ ] Implement protected route middleware for admin/administrative roles
 - [x] Create admin user management page (`/admin/users`)
@@ -558,26 +558,30 @@ After completing each task:
 **Completed Tasks**:
 
 - ✅ Phase 1 complete: 9/9 tasks (100%)
-- ⏳ Phase 2: 5/9 tasks (56%)
+- ⏳ Phase 2: 6/9 tasks (67%)
 
-**Latest Completed**: Admin user management system (feat/admin-user-management)
+**Latest Completed**: Password reset flow (feat/password-reset-flow)
 
-- ✅ Complete CRUD API routes for user operations (/api/users, /api/users/[id])
-- ✅ useUsers custom hook with filtering and error handling
-- ✅ UserTable component with search, role filter, and inline actions
-- ✅ UserForm component with validation and edit/create modes
-- ✅ Admin users page with full user lifecycle management
-- ✅ Integration with Supabase Auth for user creation and updates
-- ✅ Comprehensive unit tests (36/36 passing, including 18 new tests)
-- ✅ Spanish language UI with proper error messages
-- ✅ TypeScript strict mode compliance
-- ✅ Placeholder dashboard pages for routing
+- ✅ Password reset request page (/reset-password) with email validation
+- ✅ Password reset confirmation page (/reset-password/confirm) with session validation
+- ✅ Password visibility toggles for new password fields
+- ✅ "Forgot password" link added to login page
+- ✅ Comprehensive unit tests (16 new tests: 7 for request page, 9 for confirm page)
+- ✅ All user-facing text in Spanish
+- ✅ 51/51 tests passing (100% coverage)
+- ✅ Integration with Supabase Auth (resetPasswordForEmail, updateUser)
+
+**Previous Completions**:
+
+- Admin user management system (feat/admin-user-management)
+  - Complete CRUD API routes, useUsers hook, UserTable, UserForm components
+  - 36/36 tests passing with 18 new tests
 
 **Next Task**: Options for Phase 2 -
 
-1. Implement password reset flow
-2. Create user context provider with role detection (may be partially complete)
-3. Implement protected route middleware for admin/administrative roles
+1. Create user context provider with role detection (may be partially complete)
+2. Implement protected route middleware for admin/administrative roles
+3. Create invitation email system for new users
 
 **Phase 1 Completions**:
 
