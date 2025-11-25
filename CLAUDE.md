@@ -45,7 +45,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 
 - [x] Implement login page with email/password
 - [x] Implement password reset flow
-- [ ] Create user context provider with role detection
+- [x] Create user context provider with role detection
 - [ ] Implement protected route middleware for admin/administrative roles
 - [x] Create admin user management page (`/admin/users`)
 - [x] Implement user creation form with role assignment
@@ -558,30 +558,31 @@ After completing each task:
 **Completed Tasks**:
 
 - ✅ Phase 1 complete: 9/9 tasks (100%)
-- ⏳ Phase 2: 6/9 tasks (67%)
+- ⏳ Phase 2: 7/9 tasks (78%)
 
-**Latest Completed**: Password reset flow (feat/password-reset-flow)
+**Latest Completed**: User context provider enhancements (feat/enhance-user-context-role-detection)
 
-- ✅ Password reset request page (/reset-password) with email validation
-- ✅ Password reset confirmation page (/reset-password/confirm) with session validation
-- ✅ Password visibility toggles for new password fields
-- ✅ "Forgot password" link added to login page
-- ✅ Comprehensive unit tests (16 new tests: 7 for request page, 9 for confirm page)
-- ✅ All user-facing text in Spanish
+- ✅ Enhanced UserContext with additional role detection helpers
+- ✅ Added isAdministrative helper for symmetry with isAdmin
+- ✅ Added hasRole(role) function for flexible role checking
+- ✅ Updated all tests to verify new helpers
 - ✅ 51/51 tests passing (100% coverage)
-- ✅ Integration with Supabase Auth (resetPasswordForEmail, updateUser)
+- ✅ Fully integrated in root layout with UserProvider
 
 **Previous Completions**:
 
+- Password reset flow (feat/password-reset-flow)
+  - Reset request/confirmation pages, email validation, session validation
+  - 16 new tests, Supabase Auth integration
+
 - Admin user management system (feat/admin-user-management)
   - Complete CRUD API routes, useUsers hook, UserTable, UserForm components
-  - 36/36 tests passing with 18 new tests
+  - 18 new tests
 
 **Next Task**: Options for Phase 2 -
 
-1. Create user context provider with role detection (may be partially complete)
-2. Implement protected route middleware for admin/administrative roles
-3. Create invitation email system for new users
+1. Implement protected route middleware for admin/administrative roles
+2. Create invitation email system for new users
 
 **Phase 1 Completions**:
 

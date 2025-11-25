@@ -16,7 +16,9 @@ interface UserContextType {
   profile: User | null;
   loading: boolean;
   isAdmin: boolean;
+  isAdministrative: boolean;
   isAuthenticated: boolean;
+  hasRole: (role: "Admin" | "Administrative") => boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -111,7 +113,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     profile,
     loading,
     isAdmin: profile?.role === "Admin",
+    isAdministrative: profile?.role === "Administrative",
     isAuthenticated: !!user,
+    hasRole: (role: "Admin" | "Administrative") => profile?.role === role,
     refreshProfile,
   };
 
