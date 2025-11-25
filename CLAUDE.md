@@ -46,7 +46,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 - [x] Implement login page with email/password
 - [x] Implement password reset flow
 - [x] Create user context provider with role detection
-- [ ] Implement protected route middleware for admin/administrative roles
+- [x] Implement protected route middleware for admin/administrative roles
 - [x] Create admin user management page (`/admin/users`)
 - [x] Implement user creation form with role assignment
 - [x] Implement user editing functionality
@@ -558,18 +558,24 @@ After completing each task:
 **Completed Tasks**:
 
 - ✅ Phase 1 complete: 9/9 tasks (100%)
-- ⏳ Phase 2: 7/9 tasks (78%)
+- ⏳ Phase 2: 8/9 tasks (89%)
 
-**Latest Completed**: User context provider enhancements (feat/enhance-user-context-role-detection)
+**Latest Completed**: Protected route middleware (feat/protected-route-middleware)
 
-- ✅ Enhanced UserContext with additional role detection helpers
-- ✅ Added isAdministrative helper for symmetry with isAdmin
-- ✅ Added hasRole(role) function for flexible role checking
-- ✅ Updated all tests to verify new helpers
-- ✅ 51/51 tests passing (100% coverage)
-- ✅ Fully integrated in root layout with UserProvider
+- ✅ Implemented role-based route protection in Next.js middleware
+- ✅ Protected `/admin/*` routes (Admin only)
+- ✅ Protected `/dashboard/*` routes (authenticated users only)
+- ✅ Automatic redirect to login for unauthenticated users with return URL
+- ✅ Automatic redirect to dashboard for non-admin users accessing admin routes
+- ✅ Automatic redirect to dashboard for authenticated users on login page
+- ✅ Comprehensive middleware tests (10 new tests)
+- ✅ 61/61 tests passing (100% coverage)
 
 **Previous Completions**:
+
+- User context provider enhancements (feat/enhance-user-context-role-detection)
+  - Added isAdministrative and hasRole() helpers
+  - 51/51 tests passing
 
 - Password reset flow (feat/password-reset-flow)
   - Reset request/confirmation pages, email validation, session validation
@@ -579,10 +585,11 @@ After completing each task:
   - Complete CRUD API routes, useUsers hook, UserTable, UserForm components
   - 18 new tests
 
-**Next Task**: Options for Phase 2 -
+**Next Task**: Phase 2 final task -
 
-1. Implement protected route middleware for admin/administrative roles
-2. Create invitation email system for new users
+1. Create invitation email system for new users
+
+Or move to Phase 3: Service & Cause Configuration
 
 **Phase 1 Completions**:
 
