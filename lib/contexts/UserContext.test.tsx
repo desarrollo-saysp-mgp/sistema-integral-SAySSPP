@@ -20,7 +20,15 @@ vi.mock("@/lib/supabase/client", () => ({
 
 // Test component that uses the hook
 function TestComponent() {
-  const { user, profile, loading, isAdmin, isAuthenticated } = useUser();
+  const {
+    user,
+    profile,
+    loading,
+    isAdmin,
+    isAdministrative,
+    isAuthenticated,
+    hasRole,
+  } = useUser();
 
   if (loading) {
     return <div>Loading...</div>;
@@ -32,6 +40,15 @@ function TestComponent() {
         {isAuthenticated ? "true" : "false"}
       </div>
       <div data-testid="is-admin">{isAdmin ? "true" : "false"}</div>
+      <div data-testid="is-administrative">
+        {isAdministrative ? "true" : "false"}
+      </div>
+      <div data-testid="has-admin-role">
+        {hasRole("Admin") ? "true" : "false"}
+      </div>
+      <div data-testid="has-administrative-role">
+        {hasRole("Administrative") ? "true" : "false"}
+      </div>
       {profile && <div data-testid="profile-name">{profile.full_name}</div>}
       {profile && <div data-testid="profile-role">{profile.role}</div>}
       {user && <div data-testid="user-email">{user.email}</div>}
@@ -92,6 +109,13 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
+        "false",
+      );
+      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
+      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
+        "false",
+      );
     });
   });
 
@@ -137,6 +161,13 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("true");
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
+        "false",
+      );
+      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("true");
+      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
+        "false",
+      );
       expect(screen.getByTestId("profile-name")).toHaveTextContent(
         "Admin User",
       );
@@ -189,6 +220,11 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent("true");
+      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
+      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
+        "true",
+      );
       expect(screen.getByTestId("profile-name")).toHaveTextContent(
         "Regular User",
       );
@@ -231,6 +267,13 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
+        "false",
+      );
+      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
+      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
+        "false",
+      );
       expect(screen.queryByTestId("profile-name")).not.toBeInTheDocument();
     });
   });
