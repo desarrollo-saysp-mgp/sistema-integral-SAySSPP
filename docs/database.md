@@ -8,7 +8,7 @@ erDiagram
     SERVICES ||--o{ CAUSES : has
     SERVICES ||--o{ COMPLAINTS : categorizes
     CAUSES ||--o{ COMPLAINTS : specifies
-    
+
     USERS {
         uuid id PK
         varchar(100) full_name
@@ -17,7 +17,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     COMPLAINTS {
         bigserial id PK
         varchar(20) complaint_number UK
@@ -38,7 +38,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     SERVICES {
         bigserial id PK
         varchar(100) name UK
@@ -46,7 +46,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     CAUSES {
         bigserial id PK
         bigint service_id FK
@@ -362,7 +362,7 @@ Combines complaint information with related data for easier querying:
 
 ```sql
 CREATE VIEW complaint_details AS
-SELECT 
+SELECT
     c.id,
     c.complaint_number,
     c.complaint_date,
@@ -392,6 +392,7 @@ JOIN users u ON c.loaded_by = u.id;
 ### Google Sheets Sync
 
 The system maintains a real-time backup to Google Sheets using:
+
 - Supabase Database Webhooks or
 - Scheduled Google Apps Script that queries the database API
 - Sync frequency: Every 15 minutes or on complaint creation/update
@@ -399,6 +400,7 @@ The system maintains a real-time backup to Google Sheets using:
 ### Fields to Sync
 
 All complaint fields plus:
+
 - Service name (instead of ID)
 - Cause name (instead of ID)
 - Loaded by name (instead of user ID)

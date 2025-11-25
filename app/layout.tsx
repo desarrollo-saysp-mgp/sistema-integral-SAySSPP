@@ -16,7 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Sistema de Gestión de Reclamos",
-  description: "Portal interno para la gestión de reclamos ciudadanos - Secretaría Municipal",
+  description:
+    "Portal interno para la gestión de reclamos ciudadanos - Secretaría Municipal",
 };
 
 export default function RootLayout({

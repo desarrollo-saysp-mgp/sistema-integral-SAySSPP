@@ -92,6 +92,7 @@ When cloning the repository for the first time:
 1. **Create a Supabase project** at [supabase.com](https://supabase.com)
 
 2. **Configure environment variables** in `.env.local`:
+
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your-project-url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
@@ -135,7 +136,8 @@ GOOGLE_PRIVATE_KEY=your-private-key
 
 **Desktop-first design**: This application is optimized for desktop browsers and large screens.
 
-**Recommended browsers**: 
+**Recommended browsers**:
+
 - Google Chrome (latest)
 - Firefox (latest)
 - Safari (latest)
@@ -194,15 +196,17 @@ complaint-management-system/
 ```
 
 **Note**: The `@/*` path alias is configured in `tsconfig.json` to allow clean imports like:
+
 ```typescript
-import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
-import { Complaint } from '@/types/database'
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { Complaint } from "@/types/database";
 ```
 
 ## Key Features
 
 ### Complaint Management
+
 - Create complaints with auto-generated numbers (SASP-R000000 format)
 - Track status: En proceso → Resuelto/No resuelto
 - Link complaints to services and causes
@@ -210,21 +214,25 @@ import { Complaint } from '@/types/database'
 - View complaint history and audit trail
 
 ### User Management (Admin Only)
+
 - Create users with role assignment (Admin/Administrative)
 - Manage user permissions and access levels
 - Send invitation emails with temporary passwords
 
 ### Service Configuration (Admin Only)
+
 - Create and manage service categories
 - Define causes for each service
 - Cascading dropdowns in complaint forms
 
 ### Data Backup
+
 - Automatic synchronization with Google Sheets
 - Real-time or scheduled updates (configurable)
 - Backup retention for disaster recovery
 
 ### Security
+
 - Row-level security (RLS) policies in Supabase
 - Role-based access control (RBAC)
 - OAuth authentication with Supabase Auth
@@ -274,6 +282,7 @@ npm start
 ### Common Issues
 
 **Development server won't start**
+
 ```bash
 # Clear node_modules and reinstall
 rm -rf node_modules package-lock.json
@@ -281,16 +290,19 @@ npm install
 ```
 
 **Database connection issues**
+
 - Verify Supabase URL and keys in `.env.local`
 - Check if RLS policies are properly configured
 - Ensure your Supabase project is active
 
 **Authentication not working**
+
 - Verify `NEXT_PUBLIC_SUPABASE_ANON_KEY` is correctly set
 - Check Supabase Auth configuration
 - Ensure cookies are enabled in browser
 
 **Build fails with TypeScript errors**
+
 ```bash
 # Run type checking to see detailed errors
 npm run type-check
@@ -301,6 +313,7 @@ npm run build
 ```
 
 **Tests failing**
+
 ```bash
 # Update test snapshots if component changes are intentional
 npm test -- --updateSnapshot

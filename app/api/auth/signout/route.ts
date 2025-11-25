@@ -1,17 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
 
 export async function POST() {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const { error } = await supabase.auth.signOut()
+  const { error } = await supabase.auth.signOut();
 
   if (error) {
-    return NextResponse.json(
-      { error: 'Error signing out' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Error signing out" }, { status: 500 });
   }
 
-  return NextResponse.json({ message: 'Signed out successfully' })
+  return NextResponse.json({ message: "Signed out successfully" });
 }
