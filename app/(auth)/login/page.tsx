@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -86,6 +87,14 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
               />
+            </div>
+            <div className="flex justify-end">
+              <Link
+                href="/reset-password"
+                className="text-sm text-primary hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
             </div>
           </CardContent>
           <CardFooter>
