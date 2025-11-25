@@ -41,7 +41,6 @@ export function UserForm({
   const [formData, setFormData] = useState<UserFormData>({
     full_name: "",
     email: "",
-    password: "",
     role: "Administrative",
   });
 
@@ -56,7 +55,6 @@ export function UserForm({
       setFormData({
         full_name: user.full_name,
         email: user.email,
-        password: "",
         role: user.role,
       });
       setErrors({});
@@ -64,7 +62,6 @@ export function UserForm({
       setFormData({
         full_name: "",
         email: "",
-        password: "",
         role: "Administrative",
       });
       setErrors({});
@@ -82,14 +79,6 @@ export function UserForm({
       newErrors.email = "El email es requerido";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "El email no es válido";
-    }
-
-    if (!isEditing && !formData.password) {
-      newErrors.password = "La contraseña es requerida";
-    }
-
-    if (formData.password && formData.password.length < 6) {
-      newErrors.password = "La contraseña debe tener al menos 6 caracteres";
     }
 
     if (!formData.role) {
@@ -110,19 +99,7 @@ export function UserForm({
     setIsSubmitting(true);
 
     try {
-      // For editing, only send fields that are provided
-      const submitData: Partial<UserFormData> = {
-        full_name: formData.full_name,
-        email: formData.email,
-        role: formData.role,
-      };
-
-      // Only include password if it's set
-      if (formData.password) {
-        submitData.password = formData.password;
-      }
-
-      const result = await onSubmit(submitData as UserFormData);
+      const result = await onSubmit(formData);
 
       if (result.success) {
         onOpenChange(false);
@@ -151,8 +128,8 @@ export function UserForm({
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifica los datos del usuario. Los campos vacíos no serán actualizados."
-              : "Completa los datos para crear un nuevo usuario en el sistema."}
+              ? "Modifica los datos del usuario."
+              : "Completa los datos para crear un nuevo usuario. Se enviará un email de invitación automáticamente para que el usuario configure su contraseña."}
           </DialogDescription>
         </DialogHeader>
 
@@ -187,37 +164,15 @@ export function UserForm({
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 className={errors.email ? "border-destructive" : ""}
+                disabled={isEditing}
               />
               {errors.email && (
                 <p className="text-sm text-destructive">{errors.email}</p>
               )}
-            </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password">
-                Contraseña{" "}
-                {!isEditing && <span className="text-destructive">*</span>}
-                {isEditing && (
-                  <span className="text-sm text-muted-foreground">
-                    (opcional)
-                  </span>
-                )}
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={
-                  isEditing
-                    ? "Dejar vacío para mantener la actual"
-                    : "Mínimo 6 caracteres"
-                }
-                value={formData.password}
-                onChange={(e) => handleChange("password", e.target.value)}
-                className={errors.password ? "border-destructive" : ""}
-              />
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password}</p>
+              {!isEditing && (
+                <p className="text-sm text-muted-foreground">
+                  Se enviará un email de invitación a esta dirección
+                </p>
               )}
             </div>
 

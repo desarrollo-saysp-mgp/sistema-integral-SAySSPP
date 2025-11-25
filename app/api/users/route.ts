@@ -110,14 +110,13 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { full_name, email, password, role } = body;
+    const { full_name, email, role } = body;
 
     // Validate required fields
-    if (!full_name || !email || !password || !role) {
+    if (!full_name || !email || !role) {
       return NextResponse.json(
         {
-          error:
-            "Todos los campos son requeridos: full_name, email, password, role",
+          error: "Todos los campos son requeridos: full_name, email, role",
         },
         { status: 400 },
       );
@@ -131,12 +130,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in Supabase Auth using admin client
+    // Invite user via email - this sends an invitation email automatically
     const { data: newAuthUser, error: authCreateError } =
-      await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
+      await supabase.auth.admin.inviteUserByEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard`,
       });
 
     if (authCreateError || !newAuthUser.user) {

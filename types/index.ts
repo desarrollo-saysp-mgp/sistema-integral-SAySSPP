@@ -43,6 +43,5 @@ export interface UserFilters {
 export interface UserFormData {
   full_name: string;
   email: string;
-  password?: string;
   role: "Admin" | "Administrative";
 }
