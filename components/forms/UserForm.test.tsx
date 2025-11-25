@@ -36,7 +36,7 @@ describe("UserForm", () => {
     expect(screen.getByText("Crear nuevo usuario")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Completa los datos para crear un nuevo usuario en el sistema.",
+        /Se enviará un email de invitación automáticamente/,
       ),
     ).toBeInTheDocument();
   });
@@ -76,9 +76,6 @@ describe("UserForm", () => {
     expect(
       await screen.findByText("El email es requerido"),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText("La contraseña es requerida"),
-    ).toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
@@ -93,11 +90,10 @@ describe("UserForm", () => {
       />,
     );
 
-    // Fill required fields with email missing domain
+    // Fill required fields with invalid email
     await user.type(screen.getByLabelText(/Nombre completo/i), "Test User");
     const emailInput = screen.getByLabelText(/Email/i);
     await user.type(emailInput, "test@test");
-    await user.type(screen.getByLabelText(/Contraseña/i), "password123");
 
     const submitButton = screen.getByRole("button", { name: "Crear" });
     await user.click(submitButton);
@@ -108,29 +104,6 @@ describe("UserForm", () => {
       },
       { timeout: 2000 },
     );
-    expect(mockOnSubmit).not.toHaveBeenCalled();
-  });
-
-  it("should validate password length", async () => {
-    const user = userEvent.setup();
-    render(
-      <UserForm
-        user={null}
-        open={true}
-        onOpenChange={mockOnOpenChange}
-        onSubmit={mockOnSubmit}
-      />,
-    );
-
-    const passwordInput = screen.getByLabelText(/Contraseña/i);
-    await user.type(passwordInput, "123");
-
-    const submitButton = screen.getByRole("button", { name: "Crear" });
-    await user.click(submitButton);
-
-    expect(
-      await screen.findByText("La contraseña debe tener al menos 6 caracteres"),
-    ).toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
@@ -147,7 +120,6 @@ describe("UserForm", () => {
 
     await user.type(screen.getByLabelText(/Nombre completo/i), "Test User");
     await user.type(screen.getByLabelText(/Email/i), "test@example.com");
-    await user.type(screen.getByLabelText(/Contraseña/i), "password123");
 
     const submitButton = screen.getByRole("button", { name: "Crear" });
     await user.click(submitButton);
@@ -157,7 +129,6 @@ describe("UserForm", () => {
         expect.objectContaining({
           full_name: "Test User",
           email: "test@example.com",
-          password: "password123",
           role: "Administrative",
         }),
       );
@@ -206,7 +177,6 @@ describe("UserForm", () => {
 
     await user.type(screen.getByLabelText(/Nombre completo/i), "Test User");
     await user.type(screen.getByLabelText(/Email/i), "test@example.com");
-    await user.type(screen.getByLabelText(/Contraseña/i), "password123");
 
     const submitButton = screen.getByRole("button", { name: "Crear" });
     await user.click(submitButton);
@@ -233,7 +203,6 @@ describe("UserForm", () => {
 
     await user.type(screen.getByLabelText(/Nombre completo/i), "Test User");
     await user.type(screen.getByLabelText(/Email/i), "test@example.com");
-    await user.type(screen.getByLabelText(/Contraseña/i), "password123");
 
     const submitButton = screen.getByRole("button", { name: "Crear" });
     await user.click(submitButton);
