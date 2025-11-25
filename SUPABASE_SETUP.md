@@ -23,6 +23,7 @@ This document contains all SQL scripts needed to set up the database. Execute th
 ### Step 1: Create Tables (Execute in Order)
 
 #### 1.1 Services Table
+
 ```sql
 CREATE TABLE services (
     id BIGSERIAL PRIMARY KEY,
@@ -36,6 +37,7 @@ CREATE INDEX idx_services_active ON services(active);
 ```
 
 #### 1.2 Causes Table
+
 ```sql
 CREATE TABLE causes (
     id BIGSERIAL PRIMARY KEY,
@@ -52,6 +54,7 @@ CREATE INDEX idx_causes_active ON causes(active);
 ```
 
 #### 1.3 Users Table
+
 ```sql
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,6 +70,7 @@ CREATE INDEX idx_users_role ON users(role);
 ```
 
 #### 1.4 Complaints Table
+
 ```sql
 CREATE TABLE complaints (
     id BIGSERIAL PRIMARY KEY,
@@ -101,6 +105,7 @@ CREATE INDEX idx_complaints_number ON complaints(complaint_number);
 ### Step 2: Create Functions and Triggers
 
 #### 2.1 Update Timestamp Function
+
 ```sql
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -132,6 +137,7 @@ CREATE TRIGGER update_causes_updated_at
 ```
 
 #### 2.2 Auto-Generate Complaint Number
+
 ```sql
 CREATE OR REPLACE FUNCTION generate_complaint_number()
 RETURNS TRIGGER AS $$
@@ -152,6 +158,7 @@ CREATE TRIGGER set_complaint_number
 ### Step 3: Enable Row Level Security (RLS)
 
 #### 3.1 Users Table RLS
+
 ```sql
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
@@ -195,6 +202,7 @@ CREATE POLICY "Admins can update users"
 ```
 
 #### 3.2 Complaints Table RLS
+
 ```sql
 ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
 
@@ -215,6 +223,7 @@ CREATE POLICY "Authenticated users can update complaints"
 ```
 
 #### 3.3 Services and Causes RLS
+
 ```sql
 ALTER TABLE services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE causes ENABLE ROW LEVEL SECURITY;
@@ -372,14 +381,17 @@ After executing all scripts:
 ## Troubleshooting
 
 ### "Permission denied" errors
+
 - Ensure you're using the SQL Editor as the project owner
 - Check that your Supabase project is active (not paused)
 
 ### Foreign key constraint errors
+
 - Execute scripts in the exact order listed
 - Services and Users must exist before Complaints
 
 ### RLS blocking queries
+
 - Verify admin user exists in both Auth and users table
 - Check UUIDs match between Auth and users table
 - Test with RLS temporarily disabled if needed

@@ -92,6 +92,7 @@ When contributing to documentation:
 We use [Mermaid](https://mermaid.js.org/) for diagrams. Examples:
 
 **Entity Relationship Diagram**:
+
 ```mermaid
 erDiagram
     USERS ||--o{ COMPLAINTS : creates
@@ -99,6 +100,7 @@ erDiagram
 ```
 
 **Sequence Diagram**:
+
 ```mermaid
 sequenceDiagram
     User->>System: Create Complaint
@@ -117,7 +119,7 @@ graph TD
     B --> D[Google Sheets Backup]
     E[Admin Users] --> A
     F[Administrative Users] --> A
-    
+
     style A fill:#3b82f6
     style B fill:#3ecf8e
     style C fill:#3ecf8e
@@ -136,10 +138,10 @@ graph TD
 
 ### User Roles
 
-| Role | Permissions |
-|------|------------|
-| **Admin** | Full system access, user management, service configuration |
-| **Administrative** | Create/view complaints, read-only access to services |
+| Role               | Permissions                                                |
+| ------------------ | ---------------------------------------------------------- |
+| **Admin**          | Full system access, user management, service configuration |
+| **Administrative** | Create/view complaints, read-only access to services       |
 
 ## Common Tasks
 
@@ -171,6 +173,7 @@ graph TD
 ## API Documentation
 
 For detailed API endpoint specifications, refer to:
+
 - API routes in `/app/api/*`
 - Supabase client usage in `/lib/supabase/*`
 - Type definitions in `/types/*`
@@ -178,22 +181,22 @@ For detailed API endpoint specifications, refer to:
 ### Common API Patterns
 
 **Fetching complaints**:
+
 ```typescript
 const { data, error } = await supabase
-  .from('complaints')
-  .select('*, services(*), causes(*), users(*)')
-  .order('created_at', { ascending: false })
+  .from("complaints")
+  .select("*, services(*), causes(*), users(*)")
+  .order("created_at", { ascending: false });
 ```
 
 **Creating a complaint**:
+
 ```typescript
-const { data, error } = await supabase
-  .from('complaints')
-  .insert({
-    complainant_name: 'John Doe',
-    service_id: 1,
-    // ... other fields
-  })
+const { data, error } = await supabase.from("complaints").insert({
+  complainant_name: "John Doe",
+  service_id: 1,
+  // ... other fields
+});
 ```
 
 ## Troubleshooting
@@ -201,16 +204,19 @@ const { data, error } = await supabase
 ### Common Issues
 
 **Database connection errors**:
+
 - Verify Supabase credentials in `.env.local`
 - Check RLS policies are correctly configured
 - Ensure user has proper authentication
 
 **Authentication issues**:
+
 - Check Supabase Auth configuration
 - Verify user role is set correctly
 - Review middleware configuration
 
 **Google Sheets sync not working**:
+
 - Verify Apps Script is deployed
 - Check Supabase API credentials in script
 - Review execution logs in Apps Script
@@ -236,6 +242,7 @@ We welcome documentation improvements! To contribute:
 ## Support
 
 For questions about the documentation:
+
 - Create an issue in the repository
 - Contact the development team
 - Check existing documentation for answers

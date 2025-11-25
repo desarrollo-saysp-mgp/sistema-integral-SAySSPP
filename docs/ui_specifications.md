@@ -7,6 +7,7 @@
 - **Accessible**: WCAG 2.1 AA compliance
 - **Fast**: Optimized loading and interactions
 - **User-Friendly**: Clear navigation and intuitive forms
+- **Spanish Language**: All UI text, labels, buttons, messages, and error messages must be in Spanish
 
 ## 🎨 Paleta de Colores Institucional
 
@@ -49,36 +50,39 @@
 ```css
 :root {
   /* Institutional Colors */
-  --primary: #5CADEB;           /* Azul claro institucional */
-  --primary-dark: #0E3F75;      /* Azul oscuro */
-  --secondary: #88C1ED;         /* Azul medio / celeste */
+  --primary: #5cadeb; /* Azul claro institucional */
+  --primary-dark: #0e3f75; /* Azul oscuro */
+  --secondary: #88c1ed; /* Azul medio / celeste */
 
   /* Neutral Colors */
-  --background: #F5F6F8;        /* Gris muy claro */
-  --surface: #FFFFFF;           /* Blanco para cards */
-  --border: #D9DDE3;            /* Gris claro */
-  --text: #333333;              /* Negro / gris oscuro */
-  --text-muted: #64748b;        /* Texto secundario */
+  --background: #f5f6f8; /* Gris muy claro */
+  --surface: #ffffff; /* Blanco para cards */
+  --border: #d9dde3; /* Gris claro */
+  --text: #333333; /* Negro / gris oscuro */
+  --text-muted: #64748b; /* Texto secundario */
 
   /* Status Colors (complement institutional palette) */
-  --success: #10b981;           /* Verde para estados exitosos */
-  --warning: #f59e0b;           /* Naranja para advertencias */
-  --danger: #ef4444;            /* Rojo para errores */
+  --success: #10b981; /* Verde para estados exitosos */
+  --warning: #f59e0b; /* Naranja para advertencias */
+  --danger: #ef4444; /* Rojo para errores */
 }
 ```
 
 ### Guía de Uso
 
 **Botones:**
+
 - Primarios: `--primary` (#5CADEB) con hover en `--primary-dark` (#0E3F75)
 - Secundarios: `--secondary` (#88C1ED)
 - Destructivos: `--danger` (#ef4444)
 
 **Navegación:**
+
 - Header/Sidebar: `--primary-dark` (#0E3F75)
 - Elementos activos: `--primary` (#5CADEB)
 
 **Formularios:**
+
 - Campos: Borde `--border` (#D9DDE3)
 - Focus: `--primary` (#5CADEB)
 - Error: `--danger` (#ef4444)
@@ -86,6 +90,7 @@
 ## Layout Structure
 
 ### Main Layout
+
 ```
 ┌─────────────────────────────────────────────┐
 │ Header (Logo, User Name, Logout)           │
@@ -102,7 +107,7 @@
 └──────────┴──────────────────────────────────┘
 ```
 
-*Admin menu only visible to Admin role users
+\*Admin menu only visible to Admin role users
 
 ## Page Specifications
 
@@ -111,6 +116,7 @@
 **Layout**: Centered card on full screen with background
 
 **Elements**:
+
 - Application logo/title
 - Email input field
 - Password input field
@@ -120,16 +126,19 @@
 - Error message display area
 
 **Validation**:
+
 - Email format validation
 - Required field indicators
 - Clear error messages for invalid credentials
 
 **States**:
+
 - Loading state while authenticating
 - Disabled form during submission
 - Error state with message
 
 **Example Structure**:
+
 ```
 ┌────────────────────────────┐
 │                            │
@@ -158,6 +167,7 @@
 **Purpose**: Landing page after login with summary statistics
 
 **Elements**:
+
 - Welcome message with user name
 - Summary cards:
   - Total complaints
@@ -170,6 +180,7 @@
   - "View All Complaints"
 
 **Layout**:
+
 ```
 ┌────────────────────────────────────────────┐
 │ Bienvenido, [User Name]                   │
@@ -197,10 +208,12 @@
 **Form Sections**:
 
 **Section 1: Basic Information**
+
 - Complaint Number (auto-generated, read-only, displayed after save)
 - Complaint Date (date picker, default today)
 
 **Section 2: Complainant Information**
+
 - Full Name (text input, required)
 - Address (text input, required)
 - Street Number (text input, required)
@@ -208,6 +221,7 @@
 - Contact Method (radio buttons: Presencial/Teléfono/Email/WhatsApp)
 
 **Section 3: Complaint Details**
+
 - Service (dropdown, required)
 - Cause (dropdown, filtered by service, required)
 - Zone (text input or dropdown, required)
@@ -215,23 +229,28 @@
 - Details (textarea, required, min 20 characters)
 
 **Section 4: Status**
+
 - Status (radio buttons: En proceso [default], Resuelto, No resuelto)
 - Referred (checkbox)
 
 **Section 5: System Information**
+
 - Loaded By (auto-filled, read-only, shows current user)
 
 **Actions**:
+
 - "Save Complaint" button (primary)
 - "Cancel" button (secondary)
 
 **Validation**:
+
 - All required fields must be filled
 - Dates cannot be in the future
 - "Since When" cannot be after "Complaint Date"
 - Details must have minimum length
 
 **Example Layout**:
+
 ```
 ┌────────────────────────────────────────────┐
 │ Nuevo Reclamo                              │
@@ -284,6 +303,7 @@
 **Layout**: Table with filters and search
 
 **Header**:
+
 - Page title
 - Search bar (search by complaint number, name, address)
 - Filter dropdowns:
@@ -293,6 +313,7 @@
 - "New Complaint" button
 
 **Table Columns**:
+
 1. Complaint Number (clickable)
 2. Date
 3. Complainant Name
@@ -303,6 +324,7 @@
 8. Loaded By
 
 **Table Features**:
+
 - Sortable columns
 - Pagination (20 items per page)
 - Row highlighting on hover
@@ -310,6 +332,7 @@
 - Status can be changed inline without opening detail view
 
 **Example Layout**:
+
 ```
 ┌────────────────────────────────────────────────────────────┐
 │ Reclamos                    [🔍 Buscar...] [+ Nuevo]       │
@@ -332,22 +355,26 @@
 **Layout**: Form similar to new complaint, but with all fields editable
 
 **Header**:
+
 - Complaint Number (large, prominent)
 - Created date and time
 - Last updated date and time
 - Back button
 
 **Content**:
+
 - All fields from new complaint form
 - All fields are editable (except complaint number and loaded by)
 - Same validation rules apply
 
 **Actions**:
+
 - "Save Changes" button
 - "Cancel" button
 - "Delete" button (only for Admin, with confirmation)
 
 **Additional Features**:
+
 - Change history/audit log (future enhancement)
 - Attached documents (future enhancement)
 
@@ -358,6 +385,7 @@
 **Layout**: Two-panel view
 
 **Left Panel: Services List**
+
 - List of all services
 - "Add Service" button
 - Each service shows:
@@ -366,6 +394,7 @@
   - Edit/Delete buttons
 
 **Right Panel: Selected Service Details**
+
 - Service name (editable)
 - List of causes for this service
 - "Add Cause" button
@@ -374,6 +403,7 @@
   - Edit/Delete buttons
 
 **Example Layout**:
+
 ```
 ┌──────────────────┬──────────────────────────┐
 │ Servicios        │ Causas: Alumbrado Público│
@@ -398,12 +428,14 @@
 **Admin Only**
 
 **Header**:
+
 - Page title
 - Search bar (search by name or email)
 - "Add User" button
 - Filter by role
 
 **Table Columns**:
+
 1. Full Name
 2. Email
 3. Role
@@ -411,6 +443,7 @@
 5. Actions (Edit/Delete)
 
 **Example Layout**:
+
 ```
 ┌────────────────────────────────────────────────┐
 │ Usuarios                [🔍 Buscar] [+ Nuevo]  │
@@ -428,15 +461,18 @@
 **Admin Only**
 
 **Form Fields**:
+
 - Full Name (required)
 - Email (required, validated)
 - Role (required, radio buttons: Admin / Administrative)
 
 **Actions**:
+
 - "Create User" button
 - "Cancel" button
 
 **Process**:
+
 1. Admin fills form
 2. System creates user
 3. System sends invitation email
@@ -446,11 +482,13 @@
 ## Component Library Suggestions
 
 ### Recommended UI Framework
+
 - **Shadcn/ui**: Accessible components built on Radix UI
 - **Tailwind CSS**: Utility-first CSS framework
 - **Lucide Icons**: Icon library
 
 ### Key Components Needed
+
 - Form inputs (text, email, date, textarea)
 - Dropdowns/Select boxes
 - Radio buttons

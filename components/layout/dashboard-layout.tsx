@@ -1,12 +1,12 @@
-'use client'
+"use client";
 
-import { ReactNode } from 'react'
-import { Header } from './header'
-import { AppSidebar } from './app-sidebar'
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
+import { ReactNode } from "react";
+import { Header } from "./header";
+import { AppSidebar } from "./app-sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 interface DashboardLayoutProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -16,11 +16,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <AppSidebar />
         <SidebarInset className="flex flex-1 flex-col">
           <Header />
-          <main className="flex-1 p-4 sm:p-6">
-            {children}
-          </main>
+          <main className="flex-1 p-4 sm:p-6">{children}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>
-  )
+  );
 }

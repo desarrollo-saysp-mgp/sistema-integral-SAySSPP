@@ -1,8 +1,8 @@
-'use client'
+"use client";
 
-import { useUser } from '@/hooks/useUser'
-import { usePathname } from 'next/navigation'
-import Link from 'next/link'
+import { useUser } from "@/hooks/useUser";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Home,
   FileText,
@@ -10,7 +10,7 @@ import {
   Settings,
   Users,
   FolderKanban,
-} from 'lucide-react'
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,58 +20,58 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from '@/components/ui/sidebar'
+} from "@/components/ui/sidebar";
 
 const navigationItems = [
   {
-    title: 'Inicio',
-    href: '/dashboard',
+    title: "Inicio",
+    href: "/dashboard",
     icon: Home,
-    roles: ['Admin', 'Administrative'],
+    roles: ["Admin", "Administrative"],
   },
   {
-    title: 'Nuevo Reclamo',
-    href: '/dashboard/complaints/new',
+    title: "Nuevo Reclamo",
+    href: "/dashboard/complaints/new",
     icon: PlusCircle,
-    roles: ['Admin', 'Administrative'],
+    roles: ["Admin", "Administrative"],
   },
   {
-    title: 'Ver Reclamos',
-    href: '/dashboard/complaints',
+    title: "Ver Reclamos",
+    href: "/dashboard/complaints",
     icon: FileText,
-    roles: ['Admin', 'Administrative'],
+    roles: ["Admin", "Administrative"],
   },
-]
+];
 
 const adminItems = [
   {
-    title: 'Usuarios',
-    href: '/admin/users',
+    title: "Usuarios",
+    href: "/admin/users",
     icon: Users,
-    roles: ['Admin'],
+    roles: ["Admin"],
   },
   {
-    title: 'Servicios',
-    href: '/admin/services',
+    title: "Servicios",
+    href: "/admin/services",
     icon: FolderKanban,
-    roles: ['Admin'],
+    roles: ["Admin"],
   },
-]
+];
 
 export function AppSidebar() {
-  const { profile } = useUser()
-  const pathname = usePathname()
+  const { profile } = useUser();
+  const pathname = usePathname();
 
   const canAccess = (allowedRoles: string[]) => {
-    return profile && allowedRoles.includes(profile.role)
-  }
+    return profile && allowedRoles.includes(profile.role);
+  };
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === href
+    if (href === "/dashboard") {
+      return pathname === href;
     }
-    return pathname?.startsWith(href)
-  }
+    return pathname?.startsWith(href);
+  };
 
   return (
     <Sidebar>
@@ -84,7 +84,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
-                if (!canAccess(item.roles)) return null
+                if (!canAccess(item.roles)) return null;
 
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -99,14 +99,14 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )
+                );
               })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
         {/* Admin Section - Only visible to Admin users */}
-        {profile?.role === 'Admin' && (
+        {profile?.role === "Admin" && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-[#0E3F75] font-semibold">
               Administración
@@ -133,5 +133,5 @@ export function AppSidebar() {
         )}
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }

@@ -133,9 +133,11 @@ When implementing a task, follow these phases:
 **Mindset: Backend/Frontend Architect (contextual based on task)**
 
 1. **Create feature branch** following gitflow:
+
    ```bash
    git checkout -b feat/<task-description>
    ```
+
    Examples:
    - `feat/complaint-form`
    - `feat/user-management`
@@ -149,10 +151,12 @@ When implementing a task, follow these phases:
    - Use existing patterns found in the codebase
 
 3. **Make atomic commits** with conventional commit messages:
+
    ```bash
    git add <relevant files>
    git commit -m "type(scope): description"
    ```
+
    Examples:
    - `feat(complaints): add complaint creation form`
    - `feat(auth): implement protected routes middleware`
@@ -185,6 +189,7 @@ When implementing a task, follow these phases:
    - Place tests next to the code with `.test.ts` or `.test.tsx` suffix
 
 2. **Run the test suite**:
+
    ```bash
    npm test
    ```
@@ -196,6 +201,7 @@ When implementing a task, follow these phases:
    - If still failing after 3 attempts, pause and ask for assistance
 
 4. **Run linting and formatting**:
+
    ```bash
    npm run lint
    npm run format
@@ -216,11 +222,13 @@ When implementing a task, follow these phases:
    - Check Spanish translations for user-facing text
 
 2. **Run final test suite** to ensure everything is green:
+
    ```bash
    npm test
    ```
 
 3. **Push the feature branch** to remote:
+
    ```bash
    git push origin feat/<task-description>
    ```
@@ -374,74 +382,77 @@ types/
 
 4. **Test naming convention**:
    ```typescript
-   describe('Component/Function name', () => {
-     it('should describe the expected behavior', () => {
+   describe("Component/Function name", () => {
+     it("should describe the expected behavior", () => {
        // test implementation
-     })
-   })
+     });
+   });
    ```
 
 ### Test Examples
 
 **Form validation test**:
-```typescript
-import { describe, it, expect } from 'vitest'
-import { complaintSchema } from '@/lib/validations/complaint'
 
-describe('Complaint Form Validation', () => {
-  it('should validate required fields', () => {
-    const result = complaintSchema.safeParse({})
-    expect(result.success).toBe(false)
-    expect(result.error?.issues).toHaveLength(8) // number of required fields
-  })
-  
-  it('should accept valid complaint data', () => {
+```typescript
+import { describe, it, expect } from "vitest";
+import { complaintSchema } from "@/lib/validations/complaint";
+
+describe("Complaint Form Validation", () => {
+  it("should validate required fields", () => {
+    const result = complaintSchema.safeParse({});
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toHaveLength(8); // number of required fields
+  });
+
+  it("should accept valid complaint data", () => {
     const validData = {
-      complainant_name: 'Juan Pérez',
-      address: 'Calle Principal',
-      street_number: '123',
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
       service_id: 1,
       cause_id: 1,
-      zone: 'Centro',
+      zone: "Centro",
       since_when: new Date(),
-      contact_method: 'Email',
-      details: 'Descripción del reclamo',
-      status: 'En proceso'
-    }
-    const result = complaintSchema.safeParse(validData)
-    expect(result.success).toBe(true)
-  })
-  
-  it('should reject invalid contact method', () => {
+      contact_method: "Email",
+      details: "Descripción del reclamo",
+      status: "En proceso",
+    };
+    const result = complaintSchema.safeParse(validData);
+    expect(result.success).toBe(true);
+  });
+
+  it("should reject invalid contact method", () => {
     const invalidData = {
-      contact_method: 'InvalidMethod'
-    }
-    const result = complaintSchema.safeParse(invalidData)
-    expect(result.success).toBe(false)
-  })
-})
+      contact_method: "InvalidMethod",
+    };
+    const result = complaintSchema.safeParse(invalidData);
+    expect(result.success).toBe(false);
+  });
+});
 ```
 
 **Utility function test**:
-```typescript
-import { describe, it, expect } from 'vitest'
-import { generateComplaintNumber } from '@/lib/utils/complaint'
 
-describe('Complaint Number Generation', () => {
-  it('should generate complaint number in SASP-R format', () => {
-    const number = generateComplaintNumber(123)
-    expect(number).toBe('SASP-R000123')
-  })
-  
-  it('should pad numbers with leading zeros', () => {
-    expect(generateComplaintNumber(1)).toBe('SASP-R000001')
-    expect(generateComplaintNumber(999)).toBe('SASP-R000999')
-    expect(generateComplaintNumber(1000)).toBe('SASP-R001000')
-  })
-})
+```typescript
+import { describe, it, expect } from "vitest";
+import { generateComplaintNumber } from "@/lib/utils/complaint";
+
+describe("Complaint Number Generation", () => {
+  it("should generate complaint number in SASP-R format", () => {
+    const number = generateComplaintNumber(123);
+    expect(number).toBe("SASP-R000123");
+  });
+
+  it("should pad numbers with leading zeros", () => {
+    expect(generateComplaintNumber(1)).toBe("SASP-R000001");
+    expect(generateComplaintNumber(999)).toBe("SASP-R000999");
+    expect(generateComplaintNumber(1000)).toBe("SASP-R001000");
+  });
+});
 ```
 
 **Component test**:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
@@ -454,19 +465,19 @@ describe('ComplaintCard', () => {
     status: 'En proceso',
     created_at: new Date('2024-01-15')
   }
-  
+
   it('should render complaint information', () => {
     render(<ComplaintCard complaint={mockComplaint} />)
-    
+
     expect(screen.getByText('SASP-R000123')).toBeInTheDocument()
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
     expect(screen.getByText('En proceso')).toBeInTheDocument()
   })
-  
+
   it('should apply correct status styling', () => {
     const { container } = render(<ComplaintCard complaint={mockComplaint} />)
     const statusBadge = container.querySelector('[data-status="En proceso"]')
-    
+
     expect(statusBadge).toHaveClass('bg-yellow-100')
   })
 })
@@ -545,10 +556,12 @@ After completing each task:
 **Current Phase**: Phase 2 - Authentication & User Management
 
 **Completed Tasks**:
+
 - ✅ Phase 1 complete: 9/9 tasks (100%)
 - ⏳ Phase 2: 1/9 tasks (11%)
 
 **Latest Completed**: Database schema and RLS policies (manual setup via SUPABASE_SETUP.md)
+
 - ✅ All tables created (users, complaints, services, causes)
 - ✅ All indexes, functions, and triggers configured
 - ✅ Row Level Security (RLS) enabled on all tables
@@ -557,11 +570,13 @@ After completing each task:
 - ✅ complaint_details view created
 
 **Next Task**: Options for Phase 2 -
+
 1. Implement password reset flow
 2. Create admin user management page (`/admin/users`)
 3. Implement protected route middleware for admin/administrative roles
 
 **Phase 1 Completions**:
+
 - ✅ Next.js 15, TypeScript, Tailwind CSS, and shadcn/ui configured
 - ✅ Supabase clients and authentication infrastructure set up
 - ✅ Database schema and RLS policies fully configured
@@ -571,6 +586,7 @@ After completing each task:
 - ✅ Base layout components with institutional colors (#5CADEB, #0E3F75, #88C1ED)
 
 **Notes**:
+
 - 🎉 Phase 1 infrastructure is complete!
 - 📊 Database is ready with full schema and security policies
 - 🔐 Authentication system is functional

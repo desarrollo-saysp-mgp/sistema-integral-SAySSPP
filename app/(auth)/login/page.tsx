@@ -1,47 +1,54 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
-      const supabase = createClient()
+      const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
+      });
 
       if (error) {
-        toast.error('Error de autenticación: ' + error.message)
-        return
+        toast.error("Error de autenticación: " + error.message);
+        return;
       }
 
       if (data.user) {
-        toast.success('Inicio de sesión exitoso')
-        router.push('/dashboard')
-        router.refresh()
+        toast.success("Inicio de sesión exitoso");
+        router.push("/dashboard");
+        router.refresh();
       }
     } catch (error) {
-      toast.error('Error inesperado al iniciar sesión')
+      toast.error("Error inesperado al iniciar sesión");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -82,16 +89,12 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </CardFooter>
         </form>
       </Card>
     </div>
-  )
+  );
 }

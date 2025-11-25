@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import { useUser } from '@/hooks/useUser'
-import { Button } from '@/components/ui/button'
+import { useUser } from "@/hooks/useUser";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,21 +9,21 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { LogOut, User } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+} from "@/components/ui/dropdown-menu";
+import { LogOut, User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export function Header() {
-  const { profile, loading } = useUser()
-  const router = useRouter()
+  const { profile, loading } = useUser();
+  const router = useRouter();
 
   const handleSignOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   if (loading) {
     return (
@@ -31,11 +31,13 @@ export function Header() {
         <div className="flex h-16 items-center px-4 sm:px-6">
           <div className="flex items-center gap-4">
             <div className="h-8 w-8 rounded bg-[#5CADEB]" />
-            <span className="text-lg font-semibold">Sistema de Gestión de Reclamos</span>
+            <span className="text-lg font-semibold">
+              Sistema de Gestión de Reclamos
+            </span>
           </div>
         </div>
       </header>
-    )
+    );
   }
 
   return (
@@ -47,7 +49,9 @@ export function Header() {
             SGR
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-semibold">Sistema de Gestión de Reclamos</span>
+            <span className="text-lg font-semibold">
+              Sistema de Gestión de Reclamos
+            </span>
             <span className="text-xs text-[#88C1ED]">Secretaría Municipal</span>
           </div>
         </div>
@@ -62,7 +66,9 @@ export function Header() {
               >
                 <User className="h-5 w-5" />
                 <div className="hidden flex-col items-start sm:flex">
-                  <span className="text-sm font-medium">{profile.full_name}</span>
+                  <span className="text-sm font-medium">
+                    {profile.full_name}
+                  </span>
                   <span className="text-xs text-[#88C1ED]">{profile.role}</span>
                 </div>
               </Button>
@@ -71,12 +77,19 @@ export function Header() {
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{profile.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{profile.email}</p>
-                  <p className="text-xs font-semibold text-[#5CADEB]">{profile.role}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {profile.email}
+                  </p>
+                  <p className="text-xs font-semibold text-[#5CADEB]">
+                    {profile.role}
+                  </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="text-red-600"
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Cerrar Sesión</span>
               </DropdownMenuItem>
@@ -85,5 +98,5 @@ export function Header() {
         )}
       </div>
     </header>
-  )
+  );
 }
