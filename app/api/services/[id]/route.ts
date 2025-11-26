@@ -9,7 +9,7 @@ import type { ServiceUpdate } from "@/types";
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -42,7 +42,8 @@ export async function PATCH(
     }
 
     // Parse service ID
-    const serviceId = parseInt(params.id);
+    const { id } = await params;
+    const serviceId = parseInt(id);
     if (isNaN(serviceId)) {
       return NextResponse.json(
         { error: "ID de servicio inválido" },
@@ -142,7 +143,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -174,7 +175,8 @@ export async function DELETE(
     }
 
     // Parse service ID
-    const serviceId = parseInt(params.id);
+    const { id } = await params;
+    const serviceId = parseInt(id);
     if (isNaN(serviceId)) {
       return NextResponse.json(
         { error: "ID de servicio inválido" },

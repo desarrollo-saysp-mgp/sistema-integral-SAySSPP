@@ -9,7 +9,7 @@ import type { CauseUpdate } from "@/types";
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -41,7 +41,8 @@ export async function PATCH(
     }
 
     // Parse cause ID
-    const causeId = parseInt(params.id);
+    const { id } = await params;
+    const causeId = parseInt(id);
     if (isNaN(causeId)) {
       return NextResponse.json(
         { error: "ID de causa inválido" },
@@ -142,7 +143,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -174,7 +175,8 @@ export async function DELETE(
     }
 
     // Parse cause ID
-    const causeId = parseInt(params.id);
+    const { id } = await params;
+    const causeId = parseInt(id);
     if (isNaN(causeId)) {
       return NextResponse.json(
         { error: "ID de causa inválido" },

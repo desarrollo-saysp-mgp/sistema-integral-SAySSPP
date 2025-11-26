@@ -74,7 +74,9 @@ describe("PATCH /api/causes/[id]", () => {
       body: JSON.stringify({ name: "Updated Cause" }),
     });
 
-    const response = await PATCH(request, { params: { id: "1" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -97,7 +99,9 @@ describe("PATCH /api/causes/[id]", () => {
       body: JSON.stringify({ name: "Updated Cause" }),
     });
 
-    const response = await PATCH(request, { params: { id: "1" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(403);
@@ -123,7 +127,9 @@ describe("PATCH /api/causes/[id]", () => {
       },
     );
 
-    const response = await PATCH(request, { params: { id: "invalid" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "invalid" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -151,7 +157,9 @@ describe("PATCH /api/causes/[id]", () => {
       body: JSON.stringify({ name: "Updated Cause" }),
     });
 
-    const response = await PATCH(request, { params: { id: "999" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "999" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -197,7 +205,9 @@ describe("PATCH /api/causes/[id]", () => {
       body: JSON.stringify({ name: "Updated Cause" }),
     });
 
-    const response = await PATCH(request, { params: { id: "1" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -240,7 +250,9 @@ describe("PATCH /api/causes/[id]", () => {
       body: JSON.stringify({ active: false }),
     });
 
-    const response = await PATCH(request, { params: { id: "1" } });
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -296,7 +308,9 @@ describe("DELETE /api/causes/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: "1" } });
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -318,7 +332,9 @@ describe("DELETE /api/causes/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: "1" } });
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(403);
@@ -359,7 +375,9 @@ describe("DELETE /api/causes/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: "1" } });
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(200);
