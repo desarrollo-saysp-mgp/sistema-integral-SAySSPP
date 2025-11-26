@@ -36,7 +36,9 @@ describe("Header", () => {
       profile: null,
       loading: true,
       isAdmin: false,
+      isAdministrative: false,
       isAuthenticated: false,
+      hasRole: vi.fn(() => false),
       refreshProfile: vi.fn(),
     });
 
@@ -61,7 +63,9 @@ describe("Header", () => {
       },
       loading: false,
       isAdmin: true,
+      isAdministrative: false,
       isAuthenticated: true,
+      hasRole: vi.fn((role) => role === "Admin"),
       refreshProfile: vi.fn(),
     });
 
@@ -82,7 +86,9 @@ describe("Header", () => {
       profile: null,
       loading: false,
       isAdmin: false,
+      isAdministrative: false,
       isAuthenticated: false,
+      hasRole: vi.fn(() => false),
       refreshProfile: vi.fn(),
     });
 
@@ -107,7 +113,9 @@ describe("Header", () => {
       },
       loading: false,
       isAdmin: true,
+      isAdministrative: false,
       isAuthenticated: true,
+      hasRole: vi.fn((role) => role === "Admin"),
       refreshProfile: vi.fn(),
     });
 
