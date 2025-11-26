@@ -4,6 +4,8 @@
 
 This document contains all SQL scripts needed to set up the database. Execute these scripts in the Supabase SQL Editor in the exact order listed below.
 
+> ⚠️ **IMPORTANT**: The RLS policies in Step 3 have been **UPDATED** to fix infinite recursion issues. If you previously set up the database with the old policies, see `docs/RLS_INFINITE_RECURSION_FIX.md` for migration instructions.
+
 ---
 
 ## Prerequisites
@@ -157,6 +159,30 @@ CREATE TRIGGER set_complaint_number
 
 ### Step 3: Enable Row Level Security (RLS)
 
+#### 3.0 Create Helper Function (CRITICAL - Execute First!)
+
+Before creating RLS policies, we need a helper function to prevent infinite recursion:
+
+```sql
+-- Helper function to check if a user is an Admin
+-- Uses SECURITY DEFINER to bypass RLS and prevent infinite recursion
+CREATE OR REPLACE FUNCTION public.is_admin(user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.users
+        WHERE id = user_id
+        AND role = 'Admin'
+    );
+$$;
+```
+
+> ⚠️ **Why this is needed**: Without this function, RLS policies that check user roles will query the `users` table, which triggers the same RLS policy, creating infinite recursion. See `docs/RLS_INFINITE_RECURSION_FIX.md` for details.
+
 #### 3.1 Users Table RLS
 
 ```sql
@@ -165,13 +191,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all users"
     ON users FOR SELECT
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 
 CREATE POLICY "Users can view own profile"
     ON users FOR SELECT
@@ -181,24 +201,12 @@ CREATE POLICY "Users can view own profile"
 CREATE POLICY "Admins can insert users"
     ON users FOR INSERT
     TO authenticated
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    WITH CHECK (public.is_admin(auth.uid()));
 
 CREATE POLICY "Admins can update users"
     ON users FOR UPDATE
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 ```
 
 #### 3.2 Complaints Table RLS
@@ -236,13 +244,7 @@ CREATE POLICY "Authenticated users can view services"
 CREATE POLICY "Admins can manage services"
     ON services FOR ALL
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 
 CREATE POLICY "Authenticated users can view causes"
     ON causes FOR SELECT
@@ -252,13 +254,7 @@ CREATE POLICY "Authenticated users can view causes"
 CREATE POLICY "Admins can manage causes"
     ON causes FOR ALL
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 ```
 
 ---
