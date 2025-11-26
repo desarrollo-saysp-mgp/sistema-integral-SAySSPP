@@ -43,7 +43,9 @@ describe("AppSidebar", () => {
       },
       loading: false,
       isAdmin: false,
+      isAdministrative: true,
       isAuthenticated: true,
+      hasRole: vi.fn((role) => role === "Administrative"),
       refreshProfile: vi.fn(),
     });
 
@@ -73,7 +75,9 @@ describe("AppSidebar", () => {
       },
       loading: false,
       isAdmin: true,
+      isAdministrative: false,
       isAuthenticated: true,
+      hasRole: vi.fn((role) => role === "Admin"),
       refreshProfile: vi.fn(),
     });
 
@@ -104,7 +108,9 @@ describe("AppSidebar", () => {
       },
       loading: false,
       isAdmin: false,
+      isAdministrative: true,
       isAuthenticated: true,
+      hasRole: vi.fn((role) => role === "Administrative"),
       refreshProfile: vi.fn(),
     });
 
