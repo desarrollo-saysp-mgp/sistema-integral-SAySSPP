@@ -68,10 +68,10 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 - [x] Create cascading service/cause dropdowns in form
 - [x] Implement form validation with proper error messages
 - [x] Create complaint save functionality
-- [ ] Implement complaints table page (`/dashboard/complaints`)
-- [ ] Add search functionality (by number, name, address)
-- [ ] Add filter functionality (status, service, date range)
-- [ ] Implement inline status editing in table
+- [x] Implement complaints table page (`/dashboard/complaints`)
+- [x] Add search functionality (by number, name, address)
+- [x] Add filter functionality (status, service, date range)
+- [x] Implement inline status editing in table
 - [ ] Create complaint detail/edit page (`/dashboard/complaints/[id]`)
 - [ ] Implement complaint update functionality
 - [ ] Add complaint deletion (admin only)
@@ -560,24 +560,28 @@ After completing each task:
 - ✅ Phase 1 complete: 9/9 tasks (100%)
 - ✅ Phase 2 complete: 9/9 tasks (100%)
 - ✅ Phase 3 complete: 5/5 tasks (100%)
-- ⏳ Phase 4: 5/12 tasks (42%)
+- ⏳ Phase 4: 9/12 tasks (75%)
 
-**Latest Completed**: Complaint creation form and API (feat/complaint-form)
+**Latest Completed**: Complaints table with search and filters (feat/complaints-table)
 
-- ✅ ComplaintForm component with cascading service/cause dropdowns
-- ✅ Form validation for all required fields with Spanish error messages
-- ✅ Auto-generation of complaint numbers (SASP-R format) via database trigger
-- ✅ Complaints API endpoints (POST /api/complaints for creation, GET with filters)
-- ✅ New complaint page at `/dashboard/complaints/new`
-- ✅ Comprehensive test coverage (9 API tests, 6 component tests)
-- ✅ All tests passing (129/129), TypeScript compilation successful
+- ✅ ComplaintsTable component with inline status editing
+- ✅ Search functionality (by complaint number, name, or address)
+- ✅ Filters (status, service, date range) with toggleable filter panel
+- ✅ Individual complaint API endpoints (GET, PATCH, DELETE at /api/complaints/[id])
+- ✅ Complaints listing page at `/dashboard/complaints`
+- ✅ Row click navigation to complaint detail page
+- ✅ Color-coded status badges and dropdown selectors
+- ✅ Comprehensive test coverage (14 API tests, 7 component tests)
+- ✅ All tests passing (150/150), TypeScript compilation successful
 
-**Phase 4 Progress** (5/12 tasks - 42% Complete):
+**Phase 4 Progress** (9/12 tasks - 75% Complete):
 - ✅ Complaint creation form with full validation
 - ✅ Cascading service → cause dropdowns
 - ✅ Auto-generated complaint numbers
 - ✅ Complaints API with filtering support
-- ⏳ Next: Complaints table page with search/filter
+- ✅ Complaints table with search and filters
+- ✅ Inline status editing in table
+- ⏳ Next: Complaint detail/edit page
 
 **Previous Phase Completions**:
 
@@ -599,12 +603,8 @@ After completing each task:
 - Admin user management system (feat/admin-user-management)
   - Complete CRUD API routes, 18 new tests
 
-**Next Tasks**: Continue Phase 4 - Complaint Management
+**Next Tasks**: Complete Phase 4 - Complaint Management
 
-6. Implement complaints table page (`/dashboard/complaints`)
-7. Add search functionality (by number, name, address)
-8. Add filter functionality (status, service, date range)
-9. Implement inline status editing in table
 10. Create complaint detail/edit page (`/dashboard/complaints/[id]`)
 11. Implement complaint update functionality
 12. Add complaint deletion (admin only)
