@@ -204,6 +204,28 @@ CREATE TRIGGER update_causes_updated_at
 
 ## Row Level Security (RLS) Policies
 
+### Helper Functions
+
+Before creating RLS policies, we need a helper function to check user roles without causing infinite recursion:
+
+```sql
+-- Helper function to check if a user is an Admin
+-- Uses SECURITY DEFINER to bypass RLS and prevent infinite recursion
+CREATE OR REPLACE FUNCTION public.is_admin(user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.users
+        WHERE id = user_id
+        AND role = 'Admin'
+    );
+$$;
+```
+
 ### Users Table Policies
 
 ```sql
@@ -213,13 +235,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all users"
     ON users FOR SELECT
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 
 -- Users can view their own profile
 CREATE POLICY "Users can view own profile"
@@ -231,25 +247,13 @@ CREATE POLICY "Users can view own profile"
 CREATE POLICY "Admins can insert users"
     ON users FOR INSERT
     TO authenticated
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    WITH CHECK (public.is_admin(auth.uid()));
 
 -- Only admins can update users
 CREATE POLICY "Admins can update users"
     ON users FOR UPDATE
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 ```
 
 ### Complaints Table Policies
@@ -292,13 +296,7 @@ CREATE POLICY "Authenticated users can view services"
 CREATE POLICY "Admins can manage services"
     ON services FOR ALL
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 
 -- All authenticated users can view causes
 CREATE POLICY "Authenticated users can view causes"
@@ -310,13 +308,7 @@ CREATE POLICY "Authenticated users can view causes"
 CREATE POLICY "Admins can manage causes"
     ON causes FOR ALL
     TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM users
-            WHERE users.id = auth.uid()
-            AND users.role = 'Admin'
-        )
-    );
+    USING (public.is_admin(auth.uid()));
 ```
 
 ## Sample Data
