@@ -72,9 +72,9 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 - [x] Add search functionality (by number, name, address)
 - [x] Add filter functionality (status, service, date range)
 - [x] Implement inline status editing in table
-- [ ] Create complaint detail/edit page (`/dashboard/complaints/[id]`)
-- [ ] Implement complaint update functionality
-- [ ] Add complaint deletion (admin only)
+- [x] Create complaint detail/edit page (`/dashboard/complaints/[id]`)
+- [x] Implement complaint update functionality
+- [x] Add complaint deletion (admin only)
 
 ### Phase 5: Dashboard & Reporting
 
@@ -553,35 +553,35 @@ After completing each task:
 
 **Last Updated**: 2025-11-29
 
-**Current Phase**: Phase 4 - Complaint Management (Core Features)
+**Current Phase**: Phase 4 - Complaint Management (Core Features) - COMPLETE ✅
 
 **Completed Tasks**:
 
 - ✅ Phase 1 complete: 9/9 tasks (100%)
 - ✅ Phase 2 complete: 9/9 tasks (100%)
 - ✅ Phase 3 complete: 5/5 tasks (100%)
-- ⏳ Phase 4: 9/12 tasks (75%)
+- ✅ Phase 4 complete: 12/12 tasks (100%)
 
-**Latest Completed**: Complaints table with search and filters (feat/complaints-table)
+**Latest Completed**: Complaint detail/edit page with delete (feat/complaint-detail-edit)
 
-- ✅ ComplaintsTable component with inline status editing
-- ✅ Search functionality (by complaint number, name, or address)
-- ✅ Filters (status, service, date range) with toggleable filter panel
-- ✅ Individual complaint API endpoints (GET, PATCH, DELETE at /api/complaints/[id])
-- ✅ Complaints listing page at `/dashboard/complaints`
-- ✅ Row click navigation to complaint detail page
-- ✅ Color-coded status badges and dropdown selectors
-- ✅ Comprehensive test coverage (14 API tests, 7 component tests)
-- ✅ All tests passing (150/150), TypeScript compilation successful
+- ✅ ComplaintDetailPage with complaint fetching and loading states
+- ✅ Reuses existing ComplaintForm component for editing
+- ✅ Update complaint functionality via PATCH API
+- ✅ Admin-only delete functionality with confirmation dialog (AlertDialog component)
+- ✅ Navigation with back button and breadcrumbs
+- ✅ Comprehensive test coverage (9 new tests)
+- ✅ All tests passing (159/159), TypeScript compilation successful
 
-**Phase 4 Progress** (9/12 tasks - 75% Complete):
+**Phase 4 Summary** (12/12 tasks - 100% Complete):
 - ✅ Complaint creation form with full validation
 - ✅ Cascading service → cause dropdowns
-- ✅ Auto-generated complaint numbers
-- ✅ Complaints API with filtering support
+- ✅ Auto-generated complaint numbers (SASP-R format)
+- ✅ Complaints API with filtering support (POST, GET with filters)
 - ✅ Complaints table with search and filters
 - ✅ Inline status editing in table
-- ⏳ Next: Complaint detail/edit page
+- ✅ Complaint detail/edit page
+- ✅ Complaint update functionality
+- ✅ Complaint deletion (admin only)
 
 **Previous Phase Completions**:
 
@@ -603,11 +603,12 @@ After completing each task:
 - Admin user management system (feat/admin-user-management)
   - Complete CRUD API routes, 18 new tests
 
-**Next Tasks**: Complete Phase 4 - Complaint Management
+**Next Tasks**: Begin Phase 5 - Dashboard & Reporting
 
-10. Create complaint detail/edit page (`/dashboard/complaints/[id]`)
-11. Implement complaint update functionality
-12. Add complaint deletion (admin only)
+1. Create dashboard home page with statistics
+2. Implement complaint count cards (total, in progress, resolved, unresolved)
+3. Create recent complaints widget
+4. Add quick action buttons (new complaint, view all)
 
 **Phase 1 Completions**:
 
