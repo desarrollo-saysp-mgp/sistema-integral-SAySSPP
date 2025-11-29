@@ -78,10 +78,10 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 
 ### Phase 5: Dashboard & Reporting
 
-- [ ] Create dashboard home page with statistics
-- [ ] Implement complaint count cards (total, in progress, resolved, unresolved)
-- [ ] Create recent complaints widget
-- [ ] Add quick action buttons (new complaint, view all)
+- [x] Create dashboard home page with statistics
+- [x] Implement complaint count cards (total, in progress, resolved, unresolved)
+- [x] Create recent complaints widget
+- [x] Add quick action buttons (new complaint, view all)
 
 ### Phase 6: Google Sheets Integration
 
@@ -553,7 +553,7 @@ After completing each task:
 
 **Last Updated**: 2025-11-29
 
-**Current Phase**: Phase 4 - Complaint Management (Core Features) - COMPLETE ✅
+**Current Phase**: Phase 5 - Dashboard & Reporting - COMPLETE ✅
 
 **Completed Tasks**:
 
@@ -561,27 +561,24 @@ After completing each task:
 - ✅ Phase 2 complete: 9/9 tasks (100%)
 - ✅ Phase 3 complete: 5/5 tasks (100%)
 - ✅ Phase 4 complete: 12/12 tasks (100%)
+- ✅ Phase 5 complete: 4/4 tasks (100%)
 
-**Latest Completed**: Complaint detail/edit page with delete (feat/complaint-detail-edit)
+**Latest Completed**: Dashboard with statistics and reporting (feat/dashboard-stats)
 
-- ✅ ComplaintDetailPage with complaint fetching and loading states
-- ✅ Reuses existing ComplaintForm component for editing
-- ✅ Update complaint functionality via PATCH API
-- ✅ Admin-only delete functionality with confirmation dialog (AlertDialog component)
-- ✅ Navigation with back button and breadcrumbs
-- ✅ Comprehensive test coverage (9 new tests)
-- ✅ All tests passing (159/159), TypeScript compilation successful
+- ✅ Dashboard stats API endpoint (GET /api/dashboard/stats)
+- ✅ Four statistics cards (total, in progress, resolved, unresolved)
+- ✅ Recent complaints widget with last 5 complaints
+- ✅ Quick action buttons (new complaint, view all)
+- ✅ Responsive grid layout with color-coded status indicators
+- ✅ Clickable recent complaints for navigation
+- ✅ Comprehensive test coverage (6 new API tests)
+- ✅ All tests passing (165/165), TypeScript compilation successful
 
-**Phase 4 Summary** (12/12 tasks - 100% Complete):
-- ✅ Complaint creation form with full validation
-- ✅ Cascading service → cause dropdowns
-- ✅ Auto-generated complaint numbers (SASP-R format)
-- ✅ Complaints API with filtering support (POST, GET with filters)
-- ✅ Complaints table with search and filters
-- ✅ Inline status editing in table
-- ✅ Complaint detail/edit page
-- ✅ Complaint update functionality
-- ✅ Complaint deletion (admin only)
+**Phase 5 Summary** (4/4 tasks - 100% Complete):
+- ✅ Dashboard home page with real-time statistics
+- ✅ Complaint count cards with visual indicators
+- ✅ Recent complaints widget with navigation
+- ✅ Quick action buttons for common tasks
 
 **Previous Phase Completions**:
 
@@ -603,12 +600,13 @@ After completing each task:
 - Admin user management system (feat/admin-user-management)
   - Complete CRUD API routes, 18 new tests
 
-**Next Tasks**: Begin Phase 5 - Dashboard & Reporting
+**Next Tasks**: Begin Phase 6 - Google Sheets Integration
 
-1. Create dashboard home page with statistics
-2. Implement complaint count cards (total, in progress, resolved, unresolved)
-3. Create recent complaints widget
-4. Add quick action buttons (new complaint, view all)
+1. Set up Google Apps Script in Google Sheets
+2. Implement complaint sync function
+3. Configure scheduled triggers (15-minute intervals)
+4. Test real-time sync with Supabase webhooks (optional)
+5. Add error notification system for sync failures
 
 **Phase 1 Completions**:
 
