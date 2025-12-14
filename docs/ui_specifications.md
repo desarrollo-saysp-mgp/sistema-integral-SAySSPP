@@ -92,22 +92,125 @@
 ### Main Layout
 
 ```
-┌─────────────────────────────────────────────┐
-│ Header (Logo, User Name, Logout)           │
-├──────────┬──────────────────────────────────┤
-│          │                                  │
-│ Sidebar  │  Main Content Area              │
-│          │                                  │
-│ - Home   │  Page content here              │
-│ - New    │                                  │
-│ - Table  │                                  │
-│ - Admin* │                                  │
-│          │                                  │
-│          │                                  │
-└──────────┴──────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ Navbar (Logo | Dashboard | Reclamos | Admin* | User)  │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│                  Main Content Area                     │
+│                                                        │
+│                  Page content here                     │
+│                                                        │
+│                                                        │
+│                                                        │
+└────────────────────────────────────────────────────────┘
 ```
 
-\*Admin menu only visible to Admin role users
+\*Admin menu items only visible to Admin role users
+
+### Navbar Specifications
+
+**Layout**: Fixed top navigation bar with horizontal menu items
+
+**Structure**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [Logo] Dashboard  Reclamos  [Admin Menu]*  [User Dropdown] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Components**:
+
+1. **Logo (Left)**
+   - Application logo/icon
+   - Clickable, redirects to dashboard (`/dashboard`)
+   - Size: ~40px height
+   - Color: White or institutional colors
+
+2. **Navigation Menu Items (Center-Left)**
+
+   **For All Authenticated Users:**
+   - 🏠 **Dashboard** (`/dashboard`)
+     - Icon: Home
+     - Label: "Dashboard" or "Inicio"
+
+   - 📋 **Reclamos** (Dropdown)
+     - Icon: File/Document
+     - Label: "Reclamos"
+     - Submenu:
+       - "+ Nuevo Reclamo" → `/dashboard/complaints/new`
+       - "Ver Todos" → `/dashboard/complaints`
+
+   **For Admin Users Only:**
+   - ⚙️ **Administración** (Dropdown)
+     - Icon: Settings/Gear
+     - Label: "Administración"
+     - Submenu:
+       - "👥 Usuarios" → `/admin/users`
+       - "🏷️ Servicios" → `/admin/services`
+
+3. **User Menu (Right)**
+   - Display: User's full name or email
+   - Icon: User avatar/icon
+   - Dropdown menu:
+     - "Mi Perfil" (future feature)
+     - "Cerrar Sesión" → Logout
+
+**Styling**:
+- Background: `--primary-dark` (#0E3F75)
+- Text color: White (#FFFFFF)
+- Active item: `--primary` (#5CADEB) background or underline
+- Hover: `--secondary` (#88C1ED) background or lighter shade
+- Height: 64px
+- Shadow: `0 2px 4px rgba(0,0,0,0.1)`
+- Font weight: 500 (medium)
+
+**Behavior**:
+- Sticky/Fixed position at top
+- Dropdowns open on click or hover
+- Active route highlighted
+- Mobile: Hamburger menu for small screens
+- Smooth transitions for hover and active states
+
+### Role-Based Navigation
+
+**Administrative Users Can See:**
+```
+[Logo] Dashboard | Reclamos ▼ | [User Name ▼]
+```
+
+**Admin Users Can See:**
+```
+[Logo] Dashboard | Reclamos ▼ | Administración ▼ | [User Name ▼]
+```
+
+### Mobile Layout (< 768px)
+
+```
+┌─────────────────────────────┐
+│ [Logo] [☰ Menu] [User Icon]│
+├─────────────────────────────┤
+│                             │
+│    Main Content Area        │
+│                             │
+└─────────────────────────────┘
+```
+
+**Mobile Menu (when hamburger clicked)**:
+```
+┌─────────────────────────────┐
+│ ✕ Cerrar                    │
+├─────────────────────────────┤
+│ 🏠 Dashboard                │
+│ 📋 Reclamos                 │
+│   └ + Nuevo Reclamo         │
+│   └ Ver Todos               │
+│ ⚙️ Administración*          │
+│   └ 👥 Usuarios             │
+│   └ 🏷️ Servicios            │
+│ 👤 [User Name]              │
+│   └ Cerrar Sesión           │
+└─────────────────────────────┘
+```
 
 ## Page Specifications
 
