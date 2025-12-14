@@ -579,8 +579,15 @@ After completing each task:
 - ✅ Phase 5 complete: 4/4 tasks (100%)
 - ✅ UI/UX Navigation & Layout: 8/8 tasks (100%)
 
-**Latest Completed**: Top navbar navigation with role-based menus (feat/navbar-navigation)
+**Latest Completed**: Layout wrappers for navbar visibility (fix/add-dashboard-admin-layouts)
 
+- ✅ Added app/dashboard/layout.tsx to wrap all dashboard pages
+- ✅ Added app/admin/layout.tsx to wrap all admin pages
+- ✅ Navbar now visible on all dashboard and admin routes
+- ✅ Comprehensive test coverage (5 new layout tests)
+- ✅ All tests passing with proper cleanup
+
+**Previous Navbar Implementation** (feat/navbar-navigation):
 - ✅ Created Navbar component with sticky top navigation
 - ✅ Implemented role-based menu visibility (Admin vs Administrative)
 - ✅ Added dropdown menus for Reclamos and Administración sections
