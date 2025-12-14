@@ -104,6 +104,130 @@ describe("GET /api/complaints", () => {
     expect(response.status).toBe(500);
     expect(data.error).toBe("Error al cargar reclamos");
   });
+
+  it("should return all complaints when no service filter is provided (Todos los servicios)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockComplaintsAllServices = [
+      {
+        id: 1,
+        complaint_number: 1,
+        complainant_name: "Juan Pérez",
+        service_id: 1,
+        status: "En proceso",
+      },
+      {
+        id: 2,
+        complaint_number: 2,
+        complainant_name: "María García",
+        service_id: 2,
+        status: "Resuelto",
+      },
+      {
+        id: 3,
+        complaint_number: 3,
+        complainant_name: "Pedro López",
+        service_id: 3,
+        status: "En proceso",
+      },
+    ];
+
+    const mockQuery = {
+      or: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
+        data: mockComplaintsAllServices,
+        error: null,
+      }),
+    };
+
+    mockSelect.mockReturnValue(mockQuery);
+
+    // Request without service_id parameter (empty string simulates "Todos los servicios")
+    const request = new NextRequest("http://localhost:3000/api/complaints?service_id=");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data).toEqual(mockComplaintsAllServices);
+    expect(data.data).toHaveLength(3);
+    // Verify eq was NOT called with service_id (since it's empty)
+    expect(mockQuery.eq).not.toHaveBeenCalledWith("service_id", expect.anything());
+  });
+
+  it("should return complaints in any state when 'Todos los servicios' filter is selected", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    // Mock complaints with ALL three possible statuses across different services
+    const mockComplaintsAllStates = [
+      {
+        id: 1,
+        complaint_number: 1,
+        complainant_name: "Juan Pérez",
+        service_id: 1,
+        status: "En proceso",
+      },
+      {
+        id: 2,
+        complaint_number: 2,
+        complainant_name: "María García",
+        service_id: 2,
+        status: "Resuelto",
+      },
+      {
+        id: 3,
+        complaint_number: 3,
+        complainant_name: "Pedro López",
+        service_id: 3,
+        status: "No resuelto",
+      },
+      {
+        id: 4,
+        complaint_number: 4,
+        complainant_name: "Ana Torres",
+        service_id: 1,
+        status: "En proceso",
+      },
+    ];
+
+    const mockQuery = {
+      or: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
+        data: mockComplaintsAllStates,
+        error: null,
+      }),
+    };
+
+    mockSelect.mockReturnValue(mockQuery);
+
+    // Request with empty service_id (Todos los servicios)
+    const request = new NextRequest("http://localhost:3000/api/complaints?service_id=");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data).toHaveLength(4);
+
+    // Verify all three statuses are present in the results
+    const statuses = data.data.map((c: any) => c.status);
+    expect(statuses).toContain("En proceso");
+    expect(statuses).toContain("Resuelto");
+    expect(statuses).toContain("No resuelto");
+
+    // Verify eq was NOT called with service_id filter
+    expect(mockQuery.eq).not.toHaveBeenCalledWith("service_id", expect.anything());
+  });
 });
 
 describe("POST /api/complaints", () => {
