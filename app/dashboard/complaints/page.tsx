@@ -167,7 +167,7 @@ export default function ComplaintsPage() {
                     <SelectValue placeholder="Todos los estados" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value=" ">Todos los estados</SelectItem>
+                    <SelectItem value="">Todos los estados</SelectItem>
                     <SelectItem value="En proceso">En proceso</SelectItem>
                     <SelectItem value="Resuelto">Resuelto</SelectItem>
                     <SelectItem value="No resuelto">No resuelto</SelectItem>
@@ -182,7 +182,7 @@ export default function ComplaintsPage() {
                     <SelectValue placeholder="Todos los servicios" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value=" ">Todos los servicios</SelectItem>
+                    <SelectItem value="">Todos los servicios</SelectItem>
                     {services.map((service) => (
                       <SelectItem key={service.id} value={service.id.toString()}>
                         {service.name}
