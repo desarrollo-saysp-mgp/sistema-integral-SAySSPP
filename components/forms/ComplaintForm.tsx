@@ -551,10 +551,15 @@ export function ComplaintForm({
           <div>
             <Label>Responsable de Carga</Label>
             <Input
-              value={profile?.full_name || "Cargando..."}
+              value={profile?.full_name || "Usuario no disponible"}
               disabled
               className="bg-muted"
             />
+            {!profile && (
+              <p className="text-sm text-amber-600 mt-1">
+                ⚠️ No se pudo cargar el perfil del usuario
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

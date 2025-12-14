@@ -39,13 +39,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.error("Error fetching user profile:", error);
+        console.error("Error fetching user profile:", error.message);
+        return null;
+      }
+
+      if (!data) {
+        console.error("User profile not found");
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      console.error("Unexpected error fetching profile:", error);
       return null;
     }
   };
