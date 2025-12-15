@@ -122,7 +122,7 @@ export function Navbar() {
                   <NavigationMenuLink
                     className={cn(
                       navigationMenuTriggerStyle(),
-                      "bg-transparent text-white hover:bg-[#5CADEB]/20 hover:text-white",
+                      "bg-transparent text-white hover:bg-[#5CADEB]/20 hover:text-white flex items-center",
                       isActive("/dashboard") && !pathname?.includes("complaints") && "bg-[#5CADEB] font-semibold"
                     )}
                   >

@@ -27,8 +27,8 @@ export default function ComplaintsPage() {
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [serviceFilter, setServiceFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("all");
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
 
@@ -58,8 +58,8 @@ export default function ComplaintsPage() {
       const params = new URLSearchParams();
 
       if (searchTerm) params.append("search", searchTerm);
-      if (statusFilter) params.append("status", statusFilter);
-      if (serviceFilter) params.append("service_id", serviceFilter);
+      if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
+      if (serviceFilter && serviceFilter !== "all") params.append("service_id", serviceFilter);
       if (dateFromFilter) params.append("date_from", dateFromFilter);
       if (dateToFilter) params.append("date_to", dateToFilter);
 
@@ -167,7 +167,7 @@ export default function ComplaintsPage() {
                     <SelectValue placeholder="Todos los estados" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los estados</SelectItem>
+                    <SelectItem value="all">Todos los estados</SelectItem>
                     <SelectItem value="En proceso">En proceso</SelectItem>
                     <SelectItem value="Resuelto">Resuelto</SelectItem>
                     <SelectItem value="No resuelto">No resuelto</SelectItem>
@@ -182,7 +182,7 @@ export default function ComplaintsPage() {
                     <SelectValue placeholder="Todos los servicios" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los servicios</SelectItem>
+                    <SelectItem value="all">Todos los servicios</SelectItem>
                     {services.map((service) => (
                       <SelectItem key={service.id} value={service.id.toString()}>
                         {service.name}

@@ -2,24 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { DashboardLayout } from "./dashboard-layout";
 
-// Mock all dependencies
-vi.mock("./header", () => ({
-  Header: () => <div data-testid="header">Header</div>,
-}));
-
-vi.mock("./app-sidebar", () => ({
-  AppSidebar: () => <div data-testid="sidebar">Sidebar</div>,
-}));
-
-vi.mock("@/components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: any) => <div>{children}</div>,
-  SidebarInset: ({ children }: any) => <div>{children}</div>,
+// Mock Navbar component
+vi.mock("./navbar", () => ({
+  Navbar: () => <div data-testid="navbar">Navbar</div>,
 }));
 
 describe("DashboardLayout", () => {
   beforeEach(() => {
     cleanup();
   });
+
   it("should render children content", () => {
     render(
       <DashboardLayout>
@@ -30,24 +22,14 @@ describe("DashboardLayout", () => {
     expect(screen.getByText("Test Content")).toBeInTheDocument();
   });
 
-  it("should render Header component", () => {
+  it("should render Navbar component", () => {
     render(
       <DashboardLayout>
         <div>Content</div>
       </DashboardLayout>,
     );
 
-    expect(screen.getByTestId("header")).toBeInTheDocument();
-  });
-
-  it("should render AppSidebar component", () => {
-    render(
-      <DashboardLayout>
-        <div>Content</div>
-      </DashboardLayout>,
-    );
-
-    expect(screen.getByTestId("sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("should wrap content in main tag", () => {
@@ -60,5 +42,19 @@ describe("DashboardLayout", () => {
     const mainElement = container.querySelector("main");
     expect(mainElement).toBeInTheDocument();
     expect(mainElement).toHaveTextContent("Content");
+  });
+
+  it("should apply correct layout structure", () => {
+    const { container } = render(
+      <DashboardLayout>
+        <div>Content</div>
+      </DashboardLayout>,
+    );
+
+    // Should have flex column layout
+    const layoutDiv = container.firstChild as HTMLElement;
+    expect(layoutDiv).toHaveClass("flex");
+    expect(layoutDiv).toHaveClass("min-h-screen");
+    expect(layoutDiv).toHaveClass("flex-col");
   });
 });

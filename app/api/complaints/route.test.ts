@@ -211,8 +211,8 @@ describe("GET /api/complaints", () => {
 
     mockSelect.mockReturnValue(mockQuery);
 
-    // Request with empty service_id (Todos los servicios)
-    const request = new NextRequest("http://localhost:3000/api/complaints?service_id=");
+    // Request with "all" service_id (Todos los servicios)
+    const request = new NextRequest("http://localhost:3000/api/complaints?service_id=all");
     const response = await GET(request);
     const data = await response.json();
 
