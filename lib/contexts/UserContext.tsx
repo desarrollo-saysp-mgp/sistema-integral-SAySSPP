@@ -64,6 +64,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
 
+    // Set a maximum loading timeout of 5 seconds
+    const loadingTimeout = setTimeout(() => {
+      console.warn("UserContext: Loading timeout reached, forcing loading = false");
+      setLoading(false);
+    }, 5000);
+
     // Get initial session
     const initializeAuth = async () => {
       try {
@@ -75,6 +81,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error("Error getting session:", error);
           setLoading(false);
+          clearTimeout(loadingTimeout);
           return;
         }
 
@@ -87,6 +94,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         console.error("Error initializing auth:", error);
       } finally {
         setLoading(false);
+        clearTimeout(loadingTimeout);
       }
     };
 
