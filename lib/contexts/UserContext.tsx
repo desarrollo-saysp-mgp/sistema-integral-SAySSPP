@@ -122,21 +122,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
 
-      setUser(session?.user ?? null);
+      // Skip INITIAL_SESSION (handled by initializeAuth)
+      // Skip SIGNED_IN (causes timing issues - initializeAuth handles this too)
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        return;
+      }
 
-      if (session?.user) {
-        // Fetch profile before setting loading to false
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setProfile(profileData);
-          setLoading(false);
-        }
-      } else {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
         setProfile(null);
         setLoading(false);
+        return;
+      }
+
+      // Handle TOKEN_REFRESHED - update profile silently without setting loading
+      // This prevents navbar from disappearing during token refresh (e.g., tab switching)
+      if (event === "TOKEN_REFRESHED" && session?.user) {
+        const profileData = await fetchProfile(session.user.id);
+        if (!cancelled) {
+          setUser(session.user);
+          setProfile(profileData);
+        }
       }
     });
 
