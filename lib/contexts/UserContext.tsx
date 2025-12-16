@@ -124,16 +124,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return;
+
       setUser(session?.user ?? null);
+      setLoading(false); // Set loading false immediately when auth state is known
 
       if (session?.user) {
+        // Fetch profile in background, don't block loading state
         const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+        if (!cancelled) {
+          setProfile(profileData);
+        }
       } else {
         setProfile(null);
       }
-
-      setLoading(false);
     });
 
     return () => {

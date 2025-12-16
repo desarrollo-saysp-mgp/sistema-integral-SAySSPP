@@ -301,4 +301,71 @@ describe("UserContext", () => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
     });
   });
+
+  it("should set loading to false immediately even if profile fetch is slow", async () => {
+    const mockUser = {
+      id: "slow-user",
+      email: "slow@example.com",
+      aud: "authenticated",
+      created_at: "2024-01-01",
+    };
+
+    // Mock slow profile fetch (2 second delay)
+    const slowProfileFetch = new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            data: {
+              id: "slow-user",
+              email: "slow@example.com",
+              full_name: "Slow User",
+              role: "Admin",
+              created_at: "2024-01-01",
+              updated_at: "2024-01-01",
+            },
+            error: null,
+          }),
+        2000,
+      ),
+    );
+
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    });
+
+    mockFrom.mockReturnValue({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => slowProfileFetch),
+        })),
+      })),
+    } as any);
+
+    render(
+      <UserProvider>
+        <TestComponent />
+      </UserProvider>,
+    );
+
+    // Loading should be false within 500ms, even though profile takes 2s
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+        expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+      },
+      { timeout: 1000 },
+    );
+
+    // Profile might not be loaded yet
+    expect(screen.queryByTestId("profile-name")).not.toBeInTheDocument();
+
+    // Wait for profile to eventually load
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("profile-name")).toHaveTextContent("Slow User");
+      },
+      { timeout: 3000 },
+    );
+  });
 });
