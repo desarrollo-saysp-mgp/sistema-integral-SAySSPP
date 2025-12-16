@@ -84,13 +84,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
           try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-            if (!sessionError && session?.user) {
+            if (!cancelled && !sessionError && session?.user) {
               setUser(session.user);
-              fetchProfile(session.user.id).then(profileData => {
-                if (!cancelled) {
-                  setProfile(profileData);
-                }
-              });
+              // Fetch profile and wait for it
+              const profileData = await fetchProfile(session.user.id);
+              if (!cancelled) {
+                setProfile(profileData);
+              }
             }
           } catch (fallbackError) {
             console.error("Fallback session retrieval also failed:", fallbackError);
@@ -102,12 +102,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (user) {
           setUser(user);
-          // Fetch profile in parallel with setting user
-          fetchProfile(user.id).then(profileData => {
-            if (!cancelled) {
-              setProfile(profileData);
-            }
-          });
+          // Fetch profile and wait for it before setting loading to false
+          const profileData = await fetchProfile(user.id);
+          if (!cancelled) {
+            setProfile(profileData);
+          }
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
@@ -127,16 +126,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       setUser(session?.user ?? null);
-      setLoading(false); // Set loading false immediately when auth state is known
 
       if (session?.user) {
-        // Fetch profile in background, don't block loading state
+        // Fetch profile before setting loading to false
         const profileData = await fetchProfile(session.user.id);
         if (!cancelled) {
           setProfile(profileData);
+          setLoading(false);
         }
       } else {
         setProfile(null);
+        setLoading(false);
       }
     });
 
