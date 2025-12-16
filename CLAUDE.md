@@ -566,7 +566,7 @@ After completing each task:
 
 ## Current Status
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-16
 
 **Current Phase**: Phase 5 - Dashboard & Reporting - COMPLETE ✅
 
@@ -578,8 +578,16 @@ After completing each task:
 - ✅ Phase 4 complete: 12/12 tasks (100%)
 - ✅ Phase 5 complete: 4/4 tasks (100%)
 - ✅ UI/UX Navigation & Layout: 8/8 tasks (100%)
+- 🔧 UI/UX Polish: In Progress
 
-**Latest Completed**: Layout wrappers for navbar visibility (fix/add-dashboard-admin-layouts)
+**Latest Completed**: Filter alignment in complaints page (fix/complaints-filter-alignment)
+
+- ✅ Set consistent height (h-10) for all filter inputs and selects
+- ✅ Implemented flexbox layout for proper label/input alignment
+- ✅ Added items-end to grid for bottom alignment
+- ✅ Ensured Estado, Servicio, Desde, and Hasta filters are visually aligned
+
+**Previous Completion**: Layout wrappers for navbar visibility (fix/add-dashboard-admin-layouts)
 
 - ✅ Added app/dashboard/layout.tsx to wrap all dashboard pages
 - ✅ Added app/admin/layout.tsx to wrap all admin pages
