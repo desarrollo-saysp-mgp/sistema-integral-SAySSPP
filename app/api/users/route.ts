@@ -134,9 +134,16 @@ export async function POST(request: NextRequest) {
     const adminClient = await createAdminClient();
 
     // Invite user via email - this sends an invitation email automatically
+    // Determine site URL:
+    // - On Vercel: use VERCEL_URL (automatically set for both production & preview)
+    // - Locally: use NEXT_PUBLIC_SITE_URL from .env.local
+    const siteUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_SITE_URL;
+
     const { data: newAuthUser, error: authCreateError } =
       await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard`,
+        redirectTo: `${siteUrl}/dashboard`,
       });
 
     if (authCreateError || !newAuthUser.user) {
