@@ -2,6 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  // Handle OPTIONS requests (CORS preflight) immediately
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, { status: 200 });
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
