@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { UserUpdate } from "@/types";
 
@@ -119,10 +119,13 @@ export async function PATCH(
       );
     }
 
+    // Create admin client for auth operations
+    const adminClient = await createAdminClient();
+
     // Update email in Auth if email changed
     if (email) {
       const { error: authUpdateError } =
-        await supabase.auth.admin.updateUserById(id, { email });
+        await adminClient.auth.admin.updateUserById(id, { email });
 
       if (authUpdateError) {
         console.error("Error updating auth user email:", authUpdateError);
@@ -135,7 +138,7 @@ export async function PATCH(
 
     // Update password if provided
     if (password) {
-      const { error: passwordError } = await supabase.auth.admin.updateUserById(
+      const { error: passwordError } = await adminClient.auth.admin.updateUserById(
         id,
         { password },
       );
@@ -245,8 +248,11 @@ export async function DELETE(
       );
     }
 
+    // Create admin client for auth operations
+    const adminClient = await createAdminClient();
+
     // Delete from Auth
-    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id);
+    const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(id);
 
     if (authDeleteError) {
       console.error("Error deleting auth user:", authDeleteError);
