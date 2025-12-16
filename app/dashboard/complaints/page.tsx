@@ -159,11 +159,13 @@ export default function ComplaintsPage() {
 
           {/* Filters Panel */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
-              <div>
-                <Label htmlFor="status-filter">Estado</Label>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t items-end">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="status-filter" className="text-sm font-medium">
+                  Estado
+                </Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger id="status-filter">
+                  <SelectTrigger id="status-filter" className="h-10">
                     <SelectValue placeholder="Todos los estados" />
                   </SelectTrigger>
                   <SelectContent>
@@ -175,10 +177,12 @@ export default function ComplaintsPage() {
                 </Select>
               </div>
 
-              <div>
-                <Label htmlFor="service-filter">Servicio</Label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="service-filter" className="text-sm font-medium">
+                  Servicio
+                </Label>
                 <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger id="service-filter">
+                  <SelectTrigger id="service-filter" className="h-10">
                     <SelectValue placeholder="Todos los servicios" />
                   </SelectTrigger>
                   <SelectContent>
@@ -192,23 +196,29 @@ export default function ComplaintsPage() {
                 </Select>
               </div>
 
-              <div>
-                <Label htmlFor="date-from">Desde</Label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="date-from" className="text-sm font-medium">
+                  Desde
+                </Label>
                 <Input
                   id="date-from"
                   type="date"
                   value={dateFromFilter}
                   onChange={(e) => setDateFromFilter(e.target.value)}
+                  className="h-10"
                 />
               </div>
 
-              <div>
-                <Label htmlFor="date-to">Hasta</Label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="date-to" className="text-sm font-medium">
+                  Hasta
+                </Label>
                 <Input
                   id="date-to"
                   type="date"
                   value={dateToFilter}
                   onChange={(e) => setDateToFilter(e.target.value)}
+                  className="h-10"
                 />
               </div>
 
