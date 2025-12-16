@@ -254,6 +254,12 @@ CREATE POLICY "Admins can update users"
     ON users FOR UPDATE
     TO authenticated
     USING (public.is_admin(auth.uid()));
+
+-- Only admins can delete users
+CREATE POLICY "Admins can delete users"
+    ON users FOR DELETE
+    TO authenticated
+    USING (public.is_admin(auth.uid()));
 ```
 
 ### Complaints Table Policies
@@ -396,3 +402,219 @@ All complaint fields plus:
 - Service name (instead of ID)
 - Cause name (instead of ID)
 - Loaded by name (instead of user ID)
+
+## Exporting Schema for Production Deployment
+
+This section explains how to export your complete database schema (including tables, functions, RLS policies, indexes, and triggers) from your testing/development Supabase instance to deploy to your production environment.
+
+### Method 1: Using Supabase CLI (Recommended)
+
+The Supabase CLI provides the most complete and reliable export.
+
+#### Prerequisites
+
+1. **Install Supabase CLI:**
+   ```bash
+   npm install -g supabase
+   ```
+
+2. **Get your database connection string:**
+   - Go to Supabase Dashboard → Project Settings → Database
+   - Copy the **Connection String** (URI format)
+   - It looks like: `postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
+
+#### Export Complete Schema
+
+Run this command to export your entire schema including RLS policies:
+
+```bash
+# Export schema to a file
+supabase db dump --db-url "postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres" -f schema.sql
+
+# Or export only specific schemas (public schema contains your tables)
+supabase db dump --db-url "postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres" --schema public -f public_schema.sql
+```
+
+**What gets exported:**
+- ✅ All table definitions
+- ✅ All indexes
+- ✅ All foreign keys and constraints
+- ✅ All functions (including `is_admin()` helper)
+- ✅ All RLS policies
+- ✅ All triggers
+- ✅ Column defaults and data types
+
+#### Export Data (Optional)
+
+If you also want to export sample data:
+
+```bash
+# Export data only (no schema)
+supabase db dump --db-url "postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres" --data-only -f data.sql
+
+# Export specific tables with data
+supabase db dump --db-url "postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres" --data-only --table public.services --table public.causes -f sample_data.sql
+```
+
+### Method 2: Using Supabase Dashboard
+
+For quick manual exports of individual components:
+
+#### Export Table Schema
+
+1. Go to **Table Editor** in Supabase Dashboard
+2. Select a table
+3. Click the **⋮** (three dots) menu
+4. Select **View SQL Definition**
+5. Copy the SQL and save to a file
+
+**Note:** This only exports the table definition, not RLS policies or functions.
+
+#### Export RLS Policies
+
+1. Go to **Authentication** → **Policies**
+2. Click on a table to see its policies
+3. Click **View SQL** on each policy
+4. Copy and save to your schema file
+
+**Note:** Manual method - you'll need to do this for each table.
+
+#### Export Functions
+
+1. Go to **Database** → **Functions**
+2. Click on a function (e.g., `is_admin`)
+3. View the function definition
+4. Copy to your schema file
+
+### Method 3: Using pg_dump Directly
+
+If you have PostgreSQL tools installed:
+
+```bash
+# Full schema export
+pg_dump -h db.[PROJECT-REF].supabase.co \
+  -U postgres \
+  -d postgres \
+  --schema-only \
+  --no-owner \
+  --no-privileges \
+  -f complete_schema.sql
+
+# With RLS policies (PostgreSQL 10+)
+pg_dump -h db.[PROJECT-REF].supabase.co \
+  -U postgres \
+  -d postgres \
+  --schema-only \
+  --no-owner \
+  --no-privileges \
+  --enable-row-security \
+  -f schema_with_rls.sql
+```
+
+### Deploying to Production Environment
+
+Once you have your `schema.sql` file exported:
+
+#### Option A: Using Supabase Dashboard (Manual)
+
+1. Go to your **production Supabase project**
+2. Navigate to **SQL Editor**
+3. Create a new query
+4. Paste the contents of `schema.sql`
+5. Click **Run** (or Cmd/Ctrl + Enter)
+6. Verify all tables, functions, and policies were created
+
+#### Option B: Using Supabase CLI
+
+```bash
+# Apply schema to production database
+supabase db push --db-url "postgresql://postgres:[PROD-PASSWORD]@db.[PROD-PROJECT-REF].supabase.co:5432/postgres" --file schema.sql
+```
+
+#### Option C: Using psql
+
+```bash
+# Import schema using psql
+psql -h db.[PROD-PROJECT-REF].supabase.co \
+  -U postgres \
+  -d postgres \
+  -f schema.sql
+```
+
+### Verification Checklist
+
+After importing to production, verify:
+
+- [ ] **Tables created:** Check all 4 tables exist (users, complaints, services, causes)
+- [ ] **Indexes created:** Verify indexes on email, role, complaint_number, etc.
+- [ ] **Foreign keys:** Verify relationships between tables
+- [ ] **Functions created:** Verify `is_admin()` function exists
+- [ ] **RLS enabled:** Verify `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` was applied
+- [ ] **RLS policies:** Verify all policies exist:
+  - Users: SELECT (2), INSERT (1), UPDATE (1), DELETE (1) = 5 policies
+  - Complaints: SELECT (1), INSERT (1), UPDATE (1) = 3 policies
+  - Services: SELECT (1), ALL (1) = 2 policies
+  - Causes: SELECT (1), ALL (1) = 2 policies
+- [ ] **Sample data** (optional): If you exported data, verify it was imported
+
+### Quick Verification Queries
+
+Run these in your production SQL Editor to verify everything:
+
+```sql
+-- Check all tables exist
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+-- Check all RLS policies
+SELECT schemaname, tablename, policyname, cmd
+FROM pg_policies
+WHERE schemaname = 'public'
+ORDER BY tablename, policyname;
+
+-- Check functions
+SELECT routine_name, routine_type
+FROM information_schema.routines
+WHERE routine_schema = 'public'
+ORDER BY routine_name;
+
+-- Verify is_admin function exists
+SELECT public.is_admin(auth.uid());
+
+-- Check row counts (if you imported data)
+SELECT
+  (SELECT COUNT(*) FROM users) as users_count,
+  (SELECT COUNT(*) FROM services) as services_count,
+  (SELECT COUNT(*) FROM causes) as causes_count,
+  (SELECT COUNT(*) FROM complaints) as complaints_count;
+```
+
+### Important Notes
+
+1. **Connection Strings:** Never commit database passwords to version control
+2. **Service Role Key:** Update your production `.env` with the production Supabase keys
+3. **Auth Users:** `auth.users` table is managed by Supabase Auth - you don't export/import this directly
+4. **RLS Policies:** Always verify RLS policies were created - security depends on them
+5. **Testing:** Test authentication and permissions in production with a test admin user
+6. **Rollback Plan:** Keep your schema export file for rollback if needed
+
+### Troubleshooting
+
+**Error: "permission denied"**
+- Make sure you're using the correct database password
+- Verify your user has sufficient privileges
+
+**Error: "relation already exists"**
+- Production database may have leftover tables
+- Drop existing tables first, or use `DROP TABLE IF EXISTS` in your schema
+
+**RLS policies not working:**
+- Verify `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` was executed
+- Check that `is_admin()` function exists and works
+- Test with: `SELECT public.is_admin(auth.uid());`
+
+**Functions causing errors:**
+- Make sure to create helper functions BEFORE creating policies that use them
+- The `is_admin()` function must be created before user table policies
