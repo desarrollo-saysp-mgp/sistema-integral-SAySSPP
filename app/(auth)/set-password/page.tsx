@@ -19,24 +19,46 @@ function SetPasswordForm() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    // Check if user is already authenticated (from invitation token)
-    const checkSession = async () => {
+    // Exchange invitation token for session
+    const setupSession = async () => {
       const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
 
-      // If no session, the invitation token might be invalid
-      if (!session) {
+      // Check if there's a token hash in the URL (from invitation email)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      const type = hashParams.get("type");
+
+      // If we have tokens from the URL, set the session
+      if (accessToken && refreshToken && type === "invite") {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          toast.error("Error al establecer sesión: " + error.message);
+          return;
+        }
+      }
+
+      // Verify we have a valid session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
         // Check if there's an error in URL params
         const errorParam = searchParams.get("error");
         const errorDescription = searchParams.get("error_description");
 
         if (errorParam) {
           toast.error(errorDescription || "Enlace de invitación inválido o expirado");
+        } else {
+          toast.error("Sesión no encontrada. Por favor, usa el enlace de invitación.");
         }
       }
     };
 
-    checkSession();
+    setupSession();
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
