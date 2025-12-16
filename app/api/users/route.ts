@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { UserInsert, UserFilters } from "@/types";
 
@@ -130,9 +130,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Create admin client for auth operations
+    const adminClient = await createAdminClient();
+
     // Invite user via email - this sends an invitation email automatically
     const { data: newAuthUser, error: authCreateError } =
-      await supabase.auth.admin.inviteUserByEmail(email, {
+      await adminClient.auth.admin.inviteUserByEmail(email, {
         redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard`,
       });
 
@@ -165,7 +168,7 @@ export async function POST(request: NextRequest) {
     if (dbError) {
       console.error("Error creating user in database:", dbError);
       // Rollback: delete auth user if database insert fails
-      await supabase.auth.admin.deleteUser(newAuthUser.user.id);
+      await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
       return NextResponse.json(
         { error: "Error al crear usuario en la base de datos" },
         { status: 500 },
