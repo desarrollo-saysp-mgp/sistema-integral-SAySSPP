@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
 
     const { data: newAuthUser, error: authCreateError } =
       await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/dashboard`,
+        redirectTo: `${siteUrl}/set-password`,
       });
 
     if (authCreateError || !newAuthUser.user) {
