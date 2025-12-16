@@ -49,11 +49,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (status) {
+    if (status && status !== "all") {
       query = query.eq("status", status);
     }
 
-    if (service_id) {
+    if (service_id && service_id !== "all") {
       query = query.eq("service_id", parseInt(service_id));
     }
 

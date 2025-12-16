@@ -4,14 +4,14 @@ import { UserProvider, useUser } from "./UserContext";
 import type { User } from "@/types/database";
 
 // Mock Supabase client
-const mockGetSession = vi.fn();
+const mockGetUser = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
-      getSession: mockGetSession,
+      getUser: mockGetUser,
       onAuthStateChange: mockOnAuthStateChange,
     },
     from: mockFrom,
@@ -62,8 +62,8 @@ describe("UserContext", () => {
     vi.clearAllMocks();
 
     // Default mock: unauthenticated state
-    mockGetSession.mockResolvedValue({
-      data: { session: null },
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
       error: null,
     });
 
@@ -136,8 +136,8 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } as any },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -195,8 +195,8 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } as any },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -242,8 +242,8 @@ describe("UserContext", () => {
       created_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } as any },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -279,8 +279,8 @@ describe("UserContext", () => {
   });
 
   it("should handle session error", async () => {
-    mockGetSession.mockResolvedValue({
-      data: { session: null },
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
       error: { message: "Session error" } as any,
     });
 

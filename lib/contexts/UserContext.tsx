@@ -63,30 +63,40 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient();
+    let cancelled = false;
 
     // Get initial session
     const initializeAuth = async () => {
       try {
+        // Use getUser() instead of getSession() - it's faster and cached
         const {
-          data: { session },
+          data: { user },
           error,
-        } = await supabase.auth.getSession();
+        } = await supabase.auth.getUser();
+
+        if (cancelled) return;
 
         if (error) {
-          console.error("Error getting session:", error);
+          console.error("Error getting user:", error);
           setLoading(false);
           return;
         }
 
-        if (session?.user) {
-          setUser(session.user);
-          const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
+        if (user) {
+          setUser(user);
+          // Fetch profile in parallel with setting user
+          fetchProfile(user.id).then(profileData => {
+            if (!cancelled) {
+              setProfile(profileData);
+            }
+          });
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -109,6 +119,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
