@@ -5,6 +5,7 @@ import type { User } from "@/types/database";
 
 // Mock Supabase client
 const mockGetUser = vi.fn();
+const mockGetSession = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 const mockFrom = vi.fn();
 
@@ -12,6 +13,7 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
       getUser: mockGetUser,
+      getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
     },
     from: mockFrom,
@@ -64,6 +66,11 @@ describe("UserContext", () => {
     // Default mock: unauthenticated state
     mockGetUser.mockResolvedValue({
       data: { user: null },
+      error: null,
+    });
+
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
       error: null,
     });
 

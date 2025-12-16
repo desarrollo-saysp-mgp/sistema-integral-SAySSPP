@@ -68,7 +68,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Get initial session
     const initializeAuth = async () => {
       try {
-        // Use getUser() instead of getSession() - it's faster and cached
+        // Try getUser() first (validates JWT)
         const {
           data: { user },
           error,
@@ -76,8 +76,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
+        // If getUser() fails with session error, try getSession() as fallback
         if (error) {
           console.error("Error getting user:", error);
+
+          // Try fallback to getSession for graceful degradation
+          try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (!sessionError && session?.user) {
+              setUser(session.user);
+              fetchProfile(session.user.id).then(profileData => {
+                if (!cancelled) {
+                  setProfile(profileData);
+                }
+              });
+            }
+          } catch (fallbackError) {
+            console.error("Fallback session retrieval also failed:", fallbackError);
+          }
+
           setLoading(false);
           return;
         }
