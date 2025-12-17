@@ -120,7 +120,7 @@ export function Navbar() {
           </Link>
 
           {/* Reclamos Dropdown */}
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -133,7 +133,7 @@ export function Navbar() {
                 Reclamos
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[280px]">
+            <DropdownMenuContent align="center" side="bottom" className="w-[280px]">
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/complaints/new" className="cursor-pointer">
                   <div className="flex flex-col gap-1 py-1">
@@ -165,7 +165,7 @@ export function Navbar() {
 
           {/* Admin Dropdown - Only for Admins */}
           {isAdmin && (
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -178,7 +178,7 @@ export function Navbar() {
                   Administración
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[280px]">
+              <DropdownMenuContent align="center" side="bottom" className="w-[280px]">
                 <DropdownMenuItem asChild>
                   <Link href="/admin/users" className="cursor-pointer">
                     <div className="flex flex-col gap-1 py-1">
