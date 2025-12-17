@@ -443,7 +443,7 @@ describe("POST /api/users", () => {
     expect(mockAdminAuth.admin.inviteUserByEmail).toHaveBeenCalledWith(
       "john@example.com",
       expect.objectContaining({
-        redirectTo: expect.stringContaining("/dashboard"),
+        redirectTo: expect.stringContaining("/set-password"),
       }),
     );
     expect(data.message).toBe("Usuario creado exitosamente");

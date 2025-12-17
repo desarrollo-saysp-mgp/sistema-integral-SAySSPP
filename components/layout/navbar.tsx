@@ -13,15 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
-import {
   Home,
   FileText,
   PlusCircle,
@@ -113,138 +104,110 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center gap-6">
-          <NavigationMenu>
-            <NavigationMenuList>
-              {/* Dashboard */}
-              <NavigationMenuItem>
-                <Link href="/dashboard" legacyBehavior passHref>
-                  <NavigationMenuLink
-                    className={cn(
-                      navigationMenuTriggerStyle(),
-                      "bg-transparent text-white hover:bg-[#5CADEB]/20 hover:text-white flex items-center",
-                      isActive("/dashboard") && !pathname?.includes("complaints") && "bg-[#5CADEB] font-semibold"
-                    )}
-                  >
-                    <Home className="h-4 w-4 mr-2" />
-                    Dashboard
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
+        <div className="hidden md:flex items-center gap-2">
+          {/* Dashboard Link */}
+          <Link href="/dashboard">
+            <Button
+              variant="ghost"
+              className={cn(
+                "text-white hover:bg-[#5CADEB]/20 hover:text-white",
+                isActive("/dashboard") && !pathname?.includes("complaints") && "bg-[#5CADEB] font-semibold"
+              )}
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Dashboard
+            </Button>
+          </Link>
 
-              {/* Reclamos Dropdown */}
-              <NavigationMenuItem>
-                <NavigationMenuTrigger
+          {/* Reclamos Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "text-white hover:bg-[#5CADEB]/20 hover:text-white",
+                  pathname?.includes("complaints") && "bg-[#5CADEB]/20"
+                )}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Reclamos
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[280px]">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/complaints/new" className="cursor-pointer">
+                  <div className="flex flex-col gap-1 py-1">
+                    <div className="flex items-center gap-2">
+                      <PlusCircle className="h-4 w-4 text-[#5CADEB]" />
+                      <span className="font-medium">Nuevo Reclamo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">
+                      Crear un nuevo reclamo ciudadano
+                    </p>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/complaints" className="cursor-pointer">
+                  <div className="flex flex-col gap-1 py-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-[#5CADEB]" />
+                      <span className="font-medium">Ver Todos</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">
+                      Lista completa de reclamos
+                    </p>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Admin Dropdown - Only for Admins */}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
                   className={cn(
-                    "bg-transparent text-white hover:bg-[#5CADEB]/20 hover:text-white data-[state=open]:bg-[#5CADEB]/30",
-                    pathname?.includes("complaints") && "bg-[#5CADEB]/20"
+                    "text-white hover:bg-[#5CADEB]/20 hover:text-white",
+                    pathname?.includes("admin") && "bg-[#5CADEB]/20"
                   )}
                 >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Reclamos
-                </NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <ul className="grid w-[240px] gap-1 p-2">
-                    <li>
-                      <NavigationMenuLink asChild>
-                        <Link
-                          href="/dashboard/complaints/new"
-                          className={cn(
-                            "block select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-[#5CADEB]/10",
-                            isActive("/dashboard/complaints/new") && "bg-[#5CADEB]/20"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <PlusCircle className="h-4 w-4 text-[#5CADEB]" />
-                            <div className="text-sm font-medium">Nuevo Reclamo</div>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Crear un nuevo reclamo ciudadano
-                          </p>
-                        </Link>
-                      </NavigationMenuLink>
-                    </li>
-                    <li>
-                      <NavigationMenuLink asChild>
-                        <Link
-                          href="/dashboard/complaints"
-                          className={cn(
-                            "block select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-[#5CADEB]/10",
-                            pathname === "/dashboard/complaints" && "bg-[#5CADEB]/20"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-[#5CADEB]" />
-                            <div className="text-sm font-medium">Ver Todos</div>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Lista completa de reclamos
-                          </p>
-                        </Link>
-                      </NavigationMenuLink>
-                    </li>
-                  </ul>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-
-              {/* Admin Dropdown - Only for Admins */}
-              {isAdmin && (
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger
-                    className={cn(
-                      "bg-transparent text-white hover:bg-[#5CADEB]/20 hover:text-white data-[state=open]:bg-[#5CADEB]/30",
-                      pathname?.includes("admin") && "bg-[#5CADEB]/20"
-                    )}
-                  >
-                    <FolderKanban className="h-4 w-4 mr-2" />
-                    Administración
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-[240px] gap-1 p-2">
-                      <li>
-                        <NavigationMenuLink asChild>
-                          <Link
-                            href="/admin/users"
-                            className={cn(
-                              "block select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-[#5CADEB]/10",
-                              isActive("/admin/users") && "bg-[#5CADEB]/20"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-[#5CADEB]" />
-                              <div className="text-sm font-medium">Usuarios</div>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Gestionar usuarios del sistema
-                            </p>
-                          </Link>
-                        </NavigationMenuLink>
-                      </li>
-                      <li>
-                        <NavigationMenuLink asChild>
-                          <Link
-                            href="/admin/services"
-                            className={cn(
-                              "block select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-[#5CADEB]/10",
-                              isActive("/admin/services") && "bg-[#5CADEB]/20"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <FolderKanban className="h-4 w-4 text-[#5CADEB]" />
-                              <div className="text-sm font-medium">Servicios</div>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Configurar servicios y causas
-                            </p>
-                          </Link>
-                        </NavigationMenuLink>
-                      </li>
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              )}
-            </NavigationMenuList>
-          </NavigationMenu>
+                  <FolderKanban className="h-4 w-4 mr-2" />
+                  Administración
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[280px]">
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/users" className="cursor-pointer">
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-[#5CADEB]" />
+                        <span className="font-medium">Usuarios</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">
+                        Gestionar usuarios del sistema
+                      </p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/services" className="cursor-pointer">
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-4 w-4 text-[#5CADEB]" />
+                        <span className="font-medium">Servicios</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">
+                        Configurar servicios y causas
+                      </p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* User Menu */}
