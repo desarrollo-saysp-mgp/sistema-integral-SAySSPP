@@ -267,7 +267,8 @@ describe("Navbar", () => {
 
   describe("Mobile Navigation", () => {
     it("should show mobile menu items when hamburger is clicked", async () => {
-      const { user } = await import("@testing-library/user-event");
+      const userEvent = (await import("@testing-library/user-event")).default;
+      const user = userEvent.setup();
 
       (useUser as any).mockReturnValue({
         profile: {

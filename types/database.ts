@@ -30,7 +30,7 @@ export interface Database {
       complaints: {
         Row: {
           id: number;
-          complaint_number: number;
+          complaint_number: string;
           complaint_date: string;
           complainant_name: string;
           address: string;
@@ -50,7 +50,7 @@ export interface Database {
         };
         Insert: {
           id?: number;
-          complaint_number?: number | null;
+          complaint_number?: string | null;
           complaint_date?: string;
           complainant_name: string;
           address: string;
@@ -70,7 +70,7 @@ export interface Database {
         };
         Update: {
           id?: number;
-          complaint_number?: number | null;
+          complaint_number?: string | null;
           complaint_date?: string;
           complainant_name?: string;
           address?: string;
