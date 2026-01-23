@@ -127,6 +127,59 @@ Tasks to improve user experience and interface beyond core functionality.
 - [x] Implement active route highlighting in navbar
 - [x] Ensure navbar is sticky/fixed at top of page
 
+## Improvements & Fixes
+
+Recent enhancements and bug fixes implemented to improve the complaint management system.
+
+### Contact Information Enhancement (2026-01-23)
+
+**Overview**: Added optional phone number and email fields to complaints, and changed "Desde cuándo" from date picker to a predefined time period dropdown.
+
+**Changes**:
+1. **Phone Number Field** (Optional)
+   - Conditionally visible when "Telefono" or "WhatsApp" contact method is selected
+   - Validation: Only digits, max 50 characters (for local city use)
+   - Empty string stored if not provided
+
+2. **Email Field** (Optional)
+   - Conditionally visible when "Email" contact method is selected
+   - Validation: Basic email format, max 100 characters
+   - Empty string stored if not provided
+
+3. **"Desde Cuándo" Dropdown**
+   - Changed from date picker to dropdown with time period options
+   - Options: "En el día", "1 semana", "1 mes", "3 meses", "6 meses", "1 año"
+   - Database still stores DATE type
+   - Form converts selected period to calculated date before submission
+   - When editing, displays closest period match to stored date
+
+**Database Changes**:
+- Added `phone_number` column (VARCHAR(20), nullable) to `complaints` table
+- Added `email` column (VARCHAR(100), nullable) to `complaints` table
+- No changes to `since_when` column (remains DATE type)
+- Migration file: `/supabase/migrations/add_contact_fields.sql`
+
+**Files Modified**:
+- `/types/database.ts` - Added phone_number and email to Complaint types
+- `/types/index.ts` - Added SinceWhenPeriod type and SINCE_WHEN_OPTIONS constant
+- `/components/forms/ComplaintForm.tsx` - Added conditional phone/email fields, since_when dropdown, date calculation logic
+- `/app/api/complaints/route.ts` - Added validation for phone and email in POST handler
+- `/app/api/complaints/[id]/route.ts` - Added validation for phone and email in PATCH handler
+
+**Testing**:
+- Added 19 new tests across 3 test files:
+  - ComplaintForm.test.tsx: 8 tests for conditional rendering and form functionality
+  - app/api/complaints/route.test.ts: 7 tests for phone/email validation in POST
+  - app/api/complaints/[id]/route.test.ts: 4 tests for phone/email validation in PATCH
+- All 249 tests passing
+
+**Key Features**:
+- Conditional rendering: phone/email fields only appear when relevant contact method is selected
+- Auto-clear: fields are automatically cleared when contact method changes
+- Simplified validation: only digits for phone (no strict length requirement), basic email format
+- SQL injection protection: handled by Supabase parameterized queries
+- Backwards compatible: existing complaints without phone/email work perfectly
+
 ## Development Workflow
 
 When implementing a task, follow these phases:
