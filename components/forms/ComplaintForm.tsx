@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Complaint, Service, Cause } from "@/types";
+import type { Complaint, Service, Cause, SinceWhenPeriod } from "@/types";
+import { SINCE_WHEN_OPTIONS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,10 +22,12 @@ export interface ComplaintFormData {
   address: string;
   street_number: string;
   dni: string;
+  phone_number: string;
+  email: string;
   service_id: string;
   cause_id: string;
   zone: string;
-  since_when: string;
+  since_when_period: SinceWhenPeriod | "";
   contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp" | "";
   details: string;
   status: "En proceso" | "Resuelto" | "No resuelto";
@@ -56,10 +59,12 @@ export function ComplaintForm({
     address: "",
     street_number: "",
     dni: "",
+    phone_number: "",
+    email: "",
     service_id: "",
     cause_id: "",
     zone: "",
-    since_when: "",
+    since_when_period: "",
     contact_method: "",
     details: "",
     status: "En proceso",
@@ -75,6 +80,71 @@ export function ComplaintForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
 
+  // Helper function to convert period to date
+  const calculateDateFromPeriod = (
+    period: SinceWhenPeriod,
+    referenceDate: string = today,
+  ): string => {
+    const date = new Date(referenceDate);
+
+    switch (period) {
+      case "En el día":
+        // Same day as reference
+        return date.toISOString().split("T")[0];
+      case "1 semana":
+        date.setDate(date.getDate() - 7);
+        break;
+      case "1 mes":
+        date.setMonth(date.getMonth() - 1);
+        break;
+      case "3 meses":
+        date.setMonth(date.getMonth() - 3);
+        break;
+      case "6 meses":
+        date.setMonth(date.getMonth() - 6);
+        break;
+      case "1 año":
+        date.setFullYear(date.getFullYear() - 1);
+        break;
+    }
+
+    return date.toISOString().split("T")[0];
+  };
+
+  // Helper function to convert date to closest period (for edit mode)
+  const getClosestPeriod = (
+    sinceWhenDate: string,
+    complaintDate: string,
+  ): SinceWhenPeriod => {
+    const since = new Date(sinceWhenDate);
+    const complaint = new Date(complaintDate);
+    const diffMs = complaint.getTime() - since.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Map to closest period
+    if (diffDays === 0) return "En el día";
+    if (diffDays <= 10) return "1 semana";
+    if (diffDays <= 45) return "1 mes";
+    if (diffDays <= 135) return "3 meses";
+    if (diffDays <= 270) return "6 meses";
+    return "1 año";
+  };
+
+  // Validation helper functions
+  const validatePhone = (phone: string): boolean => {
+    if (!phone.trim()) return true; // Optional field
+    // Only digits allowed, max 50 chars
+    const digitsOnly = /^\d+$/;
+    return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
+  };
+
+  const validateEmail = (email: string): boolean => {
+    if (!email.trim()) return true; // Optional field
+    // Basic email format, max 100 chars
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailPattern.test(email.trim()) && email.trim().length <= 100;
+  };
+
   // Load services and causes on mount
   useEffect(() => {
     fetchServicesAndCauses();
@@ -89,10 +159,15 @@ export function ComplaintForm({
         address: complaint.address,
         street_number: complaint.street_number,
         dni: complaint.dni || "",
+        phone_number: complaint.phone_number || "",
+        email: complaint.email || "",
         service_id: complaint.service_id.toString(),
         cause_id: complaint.cause_id.toString(),
         zone: complaint.zone,
-        since_when: complaint.since_when,
+        since_when_period: getClosestPeriod(
+          complaint.since_when,
+          complaint.complaint_date,
+        ),
         contact_method: complaint.contact_method,
         details: complaint.details,
         status: complaint.status,
@@ -122,6 +197,23 @@ export function ComplaintForm({
       setFormData((prev) => ({ ...prev, cause_id: "" }));
     }
   }, [formData.service_id, causes]);
+
+  // Clear phone/email when contact method changes
+  useEffect(() => {
+    // Clear phone number if contact method is not Telefono or WhatsApp
+    if (
+      formData.contact_method !== "Telefono" &&
+      formData.contact_method !== "WhatsApp" &&
+      formData.phone_number
+    ) {
+      setFormData((prev) => ({ ...prev, phone_number: "" }));
+    }
+
+    // Clear email if contact method is not Email
+    if (formData.contact_method !== "Email" && formData.email) {
+      setFormData((prev) => ({ ...prev, email: "" }));
+    }
+  }, [formData.contact_method]);
 
   const fetchServicesAndCauses = async () => {
     setIsLoadingServices(true);
@@ -176,8 +268,20 @@ export function ComplaintForm({
       newErrors.zone = "La zona es requerida";
     }
 
-    if (!formData.since_when) {
-      newErrors.since_when = "La fecha 'Desde cuándo' es requerida";
+    if (!formData.since_when_period) {
+      newErrors.since_when_period =
+        "Debe seleccionar desde cuándo existe el problema";
+    }
+
+    // Phone validation (optional but must be valid if provided)
+    if (formData.phone_number.trim() && !validatePhone(formData.phone_number)) {
+      newErrors.phone_number =
+        "Formato inválido. Solo números, máximo 50 caracteres";
+    }
+
+    // Email validation (optional but must be valid if provided)
+    if (formData.email.trim() && !validateEmail(formData.email)) {
+      newErrors.email = "Formato de email inválido";
     }
 
     if (!formData.contact_method) {
@@ -199,15 +303,6 @@ export function ComplaintForm({
       newErrors.complaint_date = "La fecha no puede ser futura";
     }
 
-    if (
-      formData.since_when &&
-      formData.complaint_date &&
-      formData.since_when > formData.complaint_date
-    ) {
-      newErrors.since_when =
-        "La fecha 'Desde cuándo' no puede ser posterior a la fecha del reclamo";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -222,7 +317,23 @@ export function ComplaintForm({
     setIsSubmitting(true);
 
     try {
-      const result = await onSubmit(formData);
+      // Convert since_when_period to actual date before submitting
+      const since_when = formData.since_when_period
+        ? calculateDateFromPeriod(
+            formData.since_when_period,
+            formData.complaint_date,
+          )
+        : "";
+
+      // Create submission data with since_when as date
+      const submissionData: any = {
+        ...formData,
+        since_when,
+      };
+      // Remove since_when_period from submission
+      delete submissionData.since_when_period;
+
+      const result = await onSubmit(submissionData);
 
       if (!result.success) {
         // Show error from parent component
@@ -382,6 +493,49 @@ export function ComplaintForm({
               </p>
             )}
           </div>
+
+          {/* Conditional Phone Number Field - Show when Telefono or WhatsApp is selected */}
+          {(formData.contact_method === "Telefono" ||
+            formData.contact_method === "WhatsApp") && (
+            <div>
+              <Label htmlFor="phone_number">
+                {formData.contact_method === "WhatsApp"
+                  ? "Número de WhatsApp"
+                  : "Número de Teléfono"}
+              </Label>
+              <Input
+                id="phone_number"
+                value={formData.phone_number}
+                onChange={(e) => handleChange("phone_number", e.target.value)}
+                placeholder="Ingrese teléfono (opcional, solo números)"
+              />
+              {errors.phone_number && (
+                <p className="text-sm text-red-500 mt-1">
+                  {errors.phone_number}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Solo números, máximo 50 caracteres
+              </p>
+            </div>
+          )}
+
+          {/* Conditional Email Field - Show when Email is selected */}
+          {formData.contact_method === "Email" && (
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                placeholder="Ingrese email (opcional)"
+              />
+              {errors.email && (
+                <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -468,19 +622,27 @@ export function ComplaintForm({
             </div>
 
             <div>
-              <Label htmlFor="since_when">
+              <Label htmlFor="since_when_period">
                 Desde Cuándo <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="since_when"
-                type="date"
-                value={formData.since_when}
-                onChange={(e) => handleChange("since_when", e.target.value)}
-                max={formData.complaint_date || today}
-              />
-              {errors.since_when && (
+              <Select
+                value={formData.since_when_period}
+                onValueChange={(value) => handleChange("since_when_period", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione el período" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SINCE_WHEN_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.since_when_period && (
                 <p className="text-sm text-red-500 mt-1">
-                  {errors.since_when}
+                  {errors.since_when_period}
                 </p>
               )}
             </div>

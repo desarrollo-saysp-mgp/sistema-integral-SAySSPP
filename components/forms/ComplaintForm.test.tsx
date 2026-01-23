@@ -155,4 +155,239 @@ describe("ComplaintForm", () => {
     });
   });
 
+  it("should not render phone field when no contact method is selected", async () => {
+    render(
+      <ComplaintForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
+    );
+
+    await waitFor(() => {
+      const cancelButtons = screen.queryAllByText(/cancelar/i);
+      expect(cancelButtons.length).toBeGreaterThan(0);
+    });
+
+    // Phone field should not be visible initially
+    const phoneFields = screen.queryAllByPlaceholderText(/ingrese teléfono/i);
+    expect(phoneFields.length).toBe(0);
+  });
+
+  it("should not render email field when no contact method is selected", async () => {
+    const { container } = render(
+      <ComplaintForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
+    );
+
+    await waitFor(() => {
+      const cancelButtons = screen.queryAllByText(/cancelar/i);
+      expect(cancelButtons.length).toBeGreaterThan(0);
+    });
+
+    // Email field should not be visible initially (conditional on contact_method)
+    const emailInput = container.querySelector('input[id="email"][type="email"]');
+    expect(emailInput).toBeNull();
+  });
+
+  it("should render since_when as dropdown (not date input)", async () => {
+    render(
+      <ComplaintForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
+    );
+
+    await waitFor(() => {
+      const cancelButtons = screen.queryAllByText(/cancelar/i);
+      expect(cancelButtons.length).toBeGreaterThan(0);
+    });
+
+    // Should not have a date input with id "since_when"
+    const sinceWhenDateInput = document.querySelector('input[type="date"][id="since_when"]');
+    expect(sinceWhenDateInput).toBeNull();
+  });
+
+  it("should render form successfully with phone field when contact_method is Telefono", async () => {
+    const mockComplaint: Complaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      complaint_date: "2024-01-15",
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
+      dni: "12345678",
+      phone_number: "3514567890",
+      email: null,
+      service_id: 1,
+      cause_id: 1,
+      zone: "Centro",
+      since_when: "2024-01-10",
+      contact_method: "Telefono",
+      details: "Problema con el alumbrado",
+      status: "En proceso",
+      referred: false,
+      loaded_by: "user-123",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    };
+
+    render(
+      <ComplaintForm
+        complaint={mockComplaint}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />,
+    );
+
+    await waitFor(() => {
+      const buttons = screen.queryAllByText(/guardar cambios/i);
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("should render form successfully with email field when contact_method is Email", async () => {
+    const mockComplaint: Complaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      complaint_date: "2024-01-15",
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
+      dni: "12345678",
+      phone_number: null,
+      email: "juan.perez@example.com",
+      service_id: 1,
+      cause_id: 1,
+      zone: "Centro",
+      since_when: "2024-01-10",
+      contact_method: "Email",
+      details: "Problema con el alumbrado",
+      status: "En proceso",
+      referred: false,
+      loaded_by: "user-123",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    };
+
+    render(
+      <ComplaintForm
+        complaint={mockComplaint}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />,
+    );
+
+    await waitFor(() => {
+      const buttons = screen.queryAllByText(/guardar cambios/i);
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("should render form successfully with null phone_number (optional field)", async () => {
+    const mockComplaint: Complaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      complaint_date: "2024-01-15",
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
+      dni: "12345678",
+      phone_number: null,
+      email: null,
+      service_id: 1,
+      cause_id: 1,
+      zone: "Centro",
+      since_when: "2024-01-10",
+      contact_method: "Telefono",
+      details: "Problema con el alumbrado",
+      status: "En proceso",
+      referred: false,
+      loaded_by: "user-123",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    };
+
+    render(
+      <ComplaintForm
+        complaint={mockComplaint}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />,
+    );
+
+    await waitFor(() => {
+      const buttons = screen.queryAllByText(/guardar cambios/i);
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("should render form successfully with null email (optional field)", async () => {
+    const mockComplaint: Complaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      complaint_date: "2024-01-15",
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
+      dni: "12345678",
+      phone_number: null,
+      email: null,
+      service_id: 1,
+      cause_id: 1,
+      zone: "Centro",
+      since_when: "2024-01-10",
+      contact_method: "Email",
+      details: "Problema con el alumbrado",
+      status: "En proceso",
+      referred: false,
+      loaded_by: "user-123",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    };
+
+    render(
+      <ComplaintForm
+        complaint={mockComplaint}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />,
+    );
+
+    await waitFor(() => {
+      const buttons = screen.queryAllByText(/guardar cambios/i);
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("should render form successfully with both phone and email fields", async () => {
+    const mockComplaint: Complaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      complaint_date: "2024-01-15",
+      complainant_name: "Juan Pérez",
+      address: "Calle Principal",
+      street_number: "123",
+      dni: "12345678",
+      phone_number: "3514567890",
+      email: "juan.perez@example.com",
+      service_id: 1,
+      cause_id: 1,
+      zone: "Centro",
+      since_when: "2024-01-10",
+      contact_method: "Telefono",
+      details: "Problema con el alumbrado",
+      status: "En proceso",
+      referred: false,
+      loaded_by: "user-123",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    };
+
+    render(
+      <ComplaintForm
+        complaint={mockComplaint}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />,
+    );
+
+    await waitFor(() => {
+      const buttons = screen.queryAllByText(/guardar cambios/i);
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
 });

@@ -2,6 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintUpdate } from "@/types";
 
+// Validation helper functions
+const validatePhone = (phone: string): boolean => {
+  if (!phone || !phone.trim()) return true; // Optional field
+  const digitsOnly = /^\d+$/;
+  return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
+};
+
+const validateEmail = (email: string): boolean => {
+  if (!email || !email.trim()) return true; // Optional field
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailPattern.test(email.trim()) && email.trim().length <= 100;
+};
+
 /**
  * GET /api/complaints/[id]
  * Get a single complaint by ID
@@ -117,6 +130,29 @@ export async function PATCH(
       }
     }
 
+    // Validate phone_number if provided
+    if (
+      body.phone_number !== undefined &&
+      body.phone_number &&
+      !validatePhone(body.phone_number)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Formato de teléfono inválido. Solo números, máximo 50 caracteres",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate email if provided
+    if (body.email !== undefined && body.email && !validateEmail(body.email)) {
+      return NextResponse.json(
+        { error: "Formato de email inválido" },
+        { status: 400 },
+      );
+    }
+
     // Prepare update data
     const updateData: ComplaintUpdate = {};
 
@@ -128,6 +164,12 @@ export async function PATCH(
       updateData.street_number = body.street_number.trim();
     if (body.dni !== undefined)
       updateData.dni = body.dni ? body.dni.trim() : null;
+    if (body.phone_number !== undefined)
+      updateData.phone_number = body.phone_number
+        ? body.phone_number.trim()
+        : null;
+    if (body.email !== undefined)
+      updateData.email = body.email ? body.email.trim() : null;
     if (body.service_id !== undefined)
       updateData.service_id = parseInt(body.service_id);
     if (body.cause_id !== undefined)

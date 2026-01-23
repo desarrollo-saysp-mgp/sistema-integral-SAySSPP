@@ -2,6 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintInsert, SearchFilters } from "@/types";
 
+// Validation helper functions
+const validatePhone = (phone: string): boolean => {
+  if (!phone || !phone.trim()) return true; // Optional field
+  const digitsOnly = /^\d+$/;
+  return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
+};
+
+const validateEmail = (email: string): boolean => {
+  if (!email || !email.trim()) return true; // Optional field
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailPattern.test(email.trim()) && email.trim().length <= 100;
+};
+
 /**
  * GET /api/complaints
  * List all complaints with optional filters
@@ -147,12 +160,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate phone_number if provided (optional field)
+    if (body.phone_number && !validatePhone(body.phone_number)) {
+      return NextResponse.json(
+        { error: "Formato de teléfono inválido. Solo números, máximo 50 caracteres" },
+        { status: 400 },
+      );
+    }
+
+    // Validate email if provided (optional field)
+    if (body.email && !validateEmail(body.email)) {
+      return NextResponse.json(
+        { error: "Formato de email inválido" },
+        { status: 400 },
+      );
+    }
+
     // Prepare complaint data
     const complaintData: ComplaintInsert = {
       complainant_name: body.complainant_name.trim(),
       address: body.address.trim(),
       street_number: body.street_number.trim(),
       dni: body.dni?.trim() || null,
+      phone_number: body.phone_number?.trim() || null,
+      email: body.email?.trim() || null,
       service_id: parseInt(body.service_id),
       cause_id: parseInt(body.cause_id),
       zone: body.zone.trim(),

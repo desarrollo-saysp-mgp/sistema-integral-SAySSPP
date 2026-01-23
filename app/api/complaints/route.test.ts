@@ -433,4 +433,263 @@ describe("POST /api/complaints", () => {
     expect(response.status).toBe(500);
     expect(data.error).toBe("Error al crear reclamo");
   });
+
+  it("should accept valid phone number (only digits, max 50 chars)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      phone_number: "3514567890",
+    };
+
+    mockInsert.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: mockComplaint,
+          error: null,
+        }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Telefono",
+        details: "Test complaint details",
+        phone_number: "3514567890",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.data.phone_number).toBe("3514567890");
+  });
+
+  it("should reject invalid phone format (non-digits)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Telefono",
+        details: "Test complaint details",
+        phone_number: "351-456-7890", // Contains dashes (invalid)
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Formato de teléfono inválido");
+  });
+
+  it("should reject phone number exceeding 50 characters", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Telefono",
+        details: "Test complaint details",
+        phone_number: "123456789012345678901234567890123456789012345678901", // 51 digits
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Formato de teléfono inválido");
+  });
+
+  it("should accept valid email format", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      email: "juan.perez@example.com",
+    };
+
+    mockInsert.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: mockComplaint,
+          error: null,
+        }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Email",
+        details: "Test complaint details",
+        email: "juan.perez@example.com",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.data.email).toBe("juan.perez@example.com");
+  });
+
+  it("should reject invalid email format", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Email",
+        details: "Test complaint details",
+        email: "invalid-email-format", // Missing @ and domain
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Formato de email inválido");
+  });
+
+  it("should accept complaint with empty phone_number (optional)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      phone_number: null,
+    };
+
+    mockInsert.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: mockComplaint,
+          error: null,
+        }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Telefono",
+        details: "Test complaint details",
+        phone_number: "", // Empty string
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+  });
+
+  it("should accept complaint with empty email (optional)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      email: null,
+    };
+
+    mockInsert.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: mockComplaint,
+          error: null,
+        }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        complainant_name: "Juan Pérez",
+        address: "Calle Principal",
+        street_number: "123",
+        service_id: 1,
+        cause_id: 1,
+        zone: "Centro",
+        since_when: "2024-01-01",
+        contact_method: "Email",
+        details: "Test complaint details",
+        email: "", // Empty string
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+  });
 });

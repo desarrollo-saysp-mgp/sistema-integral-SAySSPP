@@ -36,6 +36,8 @@ export interface Database {
           address: string;
           street_number: string;
           dni: string | null;
+          phone_number: string | null;
+          email: string | null;
           service_id: number;
           cause_id: number;
           zone: string;
@@ -56,6 +58,8 @@ export interface Database {
           address: string;
           street_number: string;
           dni?: string | null;
+          phone_number?: string | null;
+          email?: string | null;
           service_id: number;
           cause_id: number;
           zone: string;
@@ -76,6 +80,8 @@ export interface Database {
           address?: string;
           street_number?: string;
           dni?: string | null;
+          phone_number?: string | null;
+          email?: string | null;
           service_id?: number;
           cause_id?: number;
           zone?: string;

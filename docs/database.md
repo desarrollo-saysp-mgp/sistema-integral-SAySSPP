@@ -91,6 +91,8 @@ CREATE TABLE complaints (
     address VARCHAR(200) NOT NULL,
     street_number VARCHAR(10) NOT NULL,
     dni VARCHAR(20),
+    phone_number VARCHAR(20),
+    email VARCHAR(100),
     service_id BIGINT NOT NULL REFERENCES services(id),
     cause_id BIGINT NOT NULL REFERENCES causes(id),
     zone VARCHAR(50) NOT NULL,

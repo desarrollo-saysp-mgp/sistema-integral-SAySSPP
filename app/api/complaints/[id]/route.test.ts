@@ -312,6 +312,124 @@ describe("PATCH /api/complaints/[id]", () => {
     expect(response.status).toBe(500);
     expect(data.error).toBe("Error al actualizar reclamo");
   });
+
+  it("should update phone_number successfully", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockUpdatedComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      phone_number: "3514567890",
+    };
+
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: mockUpdatedComplaint,
+            error: null,
+          }),
+        }),
+      }),
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/complaints/1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ phone_number: "3514567890" }),
+      },
+    );
+    const context = { params: Promise.resolve({ id: "1" }) };
+    const response = await PATCH(request, context);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.phone_number).toBe("3514567890");
+  });
+
+  it("should reject invalid phone format in update", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/complaints/1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ phone_number: "351-456-7890" }), // Contains dashes
+      },
+    );
+    const context = { params: Promise.resolve({ id: "1" }) };
+    const response = await PATCH(request, context);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Formato de teléfono inválido");
+  });
+
+  it("should update email successfully", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockUpdatedComplaint = {
+      id: 1,
+      complaint_number: "SASP-R000001",
+      email: "nuevo.email@example.com",
+    };
+
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: mockUpdatedComplaint,
+            error: null,
+          }),
+        }),
+      }),
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/complaints/1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ email: "nuevo.email@example.com" }),
+      },
+    );
+    const context = { params: Promise.resolve({ id: "1" }) };
+    const response = await PATCH(request, context);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.email).toBe("nuevo.email@example.com");
+  });
+
+  it("should reject invalid email format in update", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/complaints/1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ email: "invalid-email" }), // Missing @ and domain
+      },
+    );
+    const context = { params: Promise.resolve({ id: "1" }) };
+    const response = await PATCH(request, context);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Formato de email inválido");
+  });
 });
 
 describe("DELETE /api/complaints/[id]", () => {
