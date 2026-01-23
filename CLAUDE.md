@@ -180,6 +180,50 @@ Recent enhancements and bug fixes implemented to improve the complaint managemen
 - SQL injection protection: handled by Supabase parameterized queries
 - Backwards compatible: existing complaints without phone/email work perfectly
 
+### Relative Time "Desde Cuándo" Column (2026-01-22)
+
+**Overview**: Added a new "Desde Cuándo" column to the complaints table that displays how long ago each issue started in human-readable Spanish format.
+
+**Changes**:
+1. **formatTimeSince() Helper Function**
+   - Calculates time elapsed from `since_when` date to current date
+   - Returns Spanish strings: "Hoy", "1 día", "5 días", "1 mes y 10 días", etc.
+   - Uses 30-day month approximation for simplicity
+   - Handles proper singular/plural grammar ("día" vs "días", "mes" vs "meses")
+
+2. **New Table Column**
+   - Column header: "Desde Cuándo"
+   - Positioned between "Zona" and "Estado" columns
+   - Displays relative time for each complaint
+
+3. **Dynamic Auto-Update**
+   - Calculation happens on every component render
+   - Display automatically updates as time passes
+   - No database changes or cron jobs needed
+
+**Files Modified**:
+- `/components/tables/ComplaintsTable.tsx` - Added formatTimeSince() function (42 lines) and new column
+
+**Display Examples**:
+- Same day: "Hoy"
+- 1 day ago: "1 día"
+- 5 days ago: "5 días"
+- 30 days ago: "1 mes"
+- 35 days ago: "1 mes y 5 días"
+- 65 days ago: "2 meses y 5 días"
+
+**Testing**:
+- All 249 existing tests passing
+- No new tests required (display-only change)
+
+**Key Features**:
+- Human-readable Spanish format
+- Proper singular/plural handling
+- Dynamic calculation based on current date
+- Combines months and days (e.g., "1 mes y 10 días")
+- Shows "Hoy" for same-day issues
+- No database schema changes required
+
 ## Development Workflow
 
 When implementing a task, follow these phases:
