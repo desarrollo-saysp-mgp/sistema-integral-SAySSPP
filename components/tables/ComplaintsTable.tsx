@@ -83,6 +83,43 @@ export function ComplaintsTable({
     });
   };
 
+  const formatTimeSince = (dateString: string): string => {
+    const sinceDate = new Date(dateString);
+    const today = new Date();
+
+    // Reset time to midnight for accurate day calculation
+    today.setHours(0, 0, 0, 0);
+    sinceDate.setHours(0, 0, 0, 0);
+
+    // Calculate total days difference
+    const diffTime = today.getTime() - sinceDate.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Handle same day or future dates
+    if (totalDays <= 0) {
+      return "Hoy";
+    }
+
+    // Less than 30 days: show in days
+    if (totalDays < 30) {
+      return totalDays === 1 ? "1 día" : `${totalDays} días`;
+    }
+
+    // 30+ days: calculate months and remaining days
+    const months = Math.floor(totalDays / 30);
+    const remainingDays = totalDays % 30;
+
+    // Build the display string
+    let result = months === 1 ? "1 mes" : `${months} meses`;
+
+    if (remainingDays > 0) {
+      const daysText = remainingDays === 1 ? "1 día" : `${remainingDays} días`;
+      result += ` y ${daysText}`;
+    }
+
+    return result;
+  };
+
   if (complaints.length === 0) {
     return (
       <div className="text-center py-12">
@@ -104,6 +141,7 @@ export function ComplaintsTable({
             <TableHead>Servicio</TableHead>
             <TableHead>Causa</TableHead>
             <TableHead>Zona</TableHead>
+            <TableHead>Desde Cuándo</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Cargado por</TableHead>
           </TableRow>
@@ -129,6 +167,7 @@ export function ComplaintsTable({
               <TableCell>{complaint.service.name}</TableCell>
               <TableCell>{complaint.cause.name}</TableCell>
               <TableCell>{complaint.zone}</TableCell>
+              <TableCell>{formatTimeSince(complaint.since_when)}</TableCell>
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <div className="status-select">
                   {onStatusChange ? (
