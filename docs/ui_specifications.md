@@ -408,7 +408,7 @@
 **Header**:
 
 - Page title
-- Search bar (search by complaint number, name, address)
+- Search bar (search by name only)
 - Filter dropdowns:
   - Status filter
   - Service filter
@@ -417,22 +417,25 @@
 
 **Table Columns**:
 
-1. Complaint Number (clickable)
+1. Complaint Number
 2. Date
 3. Complainant Name
 4. Service
-5. Cause
-6. Zone
+5. Zone
+6. Desde Cuándo (relative time display, e.g., "5 días", "1 mes y 10 días")
 7. Status (inline editable dropdown)
 8. Loaded By
+9. Actions (View and Edit buttons)
 
 **Table Features**:
 
 - Sortable columns
 - Pagination (20 items per page)
 - Row highlighting on hover
-- Click anywhere on row to view details
+- View button (eye icon): Opens read-only complaint detail page
+- Edit button (pencil icon): Opens editable complaint form
 - Status can be changed inline without opening detail view
+- Buttons have visual feedback on hover and click (color change + scale effect)
 
 **Example Layout**:
 
@@ -453,7 +456,73 @@
 └────────────────────────────────────────────────────────────┘
 ```
 
-### 5. Complaint Detail Page (`/dashboard/complaints/[id]`)
+### 5. Complaint View Page (`/dashboard/complaints/[id]/view`)
+
+**Layout**: Read-only display with organized cards
+
+**Purpose**: Display complaint details in a clean, read-only format for quick reference without risk of accidental edits.
+
+**Header**:
+
+- Back button (returns to complaints list)
+- Complaint Number (large, prominent)
+- "Edit Complaint" button (navigates to edit page)
+
+**Content Cards**:
+
+1. **Basic Information Card**
+   - Complaint Number
+   - Complaint Date
+   - Status (badge with color coding)
+
+2. **Complainant Information Card**
+   - Full Name
+   - DNI
+   - Address and Street Number
+   - Contact Method
+   - Phone Number (if applicable)
+   - Email (if applicable)
+
+3. **Complaint Details Card**
+   - Service
+   - Cause
+   - Zone
+   - Since When (formatted date)
+   - Details (full text)
+
+4. **Status and Follow-up Card**
+   - Status (badge)
+   - Referred (Yes/No)
+   - Loaded By (user name)
+
+5. **System Information Card**
+   - Created At (date and time)
+   - Updated At (date and time)
+
+**Example Layout**:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ [← Volver]                              [Editar Reclamo]   │
+│                                                            │
+│ Reclamo SASP-R000123                                       │
+│ Detalle del reclamo                                        │
+├────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────────┐│
+│ │ Información Básica                                      ││
+│ │ Número: SASP-R000123  Fecha: 16/11/2025  [En proceso]  ││
+│ └─────────────────────────────────────────────────────────┘│
+│ ┌─────────────────────────────────────────────────────────┐│
+│ │ Datos del Reclamante                                    ││
+│ │ Nombre: Juan Pérez          DNI: 12345678               ││
+│ │ Dirección: Calle Principal 123                          ││
+│ │ Medio de Contacto: Email    Email: juan@mail.com        ││
+│ └─────────────────────────────────────────────────────────┘│
+│ ...                                                        │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 6. Complaint Detail/Edit Page (`/dashboard/complaints/[id]`)
 
 **Layout**: Form similar to new complaint, but with all fields editable
 
@@ -481,7 +550,7 @@
 - Change history/audit log (future enhancement)
 - Attached documents (future enhancement)
 
-### 6. Services Management Page (`/admin/services`)
+### 7. Services Management Page (`/admin/services`)
 
 **Admin Only**
 
@@ -526,7 +595,7 @@
 └──────────────────┴──────────────────────────┘
 ```
 
-### 7. User Management Page (`/admin/users`)
+### 8. User Management Page (`/admin/users`)
 
 **Admin Only**
 
@@ -559,7 +628,7 @@
 └────────────────────────────────────────────────┘
 ```
 
-### 8. New User Page (`/admin/users/new`)
+### 9. New User Page (`/admin/users/new`)
 
 **Admin Only**
 
