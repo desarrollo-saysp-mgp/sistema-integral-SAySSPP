@@ -204,6 +204,7 @@ export function ComplaintsTable({
                     size="sm"
                     onClick={() => handleView(complaint.id)}
                     title="Ver reclamo"
+                    className="hover:bg-blue-100 hover:text-blue-700 active:bg-blue-200 active:scale-95 transition-all"
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
@@ -212,6 +213,7 @@ export function ComplaintsTable({
                     size="sm"
                     onClick={() => handleEdit(complaint.id)}
                     title="Editar reclamo"
+                    className="hover:bg-amber-100 hover:text-amber-700 active:bg-amber-200 active:scale-95 transition-all"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>

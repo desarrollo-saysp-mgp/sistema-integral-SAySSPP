@@ -151,8 +151,9 @@ export function ComplaintForm({
   }, []);
 
   // Update form when complaint changes (for editing)
+  // Also re-apply when services/causes finish loading to ensure dropdowns show correct values
   useEffect(() => {
-    if (complaint) {
+    if (complaint && services.length > 0 && causes.length > 0) {
       setFormData({
         complaint_date: complaint.complaint_date,
         complainant_name: complaint.complainant_name,
@@ -174,7 +175,7 @@ export function ComplaintForm({
         referred: complaint.referred,
       });
     }
-  }, [complaint]);
+  }, [complaint, services, causes]);
 
   // Filter causes when service changes
   useEffect(() => {
