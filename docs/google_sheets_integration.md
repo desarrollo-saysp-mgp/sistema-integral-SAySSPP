@@ -94,17 +94,19 @@ Columns:
 4. Dirección
 5. Número
 6. DNI
-7. Servicio
-8. Causa
-9. Zona
-10. Desde Cuándo
-11. Medio de Contacto
-12. Detalle
-13. Seguimiento
-14. Derivado
-15. Responsable de Carga
-16. Fecha de Carga (Sistema)
-17. Última Modificación (Sistema)
+7. Teléfono
+8. Email
+9. Servicio
+10. Causa
+11. Zona
+12. Desde Cuándo
+13. Medio de Contacto
+14. Detalle
+15. Estado
+16. Derivado
+17. Responsable de Carga
+18. Fecha de Carga (Sistema)
+19. Última Modificación (Sistema)
 
 ### Sheet 2: Servicios
 
@@ -203,13 +205,15 @@ function updateComplaintsSheet(sheet, complaints) {
       "Dirección",
       "Número",
       "DNI",
+      "Teléfono",
+      "Email",
       "Servicio",
       "Causa",
       "Zona",
       "Desde Cuándo",
       "Medio de Contacto",
       "Detalle",
-      "Seguimiento",
+      "Estado",
       "Derivado",
       "Responsable de Carga",
       "Fecha de Carga",
@@ -228,6 +232,8 @@ function updateComplaintsSheet(sheet, complaints) {
     complaint.address,
     complaint.street_number,
     complaint.dni || "",
+    complaint.phone_number || "",
+    complaint.email || "",
     complaint.service_name,
     complaint.cause_name,
     complaint.zone,
@@ -397,6 +403,8 @@ function updateComplaintRow(sheet, row, complaint) {
       complaint.address,
       complaint.street_number,
       complaint.dni || "",
+      complaint.phone_number || "",
+      complaint.email || "",
       complaint.service_name,
       complaint.cause_name,
       complaint.zone,
