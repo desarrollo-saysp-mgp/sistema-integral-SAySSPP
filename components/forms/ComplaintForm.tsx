@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { Complaint, Service, Cause, SinceWhenPeriod } from "@/types";
+import type { Complaint, ComplaintWithDetails, Service, Cause, SinceWhenPeriod } from "@/types";
 import { SINCE_WHEN_OPTIONS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export interface ComplaintFormData {
 }
 
 interface ComplaintFormProps {
-  complaint?: Complaint | null;
+  complaint?: Complaint | ComplaintWithDetails | null;
   onSubmit: (
     data: ComplaintFormData,
   ) => Promise<{ success: boolean; error?: string }>;
@@ -157,14 +157,22 @@ export function ComplaintForm({
   // Also re-apply when services/causes finish loading to ensure dropdowns show correct values
   useEffect(() => {
     if (complaint && services.length > 0 && causes.length > 0) {
-      // First, filter and set causes for this service so the dropdown has options
-      const filtered = causes.filter(
+      // First, filter causes for this service
+      let filtered = causes.filter(
         (cause) =>
           cause.service_id === complaint.service_id && cause.active,
       );
+
+      // Ensure the complaint's current cause is always in the list
+      // (in case it's inactive or somehow not in the fetched causes)
+      const complaintWithDetails = complaint as ComplaintWithDetails;
+      if (complaintWithDetails.cause && !filtered.some(c => c.id === complaintWithDetails.cause.id)) {
+        filtered = [...filtered, complaintWithDetails.cause];
+      }
+
       setFilteredCauses(filtered);
 
-      // Then set the form data
+      // Set form data after filtered causes are ready
       setFormData({
         complaint_date: complaint.complaint_date,
         complainant_name: complaint.complainant_name,
@@ -601,6 +609,7 @@ export function ComplaintForm({
                 Causa <span className="text-red-500">*</span>
               </Label>
               <Select
+                key={`cause-select-${filteredCauses.length}-${formData.service_id}`}
                 value={formData.cause_id}
                 onValueChange={(value) => handleChange("cause_id", value)}
                 disabled={!formData.service_id || filteredCauses.length === 0}
