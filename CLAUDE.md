@@ -69,7 +69,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 - [x] Implement form validation with proper error messages
 - [x] Create complaint save functionality
 - [x] Implement complaints table page (`/dashboard/complaints`)
-- [x] Add search functionality (by number, name, address)
+- [x] Add search functionality (by name only)
 - [x] Add filter functionality (status, service, date range)
 - [x] Implement inline status editing in table
 - [x] Create complaint detail/edit page (`/dashboard/complaints/[id]`)
@@ -130,6 +130,54 @@ Tasks to improve user experience and interface beyond core functionality.
 ## Improvements & Fixes
 
 Recent enhancements and bug fixes implemented to improve the complaint management system.
+
+### Complaint View/Edit Improvements (2026-02-25)
+
+**Overview**: Added separate View and Edit buttons to the complaints table, created a read-only complaint view page, fixed dropdown preloading issues in edit mode, and restricted search to name only.
+
+**Changes**:
+1. **View/Edit Buttons in Table**
+   - Added Eye (view) and Pencil (edit) icon buttons to each row
+   - Removed row click navigation behavior
+   - Added visual feedback with hover/active states (blue for view, amber for edit)
+   - Added "Acciones" column header
+
+2. **Read-Only View Page** (`/dashboard/complaints/[id]/view`)
+   - Created new page to display complaint details in card format
+   - Shows all complaint information without form inputs
+   - Includes "Editar Reclamo" button to switch to edit mode
+   - Displays timestamps, status badges, and loaded_by user
+
+3. **Fixed Dropdown Preloading in Edit Mode**
+   - Service, Causa, and Desde Cuándo dropdowns now show correct values when editing
+   - Added initialization tracking with useRef to prevent cause_id reset
+   - Ensured complaint's cause is always included in filtered options
+   - Added key prop to force Select re-render when options change
+
+4. **Search Restricted to Name Only**
+   - Changed API to search only by `complainant_name` (was: number, name, address)
+   - Updated search placeholder text to "Buscar por nombre..."
+
+**Files Modified**:
+- `/components/tables/ComplaintsTable.tsx` - Added view/edit buttons, visual feedback
+- `/app/dashboard/complaints/[id]/view/page.tsx` - New read-only view page (created)
+- `/app/dashboard/complaints/[id]/view/page.test.tsx` - Tests for view page (created)
+- `/components/forms/ComplaintForm.tsx` - Fixed dropdown preloading, added useRef tracking
+- `/app/api/complaints/route.ts` - Restricted search to name only
+- `/app/dashboard/complaints/page.tsx` - Updated search placeholder
+- `/components/tables/ComplaintsTable.test.tsx` - Added tests for view/edit buttons
+- `/app/api/complaints/route.test.ts` - Added test for name-only search
+
+**Testing**:
+- Added 12 new tests across 4 test files
+- All 261 tests passing
+- TypeScript compilation successful
+
+**Key Features**:
+- Clear separation between view and edit modes
+- Visual button feedback for better UX
+- Proper dropdown value display in edit mode
+- Simplified search functionality
 
 ### Contact Information Enhancement (2026-01-23)
 
@@ -663,9 +711,9 @@ After completing each task:
 
 ## Current Status
 
-**Last Updated**: 2025-12-16
+**Last Updated**: 2026-02-25
 
-**Current Phase**: Phase 5 - Dashboard & Reporting - COMPLETE ✅
+**Current Phase**: UI/UX Improvements - In Progress
 
 **Completed Tasks**:
 
@@ -675,9 +723,18 @@ After completing each task:
 - ✅ Phase 4 complete: 12/12 tasks (100%)
 - ✅ Phase 5 complete: 4/4 tasks (100%)
 - ✅ UI/UX Navigation & Layout: 8/8 tasks (100%)
-- 🔧 UI/UX Polish: In Progress
+- ✅ Complaint View/Edit Improvements: 4/4 tasks (100%)
 
-**Latest Completed**: Filter alignment in complaints page (fix/complaints-filter-alignment)
+**Latest Completed**: Complaint View/Edit Improvements (feat/complaint-view-edit-improvements)
+
+- ✅ Added separate View (eye) and Edit (pencil) buttons to complaints table
+- ✅ Created read-only complaint view page (`/dashboard/complaints/[id]/view`)
+- ✅ Fixed dropdown preloading for Servicio, Causa, and Desde Cuándo in edit mode
+- ✅ Restricted search to name only (complainant_name)
+- ✅ Added visual button feedback (hover/active states)
+- ✅ Added 12 new tests, all 261 tests passing
+
+**Previous Completed**: Filter alignment in complaints page (fix/complaints-filter-alignment)
 
 - ✅ Set consistent height (h-10) for all filter inputs and selects
 - ✅ Implemented flexbox layout for proper label/input alignment
