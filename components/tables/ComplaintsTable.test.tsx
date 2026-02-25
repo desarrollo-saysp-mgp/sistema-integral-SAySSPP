@@ -30,6 +30,8 @@ describe("ComplaintsTable", () => {
       address: "Calle Principal",
       street_number: "123",
       dni: "12345678",
+      phone_number: null,
+      email: "juan@example.com",
       service_id: 1,
       cause_id: 1,
       zone: "Centro",
@@ -74,6 +76,8 @@ describe("ComplaintsTable", () => {
       address: "Avenida Libertad",
       street_number: "456",
       dni: "87654321",
+      phone_number: "1234567890",
+      email: null,
       service_id: 2,
       cause_id: 3,
       zone: "Norte",
@@ -200,5 +204,35 @@ describe("ComplaintsTable", () => {
 
     const userNames = screen.getAllByText("Admin User");
     expect(userNames.length).toBeGreaterThanOrEqual(2); // At least one for each complaint
+  });
+
+  it("should render view and edit buttons for each complaint", () => {
+    render(
+      <ComplaintsTable
+        complaints={mockComplaints}
+        onStatusChange={mockOnStatusChange}
+      />,
+    );
+
+    // Should have view buttons (Eye icon) - at least one for each complaint
+    const viewButtons = screen.getAllByTitle("Ver reclamo");
+    expect(viewButtons.length).toBeGreaterThanOrEqual(mockComplaints.length);
+
+    // Should have edit buttons (Pencil icon) - at least one for each complaint
+    const editButtons = screen.getAllByTitle("Editar reclamo");
+    expect(editButtons.length).toBeGreaterThanOrEqual(mockComplaints.length);
+  });
+
+  it("should have Acciones column header", () => {
+    render(
+      <ComplaintsTable
+        complaints={mockComplaints}
+        onStatusChange={mockOnStatusChange}
+      />,
+    );
+
+    // There might be multiple renders, so use getAllByText
+    const accionesHeaders = screen.getAllByText("Acciones");
+    expect(accionesHeaders.length).toBeGreaterThan(0);
   });
 });

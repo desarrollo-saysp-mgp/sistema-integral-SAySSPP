@@ -18,8 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Eye, Pencil } from "lucide-react";
 
 type ComplaintWithDetails = Complaint & {
   service: Service;
@@ -57,7 +59,11 @@ export function ComplaintsTable({
     }
   };
 
-  const handleRowClick = (complaintId: number) => {
+  const handleView = (complaintId: number) => {
+    router.push(`/dashboard/complaints/${complaintId}/view`);
+  };
+
+  const handleEdit = (complaintId: number) => {
     router.push(`/dashboard/complaints/${complaintId}`);
   };
 
@@ -144,20 +150,14 @@ export function ComplaintsTable({
             <TableHead>Desde Cuándo</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Cargado por</TableHead>
+            <TableHead className="text-center">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {complaints.map((complaint) => (
             <TableRow
               key={complaint.id}
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={(e) => {
-                // Don't navigate if clicking on the status dropdown
-                if ((e.target as HTMLElement).closest(".status-select")) {
-                  return;
-                }
-                handleRowClick(complaint.id);
-              }}
+              className="hover:bg-muted/50"
             >
               <TableCell className="font-medium">
                 {complaint.complaint_number}
@@ -168,8 +168,8 @@ export function ComplaintsTable({
               <TableCell>{complaint.cause.name}</TableCell>
               <TableCell>{complaint.zone}</TableCell>
               <TableCell>{formatTimeSince(complaint.since_when)}</TableCell>
-              <TableCell onClick={(e) => e.stopPropagation()}>
-                <div className="status-select">
+              <TableCell>
+                <div>
                   {onStatusChange ? (
                     <Select
                       value={complaint.status}
@@ -197,6 +197,26 @@ export function ComplaintsTable({
                 </div>
               </TableCell>
               <TableCell>{complaint.loaded_by_user.full_name}</TableCell>
+              <TableCell>
+                <div className="flex justify-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleView(complaint.id)}
+                    title="Ver reclamo"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEdit(complaint.id)}
+                    title="Editar reclamo"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

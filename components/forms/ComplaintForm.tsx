@@ -185,8 +185,10 @@ export function ComplaintForm({
       );
       setFilteredCauses(filtered);
 
-      // Reset cause_id if it's not in the filtered list
+      // Only reset cause_id if causes are loaded and current cause_id is not in filtered list
+      // This prevents resetting when causes are still loading
       if (
+        causes.length > 0 &&
         formData.cause_id &&
         !filtered.some((c) => c.id === parseInt(formData.cause_id))
       ) {
@@ -194,9 +196,12 @@ export function ComplaintForm({
       }
     } else {
       setFilteredCauses([]);
-      setFormData((prev) => ({ ...prev, cause_id: "" }));
+      // Only reset cause_id if we're not in edit mode or causes are loaded
+      if (!isEditing || causes.length > 0) {
+        setFormData((prev) => ({ ...prev, cause_id: "" }));
+      }
     }
-  }, [formData.service_id, causes]);
+  }, [formData.service_id, causes, isEditing]);
 
   // Clear phone/email when contact method changes
   useEffect(() => {
