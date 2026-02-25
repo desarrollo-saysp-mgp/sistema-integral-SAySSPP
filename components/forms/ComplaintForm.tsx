@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import type { Complaint, Service, Cause, SinceWhenPeriod } from "@/types";
+import { useState, useEffect, useRef } from "react";
+import type { Complaint, ComplaintWithDetails, Service, Cause, SinceWhenPeriod } from "@/types";
 import { SINCE_WHEN_OPTIONS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export interface ComplaintFormData {
 }
 
 interface ComplaintFormProps {
-  complaint?: Complaint | null;
+  complaint?: Complaint | ComplaintWithDetails | null;
   onSubmit: (
     data: ComplaintFormData,
   ) => Promise<{ success: boolean; error?: string }>;
@@ -79,6 +79,9 @@ export function ComplaintForm({
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
+
+  // Track if we've initialized the form for edit mode to prevent cause_id reset
+  const isInitializedRef = useRef(false);
 
   // Helper function to convert period to date
   const calculateDateFromPeriod = (
@@ -151,8 +154,25 @@ export function ComplaintForm({
   }, []);
 
   // Update form when complaint changes (for editing)
+  // Also re-apply when services/causes finish loading to ensure dropdowns show correct values
   useEffect(() => {
-    if (complaint) {
+    if (complaint && services.length > 0 && causes.length > 0) {
+      // First, filter causes for this service
+      let filtered = causes.filter(
+        (cause) =>
+          cause.service_id === complaint.service_id && cause.active,
+      );
+
+      // Ensure the complaint's current cause is always in the list
+      // (in case it's inactive or somehow not in the fetched causes)
+      const complaintWithDetails = complaint as ComplaintWithDetails;
+      if (complaintWithDetails.cause && !filtered.some(c => c.id === complaintWithDetails.cause.id)) {
+        filtered = [...filtered, complaintWithDetails.cause];
+      }
+
+      setFilteredCauses(filtered);
+
+      // Set form data after filtered causes are ready
       setFormData({
         complaint_date: complaint.complaint_date,
         complainant_name: complaint.complainant_name,
@@ -173,11 +193,21 @@ export function ComplaintForm({
         status: complaint.status,
         referred: complaint.referred,
       });
+
+      // Mark as initialized after a short delay to allow state to settle
+      setTimeout(() => {
+        isInitializedRef.current = true;
+      }, 100);
     }
-  }, [complaint]);
+  }, [complaint, services, causes]);
 
   // Filter causes when service changes
   useEffect(() => {
+    // Skip this effect during edit mode initialization - the edit useEffect handles it
+    if (isEditing && !isInitializedRef.current) {
+      return;
+    }
+
     if (formData.service_id) {
       const filtered = causes.filter(
         (cause) =>
@@ -185,8 +215,9 @@ export function ComplaintForm({
       );
       setFilteredCauses(filtered);
 
-      // Reset cause_id if it's not in the filtered list
+      // Only reset cause_id if causes are loaded and current cause_id is not in filtered list
       if (
+        causes.length > 0 &&
         formData.cause_id &&
         !filtered.some((c) => c.id === parseInt(formData.cause_id))
       ) {
@@ -196,7 +227,7 @@ export function ComplaintForm({
       setFilteredCauses([]);
       setFormData((prev) => ({ ...prev, cause_id: "" }));
     }
-  }, [formData.service_id, causes]);
+  }, [formData.service_id, causes, isEditing]);
 
   // Clear phone/email when contact method changes
   useEffect(() => {
@@ -578,6 +609,7 @@ export function ComplaintForm({
                 Causa <span className="text-red-500">*</span>
               </Label>
               <Select
+                key={`cause-select-${filteredCauses.length}-${formData.service_id}`}
                 value={formData.cause_id}
                 onValueChange={(value) => handleChange("cause_id", value)}
                 disabled={!formData.service_id || filteredCauses.length === 0}

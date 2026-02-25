@@ -55,11 +55,9 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    // Apply filters
+    // Apply filters - search only by complainant name
     if (search) {
-      query = query.or(
-        `complaint_number.ilike.%${search}%,complainant_name.ilike.%${search}%,address.ilike.%${search}%`,
-      );
+      query = query.ilike("complainant_name", `%${search}%`);
     }
 
     if (status && status !== "all") {

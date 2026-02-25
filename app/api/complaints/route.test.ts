@@ -83,6 +83,58 @@ describe("GET /api/complaints", () => {
     expect(data.data).toEqual(mockComplaints);
   });
 
+  it("should filter complaints by name only when search is provided", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123" } },
+      error: null,
+    });
+
+    const mockFilteredComplaints = [
+      {
+        id: 1,
+        complaint_number: "SASP-R000001",
+        complainant_name: "Juan Pérez",
+        status: "En proceso",
+      },
+    ];
+
+    // Create a thenable/chainable mock that supports both await and method chaining
+    const mockIlike = vi.fn();
+    const createChainableMock = (resolvedValue: any) => {
+      const chainable: any = {
+        ilike: mockIlike,
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        then: (resolve: any) => resolve(resolvedValue),
+      };
+      // Make ilike return the same chainable object for further chaining
+      mockIlike.mockReturnValue(chainable);
+      return chainable;
+    };
+
+    const mockQuery = {
+      order: vi.fn().mockReturnValue(
+        createChainableMock({
+          data: mockFilteredComplaints,
+          error: null,
+        })
+      ),
+    };
+
+    mockSelect.mockReturnValue(mockQuery);
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/complaints?search=Juan"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Verify that ilike was called with complainant_name (name-only search)
+    expect(mockIlike).toHaveBeenCalledWith("complainant_name", "%Juan%");
+    expect(data.data).toEqual(mockFilteredComplaints);
+  });
 
   it("should return 500 on database error", async () => {
     mockGetUser.mockResolvedValue({

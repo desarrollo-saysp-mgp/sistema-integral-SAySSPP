@@ -104,6 +104,8 @@ describe("ComplaintForm", () => {
       address: "Calle Principal",
       street_number: "123",
       dni: "12345678",
+      phone_number: null,
+      email: "juan@example.com",
       service_id: 1,
       cause_id: 1,
       zone: "Centro",
