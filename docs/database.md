@@ -370,6 +370,8 @@ SELECT
     c.address,
     c.street_number,
     c.dni,
+    c.phone_number,
+    c.email,
     s.name AS service_name,
     ca.name AS cause_name,
     c.zone,

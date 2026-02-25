@@ -231,7 +231,7 @@ CREATE POLICY "Admins can manage causes"
 -- VIEWS
 -- ================================
 
--- Complaint details view with related data
+-- Complaint details view with related data (for Google Sheets sync)
 CREATE VIEW complaint_details AS
 SELECT
     c.id,
@@ -241,6 +241,8 @@ SELECT
     c.address,
     c.street_number,
     c.dni,
+    c.phone_number,
+    c.email,
     s.name AS service_name,
     ca.name AS cause_name,
     c.zone,
