@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Complaint, Service, Cause, SinceWhenPeriod } from "@/types";
 import { SINCE_WHEN_OPTIONS } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,9 @@ export function ComplaintForm({
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
+
+  // Track if we've initialized the form for edit mode to prevent cause_id reset
+  const isInitializedRef = useRef(false);
 
   // Helper function to convert period to date
   const calculateDateFromPeriod = (
@@ -182,11 +185,21 @@ export function ComplaintForm({
         status: complaint.status,
         referred: complaint.referred,
       });
+
+      // Mark as initialized after a short delay to allow state to settle
+      setTimeout(() => {
+        isInitializedRef.current = true;
+      }, 100);
     }
   }, [complaint, services, causes]);
 
   // Filter causes when service changes
   useEffect(() => {
+    // Skip this effect during edit mode initialization - the edit useEffect handles it
+    if (isEditing && !isInitializedRef.current) {
+      return;
+    }
+
     if (formData.service_id) {
       const filtered = causes.filter(
         (cause) =>
@@ -195,7 +208,6 @@ export function ComplaintForm({
       setFilteredCauses(filtered);
 
       // Only reset cause_id if causes are loaded and current cause_id is not in filtered list
-      // This prevents resetting when causes are still loading
       if (
         causes.length > 0 &&
         formData.cause_id &&
@@ -205,10 +217,7 @@ export function ComplaintForm({
       }
     } else {
       setFilteredCauses([]);
-      // Only reset cause_id if we're not in edit mode or causes are loaded
-      if (!isEditing || causes.length > 0) {
-        setFormData((prev) => ({ ...prev, cause_id: "" }));
-      }
+      setFormData((prev) => ({ ...prev, cause_id: "" }));
     }
   }, [formData.service_id, causes, isEditing]);
 
