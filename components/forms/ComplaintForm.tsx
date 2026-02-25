@@ -154,6 +154,14 @@ export function ComplaintForm({
   // Also re-apply when services/causes finish loading to ensure dropdowns show correct values
   useEffect(() => {
     if (complaint && services.length > 0 && causes.length > 0) {
+      // First, filter and set causes for this service so the dropdown has options
+      const filtered = causes.filter(
+        (cause) =>
+          cause.service_id === complaint.service_id && cause.active,
+      );
+      setFilteredCauses(filtered);
+
+      // Then set the form data
       setFormData({
         complaint_date: complaint.complaint_date,
         complainant_name: complaint.complainant_name,
