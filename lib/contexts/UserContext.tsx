@@ -65,79 +65,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let cancelled = false;
 
-    // Get initial session
-    const initializeAuth = async () => {
-      try {
-        // Try getUser() first (validates JWT)
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (cancelled) return;
-
-        // If getUser() fails with session error, try getSession() as fallback
-        if (error) {
-          console.error("Error getting user:", error);
-
-          // Try fallback to getSession for graceful degradation
-          try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-            if (!cancelled && !sessionError && session?.user) {
-              setUser(session.user);
-              // Fetch profile and wait for it
-              const profileData = await fetchProfile(session.user.id);
-              if (!cancelled) {
-                setProfile(profileData);
-              }
-            }
-          } catch (fallbackError) {
-            console.error("Fallback session retrieval also failed:", fallbackError);
-          }
-
-          setLoading(false);
-          return;
-        }
-
-        if (user) {
-          setUser(user);
-          // Fetch profile and wait for it before setting loading to false
-          const profileData = await fetchProfile(user.id);
-          if (!cancelled) {
-            setProfile(profileData);
-          }
-        }
-      } catch (error) {
-        console.error("Error initializing auth:", error);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth state changes
+    // Listen for auth state changes - this is the ONLY source of truth
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
 
-      // Skip INITIAL_SESSION (handled by initializeAuth on page load)
-      if (event === "INITIAL_SESSION") {
-        return;
-      }
-
-      // Handle SIGNED_IN - needed when user logs in and UserProvider is already mounted
-      // This fires AFTER login when navigating to dashboard
-      // We do NOT set loading=true to avoid showing loading screen
-      if (event === "SIGNED_IN" && session?.user) {
-        const profileData = await fetchProfile(session.user.id);
+      // INITIAL_SESSION fires on page load/reload
+      // SIGNED_IN fires after login
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        if (session?.user) {
+          const profileData = await fetchProfile(session.user.id);
+          if (!cancelled) {
+            setUser(session.user);
+            setProfile(profileData);
+          }
+        }
+        // Always set loading to false after INITIAL_SESSION
         if (!cancelled) {
-          setUser(session.user);
-          setProfile(profileData);
+          setLoading(false);
         }
         return;
       }
@@ -149,8 +95,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Handle TOKEN_REFRESHED - update profile silently without setting loading
-      // This prevents navbar from disappearing during token refresh (e.g., tab switching)
+      // Handle TOKEN_REFRESHED - update profile silently
       if (event === "TOKEN_REFRESHED" && session?.user) {
         const profileData = await fetchProfile(session.user.id);
         if (!cancelled) {
