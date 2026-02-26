@@ -28,7 +28,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
-  const { profile, loading } = useUser();
+  const { profile } = useUser();
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -48,43 +48,6 @@ export function Navbar() {
   };
 
   const isAdmin = profile?.role === "Admin";
-
-  if (loading) {
-    return (
-      <nav className="sticky top-0 z-50 w-full border-b bg-[#0E3F75] text-white">
-        <div className="flex h-16 items-center px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-[#5CADEB]" />
-            <span className="text-lg font-semibold">Cargando...</span>
-          </div>
-        </div>
-      </nav>
-    );
-  }
-
-  // If not loading but no profile, show error state
-  if (!loading && !profile) {
-    return (
-      <nav className="sticky top-0 z-50 w-full border-b bg-[#0E3F75] text-white">
-        <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5CADEB] font-bold text-white shadow-sm">
-              SGR
-            </div>
-            <span className="text-base font-semibold">Sistema de Gestión de Reclamos</span>
-          </Link>
-          <Button
-            variant="ghost"
-            className="text-white hover:bg-[#5CADEB]/20"
-            onClick={handleSignOut}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Cerrar Sesión
-          </Button>
-        </div>
-      </nav>
-    );
-  }
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-[#88C1ED]/20 bg-[#0E3F75] text-white shadow-md">

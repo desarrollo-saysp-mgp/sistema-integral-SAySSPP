@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +29,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Ref to track current user ID for checking in event handlers
+  const userIdRef = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -64,105 +67,95 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
+    let subscription: { unsubscribe: () => void } | null = null;
 
-    // Get initial session
-    const initializeAuth = async () => {
-      try {
-        // Try getUser() first (validates JWT)
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+    const initialize = async () => {
+      console.log("[UserContext] initialize starting");
+
+      // FIRST: Load existing session from cookies
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("[UserContext] getSession result:", session?.user?.id);
+
+      if (cancelled) return;
+
+      if (session?.user) {
+        userIdRef.current = session.user.id;
+        setUser(session.user);
+
+        const profileData = await fetchProfile(session.user.id);
+        console.log("[UserContext] Profile loaded:", profileData?.full_name);
+
+        if (!cancelled) {
+          setProfile(profileData);
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
+
+      if (cancelled) return;
+
+      // THEN: Set up listener for future auth changes (login, logout)
+      const { data } = supabase.auth.onAuthStateChange(async (event, eventSession) => {
+        console.log("[UserContext] onAuthStateChange:", event);
 
         if (cancelled) return;
 
-        // If getUser() fails with session error, try getSession() as fallback
-        if (error) {
-          console.error("Error getting user:", error);
+        // Skip INITIAL_SESSION - already handled above
+        if (event === "INITIAL_SESSION") {
+          return;
+        }
 
-          // Try fallback to getSession for graceful degradation
-          try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-            if (!cancelled && !sessionError && session?.user) {
-              setUser(session.user);
-              // Fetch profile and wait for it
-              const profileData = await fetchProfile(session.user.id);
-              if (!cancelled) {
-                setProfile(profileData);
-              }
-            }
-          } catch (fallbackError) {
-            console.error("Fallback session retrieval also failed:", fallbackError);
+        // SIGNED_IN - user just logged in
+        if (event === "SIGNED_IN" && eventSession?.user) {
+          // Skip if same user already loaded
+          if (userIdRef.current === eventSession.user.id) {
+            console.log("[UserContext] Same user, skipping");
+            return;
           }
 
+          console.log("[UserContext] New login, loading user");
+          userIdRef.current = eventSession.user.id;
+          setUser(eventSession.user);
+
+          const profileData = await fetchProfile(eventSession.user.id);
+          console.log("[UserContext] Profile loaded:", profileData?.full_name);
+
+          if (!cancelled) {
+            setProfile(profileData);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (event === "SIGNED_OUT") {
+          console.log("[UserContext] SIGNED_OUT");
+          userIdRef.current = null;
+          setUser(null);
+          setProfile(null);
           setLoading(false);
           return;
         }
 
-        if (user) {
-          setUser(user);
-          // Fetch profile and wait for it before setting loading to false
-          const profileData = await fetchProfile(user.id);
+        if (event === "TOKEN_REFRESHED" && eventSession?.user) {
+          console.log("[UserContext] TOKEN_REFRESHED");
+          const profileData = await fetchProfile(eventSession.user.id);
           if (!cancelled) {
+            setUser(eventSession.user);
             setProfile(profileData);
           }
         }
-      } catch (error) {
-        console.error("Error initializing auth:", error);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+      });
+
+      subscription = data.subscription;
     };
 
-    initializeAuth();
-
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return;
-
-      // Skip INITIAL_SESSION (handled by initializeAuth)
-      if (event === "INITIAL_SESSION") {
-        return;
-      }
-
-      // Handle SIGNED_IN - this fires after login from another page
-      if (event === "SIGNED_IN" && session?.user) {
-        setLoading(true);
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setUser(session.user);
-          setProfile(profileData);
-          setLoading(false);
-        }
-        return;
-      }
-
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      // Handle TOKEN_REFRESHED - update profile silently without setting loading
-      // This prevents navbar from disappearing during token refresh (e.g., tab switching)
-      if (event === "TOKEN_REFRESHED" && session?.user) {
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setUser(session.user);
-          setProfile(profileData);
-        }
-      }
-    });
+    initialize();
 
     return () => {
+      console.log("[UserContext] cleanup");
       cancelled = true;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 

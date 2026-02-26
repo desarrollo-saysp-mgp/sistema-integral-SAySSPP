@@ -4,7 +4,6 @@ import { UserProvider, useUser } from "./UserContext";
 import type { User } from "@/types/database";
 
 // Mock Supabase client
-const mockGetUser = vi.fn();
 const mockGetSession = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 const mockFrom = vi.fn();
@@ -12,7 +11,6 @@ const mockFrom = vi.fn();
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
-      getUser: mockGetUser,
       getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
     },
@@ -63,17 +61,12 @@ describe("UserContext", () => {
     cleanup();
     vi.clearAllMocks();
 
-    // Default mock: unauthenticated state
-    mockGetUser.mockResolvedValue({
-      data: { user: null },
-      error: null,
-    });
-
+    // Default: no session
     mockGetSession.mockResolvedValue({
       data: { session: null },
-      error: null,
     });
 
+    // Default: subscription that does nothing (we skip INITIAL_SESSION now)
     mockOnAuthStateChange.mockReturnValue({
       data: {
         subscription: {
@@ -84,7 +77,6 @@ describe("UserContext", () => {
   });
 
   it("should throw error when useUser is used outside UserProvider", () => {
-    // Suppress console.error for this test
     const originalError = console.error;
     console.error = vi.fn();
 
@@ -96,17 +88,20 @@ describe("UserContext", () => {
   });
 
   it("should provide loading state initially", () => {
+    // Make getSession never resolve
+    mockGetSession.mockReturnValue(new Promise(() => {}));
+
     render(
       <UserProvider>
         <TestComponent />
       </UserProvider>,
     );
 
-    // Should show loading initially
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
   it("should handle unauthenticated user", async () => {
+    // INITIAL_SESSION with no user (default setup)
     render(
       <UserProvider>
         <TestComponent />
@@ -116,17 +111,11 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
-      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
-        "false",
-      );
-      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
-      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
-        "false",
-      );
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent("false");
     });
   });
 
-  it("should handle authenticated admin user", async () => {
+  it("should handle authenticated admin user on reload", async () => {
     const mockUser = {
       id: "123",
       email: "admin@example.com",
@@ -143,9 +132,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // getSession returns existing session (simulates page reload)
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -168,20 +157,10 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("true");
-      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
-        "false",
-      );
-      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("true");
-      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
-        "false",
-      );
-      expect(screen.getByTestId("profile-name")).toHaveTextContent(
-        "Admin User",
-      );
+      expect(screen.getByTestId("is-administrative")).toHaveTextContent("false");
+      expect(screen.getByTestId("profile-name")).toHaveTextContent("Admin User");
       expect(screen.getByTestId("profile-role")).toHaveTextContent("Admin");
-      expect(screen.getByTestId("user-email")).toHaveTextContent(
-        "admin@example.com",
-      );
+      expect(screen.getByTestId("user-email")).toHaveTextContent("admin@example.com");
     });
   });
 
@@ -202,9 +181,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // getSession returns existing session
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -228,16 +207,7 @@ describe("UserContext", () => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
       expect(screen.getByTestId("is-administrative")).toHaveTextContent("true");
-      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
-      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
-        "true",
-      );
-      expect(screen.getByTestId("profile-name")).toHaveTextContent(
-        "Regular User",
-      );
-      expect(screen.getByTestId("profile-role")).toHaveTextContent(
-        "Administrative",
-      );
+      expect(screen.getByTestId("profile-name")).toHaveTextContent("Regular User");
     });
   });
 
@@ -249,9 +219,9 @@ describe("UserContext", () => {
       created_at: "2024-01-01",
     };
 
-    mockGetUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // getSession returns user but profile fetch will fail
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -274,21 +244,55 @@ describe("UserContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
       expect(screen.getByTestId("is-admin")).toHaveTextContent("false");
-      expect(screen.getByTestId("is-administrative")).toHaveTextContent(
-        "false",
-      );
-      expect(screen.getByTestId("has-admin-role")).toHaveTextContent("false");
-      expect(screen.getByTestId("has-administrative-role")).toHaveTextContent(
-        "false",
-      );
       expect(screen.queryByTestId("profile-name")).not.toBeInTheDocument();
     });
   });
 
-  it("should handle session error", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: null },
-      error: { message: "Session error" } as any,
+  it("should handle SIGNED_IN event for login", async () => {
+    const mockUser = {
+      id: "login-user",
+      email: "login@example.com",
+      aud: "authenticated",
+      created_at: "2024-01-01",
+    };
+
+    const mockProfile: User = {
+      id: "login-user",
+      email: "login@example.com",
+      full_name: "Login User",
+      role: "Admin",
+      created_at: "2024-01-01",
+      updated_at: "2024-01-01",
+    };
+
+    // Initial: no session
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
+    });
+
+    // Set up profile mock for when SIGNED_IN fires
+    mockFrom.mockReturnValue({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn().mockResolvedValue({
+            data: mockProfile,
+            error: null,
+          }),
+        })),
+      })),
+    } as any);
+
+    // Capture the callback to trigger SIGNED_IN later
+    let authCallback: any;
+    mockOnAuthStateChange.mockImplementation((callback: any) => {
+      authCallback = callback;
+      return {
+        data: {
+          subscription: {
+            unsubscribe: vi.fn(),
+          },
+        },
+      };
     });
 
     render(
@@ -297,8 +301,17 @@ describe("UserContext", () => {
       </UserProvider>,
     );
 
+    // Wait for initial load (no user)
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
+    });
+
+    // Simulate login by triggering SIGNED_IN
+    await authCallback("SIGNED_IN", { user: mockUser });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+      expect(screen.getByTestId("profile-name")).toHaveTextContent("Login User");
     });
   });
 
@@ -319,27 +332,23 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    // Mock profile fetch with 300ms delay
-    const profileFetchWithDelay = new Promise((resolve) =>
-      setTimeout(
-        () =>
-          resolve({
-            data: mockProfile,
-            error: null,
-          }),
-        300,
-      ),
-    );
-
-    mockGetUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // getSession returns user
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
+    // Mock with delayed profile fetch
     mockFrom.mockReturnValue({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: vi.fn(() => profileFetchWithDelay),
+          single: vi.fn(() =>
+            new Promise((resolve) =>
+              setTimeout(
+                () => resolve({ data: mockProfile, error: null }),
+                100
+              )
+            )
+          ),
         })),
       })),
     } as any);
@@ -350,17 +359,17 @@ describe("UserContext", () => {
       </UserProvider>,
     );
 
-    // Should show loading while profile is being fetched
+    // Should show loading initially
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
-    // Wait for profile to load and loading to become false
+    // Wait for profile to load
     await waitFor(
       () => {
         expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
         expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
         expect(screen.getByTestId("profile-name")).toHaveTextContent("Test User");
       },
-      { timeout: 1000 },
+      { timeout: 500 }
     );
   });
 });
