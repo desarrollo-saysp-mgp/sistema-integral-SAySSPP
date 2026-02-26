@@ -131,6 +131,44 @@ Tasks to improve user experience and interface beyond core functionality.
 
 Recent enhancements and bug fixes implemented to improve the complaint management system.
 
+### Loading Screen After Login (2026-02-25)
+
+**Overview**: Added a loading screen that displays after login while user data is being loaded. This ensures all components (especially the navbar) are fully loaded before showing the dashboard.
+
+**Changes**:
+1. **LoadingScreen Component** (`/components/layout/loading-screen.tsx`)
+   - Full-screen loading overlay with SGR branding
+   - Animated spinner (Loader2 from lucide-react)
+   - Customizable message (default: "Cargando...")
+   - Matches app color scheme (#0E3F75, #5CADEB, #F5F6F8)
+
+2. **Fixed UserContext SIGNED_IN Event Handling**
+   - Previously skipped SIGNED_IN event, causing navbar to not show after login
+   - Now properly handles SIGNED_IN to fetch user profile immediately
+   - Sets loading state during profile fetch to trigger loading screen
+
+3. **DashboardLayout Loading States**
+   - Shows LoadingScreen while `loading` is true
+   - Shows "Verificando sesión..." while profile is being fetched
+   - Only renders navbar and content when user data is fully loaded
+
+**Files Modified**:
+- `/components/layout/loading-screen.tsx` - New loading screen component (created)
+- `/components/layout/loading-screen.test.tsx` - Tests for loading screen (created)
+- `/components/layout/dashboard-layout.tsx` - Added loading state handling
+- `/components/layout/dashboard-layout.test.tsx` - Updated tests for loading states
+- `/lib/contexts/UserContext.tsx` - Fixed SIGNED_IN event handling
+
+**Testing**:
+- Added 7 new tests (5 for LoadingScreen, 2 for DashboardLayout loading states)
+- All 268 tests passing
+
+**Key Features**:
+- Smooth transition from login to dashboard
+- No more navbar flashing or requiring page refresh
+- Consistent branding during load
+- Clear feedback to users during authentication
+
 ### Complaint View/Edit Improvements (2026-02-25)
 
 **Overview**: Added separate View and Edit buttons to the complaints table, created a read-only complaint view page, fixed dropdown preloading issues in edit mode, and restricted search to name only.

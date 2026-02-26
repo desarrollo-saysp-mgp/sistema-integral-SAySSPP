@@ -126,8 +126,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       // Skip INITIAL_SESSION (handled by initializeAuth)
-      // Skip SIGNED_IN (causes timing issues - initializeAuth handles this too)
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
+      // Handle SIGNED_IN - this fires after login from another page
+      if (event === "SIGNED_IN" && session?.user) {
+        setLoading(true);
+        const profileData = await fetchProfile(session.user.id);
+        if (!cancelled) {
+          setUser(session.user);
+          setProfile(profileData);
+          setLoading(false);
+        }
         return;
       }
 
