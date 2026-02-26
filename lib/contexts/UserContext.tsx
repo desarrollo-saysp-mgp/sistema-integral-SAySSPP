@@ -68,8 +68,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let cancelled = false;
 
-    // Set up auth state change listener FIRST
-    // This is the recommended approach from Supabase
+    // Handle session loading from any event
+    const loadUserSession = async (sessionUser: AuthUser) => {
+      if (cancelled) return;
+
+      // If we already have this user loaded, skip
+      if (userIdRef.current === sessionUser.id) {
+        console.log("[UserContext] User already loaded, skipping");
+        return;
+      }
+
+      console.log("[UserContext] Loading user session:", sessionUser.id);
+      userIdRef.current = sessionUser.id;
+      setUser(sessionUser);
+
+      const profileData = await fetchProfile(sessionUser.id);
+      console.log("[UserContext] Profile loaded:", profileData?.full_name);
+
+      if (!cancelled) {
+        setProfile(profileData);
+        setLoading(false);
+      }
+    };
+
+    // Set up auth state change listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -77,38 +99,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
-      if (event === "INITIAL_SESSION") {
-        // This fires immediately on page load with current session
-        if (session?.user) {
-          console.log("[UserContext] INITIAL_SESSION with user");
-          userIdRef.current = session.user.id;
-          setUser(session.user);
-          const profileData = await fetchProfile(session.user.id);
-          if (!cancelled) {
-            setProfile(profileData);
-            setLoading(false);
-          }
-        } else {
-          console.log("[UserContext] INITIAL_SESSION no user");
-          setLoading(false);
-        }
+      // INITIAL_SESSION or SIGNED_IN with user - load the session
+      // Supabase may fire either on page reload depending on version/config
+      if ((event === "INITIAL_SESSION" || event === "SIGNED_IN") && session?.user) {
+        await loadUserSession(session.user);
         return;
       }
 
-      if (event === "SIGNED_IN" && session?.user) {
-        // This fires after login
-        console.log("[UserContext] SIGNED_IN - userIdRef:", userIdRef.current);
-        if (userIdRef.current === session.user.id) {
-          // Same user, skip (might be a duplicate event)
-          return;
-        }
-        userIdRef.current = session.user.id;
-        setUser(session.user);
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setProfile(profileData);
-          setLoading(false);
-        }
+      // No session events - set loading to false
+      if (event === "INITIAL_SESSION" && !session) {
+        console.log("[UserContext] No session");
+        setLoading(false);
         return;
       }
 
