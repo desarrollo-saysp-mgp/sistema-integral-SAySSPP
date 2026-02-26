@@ -67,46 +67,39 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
-    let isLoadingSession = false;
 
-    // Handle session loading from any event
-    const loadUserSession = async (sessionUser: AuthUser) => {
-      // Prevent concurrent loads
-      if (isLoadingSession) {
-        console.log("[UserContext] Already loading, skipping");
+    // Load session immediately on mount using getSession()
+    const initSession = async () => {
+      console.log("[UserContext] initSession starting");
+
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("[UserContext] getSession result:", session?.user?.id);
+
+      if (cancelled) {
+        console.log("[UserContext] cancelled after getSession");
         return;
       }
 
-      // If we already have this user loaded, just ensure loading is false
-      if (userIdRef.current === sessionUser.id) {
-        console.log("[UserContext] User already loaded, skipping");
-        if (!cancelled) setLoading(false);
-        return;
-      }
+      if (session?.user) {
+        userIdRef.current = session.user.id;
+        setUser(session.user);
 
-      isLoadingSession = true;
-      console.log("[UserContext] Loading user session:", sessionUser.id);
-
-      userIdRef.current = sessionUser.id;
-      setUser(sessionUser);
-
-      try {
-        const profileData = await fetchProfile(sessionUser.id);
+        const profileData = await fetchProfile(session.user.id);
         console.log("[UserContext] Profile loaded:", profileData?.full_name);
 
         if (!cancelled) {
           setProfile(profileData);
-          setLoading(false);
         }
-      } catch (error) {
-        console.error("[UserContext] Error loading profile:", error);
-        if (!cancelled) setLoading(false);
-      } finally {
-        isLoadingSession = false;
+      }
+
+      if (!cancelled) {
+        setLoading(false);
       }
     };
 
-    // Set up auth state change listener
+    initSession();
+
+    // Listen for auth changes (login, logout, token refresh)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -114,16 +107,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
-      // INITIAL_SESSION or SIGNED_IN with user - load the session
-      if ((event === "INITIAL_SESSION" || event === "SIGNED_IN") && session?.user) {
-        await loadUserSession(session.user);
+      // Skip INITIAL_SESSION - we handle it with getSession() above
+      if (event === "INITIAL_SESSION") {
         return;
       }
 
-      // No session events - set loading to false
-      if (event === "INITIAL_SESSION" && !session) {
-        console.log("[UserContext] No session");
-        setLoading(false);
+      // SIGNED_IN - user just logged in
+      if (event === "SIGNED_IN" && session?.user) {
+        // Skip if same user (duplicate event)
+        if (userIdRef.current === session.user.id) {
+          console.log("[UserContext] Same user, skipping SIGNED_IN");
+          return;
+        }
+
+        console.log("[UserContext] SIGNED_IN - loading user");
+        userIdRef.current = session.user.id;
+        setUser(session.user);
+
+        const profileData = await fetchProfile(session.user.id);
+        console.log("[UserContext] Profile loaded:", profileData?.full_name);
+
+        if (!cancelled) {
+          setProfile(profileData);
+          setLoading(false);
+        }
         return;
       }
 
@@ -138,14 +145,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (event === "TOKEN_REFRESHED" && session?.user) {
         console.log("[UserContext] TOKEN_REFRESHED");
-        try {
-          const profileData = await fetchProfile(session.user.id);
-          if (!cancelled) {
-            setUser(session.user);
-            setProfile(profileData);
-          }
-        } catch (error) {
-          console.error("[UserContext] Error refreshing profile:", error);
+        const profileData = await fetchProfile(session.user.id);
+        if (!cancelled) {
+          setUser(session.user);
+          setProfile(profileData);
         }
       }
     });

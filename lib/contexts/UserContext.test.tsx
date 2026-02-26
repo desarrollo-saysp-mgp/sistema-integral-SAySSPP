@@ -4,12 +4,14 @@ import { UserProvider, useUser } from "./UserContext";
 import type { User } from "@/types/database";
 
 // Mock Supabase client
+const mockGetSession = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
+      getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
     },
     from: mockFrom,
@@ -59,17 +61,18 @@ describe("UserContext", () => {
     cleanup();
     vi.clearAllMocks();
 
-    // Default: subscription that fires INITIAL_SESSION with no user
-    mockOnAuthStateChange.mockImplementation((callback: any) => {
-      // Fire INITIAL_SESSION immediately (simulates page load with no session)
-      setTimeout(() => callback("INITIAL_SESSION", null), 0);
-      return {
-        data: {
-          subscription: {
-            unsubscribe: vi.fn(),
-          },
+    // Default: no session
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
+    });
+
+    // Default: subscription that does nothing (we skip INITIAL_SESSION now)
+    mockOnAuthStateChange.mockReturnValue({
+      data: {
+        subscription: {
+          unsubscribe: vi.fn(),
         },
-      };
+      },
     });
   });
 
@@ -85,14 +88,8 @@ describe("UserContext", () => {
   });
 
   it("should provide loading state initially", () => {
-    // Don't fire INITIAL_SESSION immediately
-    mockOnAuthStateChange.mockReturnValue({
-      data: {
-        subscription: {
-          unsubscribe: vi.fn(),
-        },
-      },
-    });
+    // Make getSession never resolve
+    mockGetSession.mockReturnValue(new Promise(() => {}));
 
     render(
       <UserProvider>
@@ -135,16 +132,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    // INITIAL_SESSION with existing user (simulates page reload with session)
-    mockOnAuthStateChange.mockImplementation((callback: any) => {
-      setTimeout(() => callback("INITIAL_SESSION", { user: mockUser }), 0);
-      return {
-        data: {
-          subscription: {
-            unsubscribe: vi.fn(),
-          },
-        },
-      };
+    // getSession returns existing session (simulates page reload)
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -191,16 +181,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    // INITIAL_SESSION with existing user
-    mockOnAuthStateChange.mockImplementation((callback: any) => {
-      setTimeout(() => callback("INITIAL_SESSION", { user: mockUser }), 0);
-      return {
-        data: {
-          subscription: {
-            unsubscribe: vi.fn(),
-          },
-        },
-      };
+    // getSession returns existing session
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -236,16 +219,9 @@ describe("UserContext", () => {
       created_at: "2024-01-01",
     };
 
-    // INITIAL_SESSION with user but profile fetch will fail
-    mockOnAuthStateChange.mockImplementation((callback: any) => {
-      setTimeout(() => callback("INITIAL_SESSION", { user: mockUser }), 0);
-      return {
-        data: {
-          subscription: {
-            unsubscribe: vi.fn(),
-          },
-        },
-      };
+    // getSession returns user but profile fetch will fail
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     mockFrom.mockReturnValue({
@@ -289,6 +265,11 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
+    // Initial: no session
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
+    });
+
     // Set up profile mock for when SIGNED_IN fires
     mockFrom.mockReturnValue({
       select: vi.fn(() => ({
@@ -301,12 +282,10 @@ describe("UserContext", () => {
       })),
     } as any);
 
-    // Capture the callback and trigger events manually
+    // Capture the callback to trigger SIGNED_IN later
     let authCallback: any;
     mockOnAuthStateChange.mockImplementation((callback: any) => {
       authCallback = callback;
-      // Fire INITIAL_SESSION with no user first
-      setTimeout(() => callback("INITIAL_SESSION", null), 0);
       return {
         data: {
           subscription: {
@@ -353,16 +332,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    // INITIAL_SESSION with user, but profile fetch is delayed
-    mockOnAuthStateChange.mockImplementation((callback: any) => {
-      setTimeout(() => callback("INITIAL_SESSION", { user: mockUser }), 0);
-      return {
-        data: {
-          subscription: {
-            unsubscribe: vi.fn(),
-          },
-        },
-      };
+    // getSession returns user
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: mockUser } },
     });
 
     // Mock with delayed profile fetch
