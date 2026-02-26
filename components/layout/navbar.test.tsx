@@ -40,7 +40,7 @@ describe("Navbar", () => {
     cleanup();
   });
 
-  it("should show loading state when user is loading", () => {
+  it("should always show logo and navigation even while loading", () => {
     (useUser as any).mockReturnValue({
       profile: null,
       loading: true,
@@ -48,42 +48,14 @@ describe("Navbar", () => {
 
     render(<Navbar />);
 
-    expect(screen.getByText("Cargando...")).toBeInTheDocument();
-    // Should NOT show navigation items while loading
-    expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reclamos")).not.toBeInTheDocument();
-  });
-
-  it("should transition from loading to loaded state and show navigation", () => {
-    const { rerender } = render(<Navbar />);
-
-    // Initially loading
-    (useUser as any).mockReturnValue({
-      profile: null,
-      loading: true,
-    });
-    rerender(<Navbar />);
-    expect(screen.getByText("Cargando...")).toBeInTheDocument();
-
-    // Then loaded with Admin profile
-    (useUser as any).mockReturnValue({
-      profile: {
-        full_name: "Admin User",
-        email: "admin@test.com",
-        role: "Admin",
-      },
-      loading: false,
-    });
-    rerender(<Navbar />);
-
-    // Should show navigation items
-    expect(screen.queryByText("Cargando...")).not.toBeInTheDocument();
+    // Logo should always be visible
+    expect(screen.getAllByText("SGR").length).toBeGreaterThan(0);
+    // Navigation should always be visible
     expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Reclamos").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Administración").length).toBeGreaterThan(0);
   });
 
-  it("should show fallback UI when profile fails to load", () => {
+  it("should show navigation without profile (user dropdown hidden)", () => {
     (useUser as any).mockReturnValue({
       profile: null,
       loading: false,
@@ -91,16 +63,12 @@ describe("Navbar", () => {
 
     render(<Navbar />);
 
-    // Should show logo and system name
+    // Logo and navigation should be visible
     expect(screen.getAllByText("SGR").length).toBeGreaterThan(0);
-    expect(screen.getByText("Sistema de Gestión de Reclamos")).toBeInTheDocument();
+    expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reclamos").length).toBeGreaterThan(0);
 
-    // Should show logout button as fallback
-    expect(screen.getByText("Cerrar Sesión")).toBeInTheDocument();
-
-    // Should NOT show navigation menus when profile failed to load
-    expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reclamos")).not.toBeInTheDocument();
+    // Admin menu should NOT be visible without profile
     expect(screen.queryByText("Administración")).not.toBeInTheDocument();
   });
 
