@@ -125,9 +125,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
 
-      // Skip INITIAL_SESSION and SIGNED_IN (handled by initializeAuth)
-      // initializeAuth calls getUser() which validates the JWT and gets current session
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+      // Skip INITIAL_SESSION (handled by initializeAuth on page load)
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
+      // Handle SIGNED_IN - needed when user logs in and UserProvider is already mounted
+      // This fires AFTER login when navigating to dashboard
+      // We do NOT set loading=true to avoid showing loading screen
+      if (event === "SIGNED_IN" && session?.user) {
+        const profileData = await fetchProfile(session.user.id);
+        if (!cancelled) {
+          setUser(session.user);
+          setProfile(profileData);
+        }
         return;
       }
 
