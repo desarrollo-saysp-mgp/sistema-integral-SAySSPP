@@ -67,18 +67,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
+    let subscription: { unsubscribe: () => void } | null = null;
 
-    // Load session immediately on mount using getSession()
-    const initSession = async () => {
-      console.log("[UserContext] initSession starting");
+    const initialize = async () => {
+      console.log("[UserContext] initialize starting");
 
+      // FIRST: Load existing session from cookies
       const { data: { session } } = await supabase.auth.getSession();
       console.log("[UserContext] getSession result:", session?.user?.id);
 
-      if (cancelled) {
-        console.log("[UserContext] cancelled after getSession");
-        return;
-      }
+      if (cancelled) return;
 
       if (session?.user) {
         userIdRef.current = session.user.id;
@@ -89,74 +87,75 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (!cancelled) {
           setProfile(profileData);
+          setLoading(false);
         }
-      }
-
-      if (!cancelled) {
+      } else {
         setLoading(false);
       }
-    };
-
-    initSession();
-
-    // Listen for auth changes (login, logout, token refresh)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("[UserContext] onAuthStateChange:", event, "user:", session?.user?.id);
 
       if (cancelled) return;
 
-      // Skip INITIAL_SESSION - we handle it with getSession() above
-      if (event === "INITIAL_SESSION") {
-        return;
-      }
+      // THEN: Set up listener for future auth changes (login, logout)
+      const { data } = supabase.auth.onAuthStateChange(async (event, eventSession) => {
+        console.log("[UserContext] onAuthStateChange:", event);
 
-      // SIGNED_IN - user just logged in
-      if (event === "SIGNED_IN" && session?.user) {
-        // Skip if same user (duplicate event)
-        if (userIdRef.current === session.user.id) {
-          console.log("[UserContext] Same user, skipping SIGNED_IN");
+        if (cancelled) return;
+
+        // Skip INITIAL_SESSION - already handled above
+        if (event === "INITIAL_SESSION") {
           return;
         }
 
-        console.log("[UserContext] SIGNED_IN - loading user");
-        userIdRef.current = session.user.id;
-        setUser(session.user);
+        // SIGNED_IN - user just logged in
+        if (event === "SIGNED_IN" && eventSession?.user) {
+          // Skip if same user already loaded
+          if (userIdRef.current === eventSession.user.id) {
+            console.log("[UserContext] Same user, skipping");
+            return;
+          }
 
-        const profileData = await fetchProfile(session.user.id);
-        console.log("[UserContext] Profile loaded:", profileData?.full_name);
+          console.log("[UserContext] New login, loading user");
+          userIdRef.current = eventSession.user.id;
+          setUser(eventSession.user);
 
-        if (!cancelled) {
-          setProfile(profileData);
+          const profileData = await fetchProfile(eventSession.user.id);
+          console.log("[UserContext] Profile loaded:", profileData?.full_name);
+
+          if (!cancelled) {
+            setProfile(profileData);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (event === "SIGNED_OUT") {
+          console.log("[UserContext] SIGNED_OUT");
+          userIdRef.current = null;
+          setUser(null);
+          setProfile(null);
           setLoading(false);
+          return;
         }
-        return;
-      }
 
-      if (event === "SIGNED_OUT") {
-        console.log("[UserContext] SIGNED_OUT");
-        userIdRef.current = null;
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      if (event === "TOKEN_REFRESHED" && session?.user) {
-        console.log("[UserContext] TOKEN_REFRESHED");
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setUser(session.user);
-          setProfile(profileData);
+        if (event === "TOKEN_REFRESHED" && eventSession?.user) {
+          console.log("[UserContext] TOKEN_REFRESHED");
+          const profileData = await fetchProfile(eventSession.user.id);
+          if (!cancelled) {
+            setUser(eventSession.user);
+            setProfile(profileData);
+          }
         }
-      }
-    });
+      });
+
+      subscription = data.subscription;
+    };
+
+    initialize();
 
     return () => {
       console.log("[UserContext] cleanup");
       cancelled = true;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
