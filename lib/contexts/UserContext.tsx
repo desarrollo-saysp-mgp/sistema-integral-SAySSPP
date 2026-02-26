@@ -65,15 +65,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let cancelled = false;
 
-    // Listen for auth state changes - this is the ONLY source of truth
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return;
+    // Get initial session directly (not relying on events)
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // INITIAL_SESSION fires on page load/reload
-      // SIGNED_IN fires after login
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        if (cancelled) return;
+
         if (session?.user) {
           const profileData = await fetchProfile(session.user.id);
           if (!cancelled) {
@@ -81,8 +79,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
             setProfile(profileData);
           }
         }
-        // Always set loading to false after INITIAL_SESSION
+      } catch (error) {
+        console.error("Error getting initial session:", error);
+      } finally {
         if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    getInitialSession();
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (cancelled) return;
+
+      // Skip INITIAL_SESSION - we handle it above with getSession()
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
+      // SIGNED_IN fires after login
+      if (event === "SIGNED_IN" && session?.user) {
+        const profileData = await fetchProfile(session.user.id);
+        if (!cancelled) {
+          setUser(session.user);
+          setProfile(profileData);
           setLoading(false);
         }
         return;
