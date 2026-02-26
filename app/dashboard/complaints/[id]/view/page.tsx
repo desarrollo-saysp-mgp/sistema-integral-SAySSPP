@@ -113,6 +113,7 @@ export default function ComplaintViewPage() {
               variant="ghost"
               size="sm"
               onClick={() => router.push("/dashboard/complaints")}
+              className="hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200 active:scale-95 transition-all"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Volver
