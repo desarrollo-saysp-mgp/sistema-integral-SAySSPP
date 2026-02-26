@@ -4,6 +4,7 @@ import { UserProvider, useUser } from "./UserContext";
 import type { User } from "@/types/database";
 
 // Mock Supabase client
+const mockGetUser = vi.fn();
 const mockGetSession = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 const mockFrom = vi.fn();
@@ -11,6 +12,7 @@ const mockFrom = vi.fn();
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
+      getUser: mockGetUser,
       getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
     },
@@ -61,7 +63,13 @@ describe("UserContext", () => {
     cleanup();
     vi.clearAllMocks();
 
-    // Default: no session
+    // Default: no user
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    });
+
+    // Default: no session (fallback)
     mockGetSession.mockResolvedValue({
       data: { session: null },
       error: null,
@@ -89,8 +97,8 @@ describe("UserContext", () => {
   });
 
   it("should provide loading state initially", () => {
-    // Make getSession never resolve
-    mockGetSession.mockReturnValue(new Promise(() => {}));
+    // Make getUser never resolve
+    mockGetUser.mockReturnValue(new Promise(() => {}));
 
     render(
       <UserProvider>
@@ -102,8 +110,8 @@ describe("UserContext", () => {
   });
 
   it("should handle unauthenticated user", async () => {
-    mockGetSession.mockResolvedValue({
-      data: { session: null },
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
       error: null,
     });
 
@@ -137,8 +145,8 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -186,8 +194,8 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -224,8 +232,8 @@ describe("UserContext", () => {
       created_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 
@@ -270,9 +278,9 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    // Initial: no session
-    mockGetSession.mockResolvedValue({
-      data: { session: null },
+    // Initial: no user (simulates pre-login state)
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
       error: null,
     });
 
@@ -307,7 +315,7 @@ describe("UserContext", () => {
       </UserProvider>,
     );
 
-    // Wait for initial load (no session)
+    // Wait for initial load (no user)
     await waitFor(() => {
       expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
     });
@@ -338,8 +346,8 @@ describe("UserContext", () => {
       updated_at: "2024-01-01",
     };
 
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
       error: null,
     });
 

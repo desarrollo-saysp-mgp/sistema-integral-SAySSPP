@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +29,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Ref to track current user ID for checking in event handlers
+  const userIdRef = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -65,22 +68,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let cancelled = false;
 
-    // Get initial session directly (not relying on events)
-    const getInitialSession = async () => {
+    // Initialize auth using getUser() which validates JWT with server
+    const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { user: authUser }, error } = await supabase.auth.getUser();
 
         if (cancelled) return;
 
-        if (session?.user) {
-          const profileData = await fetchProfile(session.user.id);
-          if (!cancelled) {
+        if (error) {
+          // Try fallback to getSession for edge cases
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!cancelled && session?.user) {
+            userIdRef.current = session.user.id;
             setUser(session.user);
-            setProfile(profileData);
+            const profileData = await fetchProfile(session.user.id);
+            if (!cancelled) setProfile(profileData);
           }
+        } else if (authUser) {
+          userIdRef.current = authUser.id;
+          setUser(authUser);
+          const profileData = await fetchProfile(authUser.id);
+          if (!cancelled) setProfile(profileData);
         }
       } catch (error) {
-        console.error("Error getting initial session:", error);
+        console.error("Error initializing auth:", error);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -88,21 +99,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    getInitialSession();
+    initializeAuth();
 
-    // Listen for auth state changes (login, logout, token refresh)
+    // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
 
-      // Skip INITIAL_SESSION - we handle it above with getSession()
+      // Skip INITIAL_SESSION - handled by initializeAuth
       if (event === "INITIAL_SESSION") {
         return;
       }
 
-      // SIGNED_IN fires after login
+      // SIGNED_IN: Only handle for fresh login
+      // If we already have the same user (reload case), skip to avoid duplicate processing
       if (event === "SIGNED_IN" && session?.user) {
+        if (userIdRef.current === session.user.id) {
+          // Same user already loaded (reload case), skip
+          return;
+        }
+        // Fresh login - load user and profile
+        userIdRef.current = session.user.id;
         const profileData = await fetchProfile(session.user.id);
         if (!cancelled) {
           setUser(session.user);
@@ -113,6 +131,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       if (event === "SIGNED_OUT") {
+        userIdRef.current = null;
         setUser(null);
         setProfile(null);
         setLoading(false);
