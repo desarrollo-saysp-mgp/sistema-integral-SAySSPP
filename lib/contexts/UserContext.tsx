@@ -131,13 +131,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // Handle SIGNED_IN - this fires after login from another page
+      // Update user and profile silently without setting loading state
       if (event === "SIGNED_IN" && session?.user) {
-        setLoading(true);
         const profileData = await fetchProfile(session.user.id);
         if (!cancelled) {
           setUser(session.user);
           setProfile(profileData);
-          setLoading(false);
         }
         return;
       }
