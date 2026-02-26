@@ -67,27 +67,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
+    let isLoadingSession = false;
 
     // Handle session loading from any event
     const loadUserSession = async (sessionUser: AuthUser) => {
-      if (cancelled) return;
-
-      // If we already have this user loaded, skip
-      if (userIdRef.current === sessionUser.id) {
-        console.log("[UserContext] User already loaded, skipping");
+      // Prevent concurrent loads
+      if (isLoadingSession) {
+        console.log("[UserContext] Already loading, skipping");
         return;
       }
 
+      // If we already have this user loaded, just ensure loading is false
+      if (userIdRef.current === sessionUser.id) {
+        console.log("[UserContext] User already loaded, skipping");
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      isLoadingSession = true;
       console.log("[UserContext] Loading user session:", sessionUser.id);
+
       userIdRef.current = sessionUser.id;
       setUser(sessionUser);
 
-      const profileData = await fetchProfile(sessionUser.id);
-      console.log("[UserContext] Profile loaded:", profileData?.full_name);
+      try {
+        const profileData = await fetchProfile(sessionUser.id);
+        console.log("[UserContext] Profile loaded:", profileData?.full_name);
 
-      if (!cancelled) {
-        setProfile(profileData);
-        setLoading(false);
+        if (!cancelled) {
+          setProfile(profileData);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("[UserContext] Error loading profile:", error);
+        if (!cancelled) setLoading(false);
+      } finally {
+        isLoadingSession = false;
       }
     };
 
@@ -100,7 +115,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       // INITIAL_SESSION or SIGNED_IN with user - load the session
-      // Supabase may fire either on page reload depending on version/config
       if ((event === "INITIAL_SESSION" || event === "SIGNED_IN") && session?.user) {
         await loadUserSession(session.user);
         return;
@@ -124,10 +138,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (event === "TOKEN_REFRESHED" && session?.user) {
         console.log("[UserContext] TOKEN_REFRESHED");
-        const profileData = await fetchProfile(session.user.id);
-        if (!cancelled) {
-          setUser(session.user);
-          setProfile(profileData);
+        try {
+          const profileData = await fetchProfile(session.user.id);
+          if (!cancelled) {
+            setUser(session.user);
+            setProfile(profileData);
+          }
+        } catch (error) {
+          console.error("[UserContext] Error refreshing profile:", error);
         }
       }
     });
