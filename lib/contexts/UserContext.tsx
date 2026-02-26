@@ -70,11 +70,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null;
 
     const initialize = async () => {
-      console.log("[UserContext] initialize starting");
-
       // FIRST: Load existing session from cookies
       const { data: { session } } = await supabase.auth.getSession();
-      console.log("[UserContext] getSession result:", session?.user?.id);
 
       if (cancelled) return;
 
@@ -83,7 +80,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(session.user);
 
         const profileData = await fetchProfile(session.user.id);
-        console.log("[UserContext] Profile loaded:", profileData?.full_name);
 
         if (!cancelled) {
           setProfile(profileData);
@@ -97,8 +93,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       // THEN: Set up listener for future auth changes (login, logout)
       const { data } = supabase.auth.onAuthStateChange(async (event, eventSession) => {
-        console.log("[UserContext] onAuthStateChange:", event);
-
         if (cancelled) return;
 
         // Skip INITIAL_SESSION - already handled above
@@ -110,16 +104,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (event === "SIGNED_IN" && eventSession?.user) {
           // Skip if same user already loaded
           if (userIdRef.current === eventSession.user.id) {
-            console.log("[UserContext] Same user, skipping");
             return;
           }
 
-          console.log("[UserContext] New login, loading user");
           userIdRef.current = eventSession.user.id;
           setUser(eventSession.user);
 
           const profileData = await fetchProfile(eventSession.user.id);
-          console.log("[UserContext] Profile loaded:", profileData?.full_name);
 
           if (!cancelled) {
             setProfile(profileData);
@@ -129,7 +120,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
 
         if (event === "SIGNED_OUT") {
-          console.log("[UserContext] SIGNED_OUT");
           userIdRef.current = null;
           setUser(null);
           setProfile(null);
@@ -138,7 +128,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
 
         if (event === "TOKEN_REFRESHED" && eventSession?.user) {
-          console.log("[UserContext] TOKEN_REFRESHED");
           const profileData = await fetchProfile(eventSession.user.id);
           if (!cancelled) {
             setUser(eventSession.user);
@@ -153,7 +142,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     initialize();
 
     return () => {
-      console.log("[UserContext] cleanup");
       cancelled = true;
       subscription?.unsubscribe();
     };
