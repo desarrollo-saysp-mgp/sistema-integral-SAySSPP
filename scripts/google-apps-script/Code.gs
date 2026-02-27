@@ -137,7 +137,7 @@ function syncNewComplaints() {
  */
 function fetchComplaintsFromSupabase() {
   var config = getConfig();
-  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&order=id.desc';
+  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&order=id.asc';
 
   var response = UrlFetchApp.fetch(url, {
     method: 'get',
@@ -173,7 +173,7 @@ function fetchTodayComplaintsFromSupabase() {
   var startDate = startOfDay.toISOString();
 
   // Query complaints created today (from 3 AM onwards)
-  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&created_at=gte.' + encodeURIComponent(startDate) + '&order=id.desc';
+  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&created_at=gte.' + encodeURIComponent(startDate) + '&order=id.asc';
 
   Logger.log('Fetching complaints from: ' + startDate);
 
