@@ -1,7 +1,6 @@
 /**
- * Google Apps Script - Complaint Sync for Sistema de Gestion de Reclamos
- *
- * This script syncs complaint data from Supabase to Google Sheets.
+ * Google Apps Script - Complaints Backup
+ * Syncs complaints from Supabase to Google Sheets
  *
  * SETUP INSTRUCTIONS:
  * 1. Open your Google Sheet
@@ -11,8 +10,7 @@
  * 5. Add the following properties:
  *    - SUPABASE_URL: Your Supabase project URL (e.g., https://xxxxx.supabase.co)
  *    - SUPABASE_KEY: Your Supabase anon/public key
- *    - ADMIN_EMAIL: Email address for error notifications
- * 6. Save and run setupTriggers() once to enable automatic sync
+ * 6. Save, refresh the sheet, and use the SGR - Backup menu
  */
 
 // ================================
@@ -27,225 +25,274 @@ function getConfig() {
   return {
     SUPABASE_URL: scriptProperties.getProperty('SUPABASE_URL'),
     SUPABASE_KEY: scriptProperties.getProperty('SUPABASE_KEY'),
-    ADMIN_EMAIL: scriptProperties.getProperty('ADMIN_EMAIL') || '',
   };
 }
 
-// Sheet names
 const COMPLAINTS_SHEET = 'Reclamos';
-const SERVICES_SHEET = 'Servicios';
-const USERS_SHEET = 'Usuarios';
-const SYNC_STATUS_SHEET = '_SyncStatus';
+const HEADERS = [
+  'Número de Reclamo',
+  'Fecha de Reclamo',
+  'Nombre y Apellido',
+  'Dirección',
+  'Número',
+  'DNI',
+  'Teléfono',
+  'Email',
+  'Servicio',
+  'Causa',
+  'Zona',
+  'Desde Cuándo',
+  'Medio de Contacto',
+  'Detalle',
+  'Estado',
+  'Derivado',
+  'Responsable de Carga',
+  'Fecha de Carga',
+  'Última Modificación',
+];
 
 // ================================
 // MAIN SYNC FUNCTIONS
 // ================================
 
 /**
- * Main sync function - runs on schedule (every 15 minutes)
- * Syncs all complaints from Supabase to the Google Sheet
+ * Manual sync - syncs ALL complaints (use for initial setup or full refresh)
  */
-function syncComplaintsToSheet() {
+function syncAllComplaints() {
   try {
-    Logger.log('Starting complaint sync...');
+    Logger.log('Starting FULL complaint sync...');
 
-    const complaints = fetchComplaintsFromSupabase();
-    const sheet = getOrCreateSheet(COMPLAINTS_SHEET);
+    var complaints = fetchComplaintsFromSupabase();
+    var sheet = getOrCreateSheet(COMPLAINTS_SHEET);
 
+    // Clear and rewrite all
     updateComplaintsSheet(sheet, complaints);
-    updateSyncStatus('Reclamos', complaints.length, 'success');
 
-    Logger.log(`Successfully synced ${complaints.length} complaints`);
+    Logger.log('Successfully synced ' + complaints.length + ' complaints');
+    SpreadsheetApp.getUi().alert(
+      'Sincronización Completa',
+      'Se sincronizaron ' + complaints.length + ' reclamos.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
   } catch (error) {
     Logger.log('Error syncing complaints: ' + error.message);
-    updateSyncStatus('Reclamos', 0, 'error', error.message);
-    sendErrorNotification(error, 'syncComplaintsToSheet');
+    SpreadsheetApp.getUi().alert(
+      'Error de Sincronización',
+      'Error: ' + error.message,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
   }
 }
 
 /**
- * Sync services to sheet (runs every hour)
+ * Scheduled sync - only adds complaints created TODAY (runs daily at 11 PM)
+ * Fetches complaints created between 3 AM and 11 PM today
+ * This function is called by the trigger
  */
-function syncServicesToSheet() {
+function syncNewComplaints() {
   try {
-    Logger.log('Starting services sync...');
+    Logger.log('Starting daily complaints sync...');
 
-    const services = fetchServicesFromSupabase();
-    const sheet = getOrCreateSheet(SERVICES_SHEET);
+    // Fetch only today's complaints (3 AM to 11 PM)
+    var todayComplaints = fetchTodayComplaintsFromSupabase();
+    Logger.log('Found ' + todayComplaints.length + ' complaints created today');
 
-    updateServicesSheet(sheet, services);
-    updateSyncStatus('Servicios', services.length, 'success');
+    if (todayComplaints.length === 0) {
+      Logger.log('No complaints created today');
+      return;
+    }
 
-    Logger.log(`Successfully synced ${services.length} services`);
+    var sheet = getOrCreateSheet(COMPLAINTS_SHEET);
+
+    // Get existing IDs to avoid duplicates (in case of re-runs)
+    var existingIds = getExistingIds(sheet);
+
+    // Filter out any that already exist
+    var newComplaints = todayComplaints.filter(function(complaint) {
+      return existingIds.indexOf(complaint.id) === -1;
+    });
+
+    Logger.log('Found ' + newComplaints.length + ' NEW complaints to add');
+
+    if (newComplaints.length === 0) {
+      Logger.log('All today\'s complaints already synced');
+      return;
+    }
+
+    // Append new complaints
+    appendNewComplaints(sheet, newComplaints);
+
+    Logger.log('Successfully added ' + newComplaints.length + ' new complaints');
   } catch (error) {
-    Logger.log('Error syncing services: ' + error.message);
-    updateSyncStatus('Servicios', 0, 'error', error.message);
-    sendErrorNotification(error, 'syncServicesToSheet');
+    Logger.log('Error syncing new complaints: ' + error.message);
   }
-}
-
-/**
- * Sync users to sheet (runs every hour)
- */
-function syncUsersToSheet() {
-  try {
-    Logger.log('Starting users sync...');
-
-    const users = fetchUsersFromSupabase();
-    const sheet = getOrCreateSheet(USERS_SHEET);
-
-    updateUsersSheet(sheet, users);
-    updateSyncStatus('Usuarios', users.length, 'success');
-
-    Logger.log(`Successfully synced ${users.length} users`);
-  } catch (error) {
-    Logger.log('Error syncing users: ' + error.message);
-    updateSyncStatus('Usuarios', 0, 'error', error.message);
-    sendErrorNotification(error, 'syncUsersToSheet');
-  }
-}
-
-/**
- * Full sync - syncs all data (complaints, services, users)
- */
-function syncAll() {
-  syncComplaintsToSheet();
-  syncServicesToSheet();
-  syncUsersToSheet();
 }
 
 // ================================
-// SUPABASE API FUNCTIONS
+// SUPABASE API
 // ================================
 
 /**
- * Fetch complaints from Supabase using the complaint_details view
+ * Fetch ALL complaints from Supabase using the complaint_details view
  */
 function fetchComplaintsFromSupabase() {
-  const config = getConfig();
-  const url = `${config.SUPABASE_URL}/rest/v1/complaint_details?select=*&order=id.desc`;
+  var config = getConfig();
+  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&order=id.desc';
 
-  const options = {
+  var response = UrlFetchApp.fetch(url, {
     method: 'get',
     headers: {
       'apikey': config.SUPABASE_KEY,
-      'Authorization': `Bearer ${config.SUPABASE_KEY}`,
+      'Authorization': 'Bearer ' + config.SUPABASE_KEY,
       'Content-Type': 'application/json',
     },
     muteHttpExceptions: true,
-  };
+  });
 
-  const response = UrlFetchApp.fetch(url, options);
-  const responseCode = response.getResponseCode();
+  var responseCode = response.getResponseCode();
 
   if (responseCode !== 200) {
-    throw new Error(`Supabase API error: ${responseCode} - ${response.getContentText()}`);
+    throw new Error('Supabase API error: ' + responseCode + ' - ' + response.getContentText());
   }
 
   return JSON.parse(response.getContentText());
 }
 
 /**
- * Fetch services with causes from Supabase
+ * Fetch only TODAY's complaints (created between 3 AM and 11 PM)
+ * More efficient for daily sync
  */
-function fetchServicesFromSupabase() {
-  const config = getConfig();
-  const url = `${config.SUPABASE_URL}/rest/v1/services?select=*,causes(name)&active=eq.true&order=id`;
+function fetchTodayComplaintsFromSupabase() {
+  var config = getConfig();
 
-  const options = {
+  // Get today's date at 3:00 AM
+  var today = new Date();
+  var startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 3, 0, 0);
+
+  // Format as ISO string for Supabase query
+  var startDate = startOfDay.toISOString();
+
+  // Query complaints created today (from 3 AM onwards)
+  var url = config.SUPABASE_URL + '/rest/v1/complaint_details?select=*&created_at=gte.' + encodeURIComponent(startDate) + '&order=id.desc';
+
+  Logger.log('Fetching complaints from: ' + startDate);
+
+  var response = UrlFetchApp.fetch(url, {
     method: 'get',
     headers: {
       'apikey': config.SUPABASE_KEY,
-      'Authorization': `Bearer ${config.SUPABASE_KEY}`,
+      'Authorization': 'Bearer ' + config.SUPABASE_KEY,
       'Content-Type': 'application/json',
     },
     muteHttpExceptions: true,
-  };
+  });
 
-  const response = UrlFetchApp.fetch(url, options);
-  const responseCode = response.getResponseCode();
-
-  if (responseCode !== 200) {
-    throw new Error(`Supabase API error: ${responseCode} - ${response.getContentText()}`);
-  }
-
-  return JSON.parse(response.getContentText());
-}
-
-/**
- * Fetch users from Supabase
- */
-function fetchUsersFromSupabase() {
-  const config = getConfig();
-  const url = `${config.SUPABASE_URL}/rest/v1/users?select=full_name,email,role,created_at&active=eq.true&order=full_name`;
-
-  const options = {
-    method: 'get',
-    headers: {
-      'apikey': config.SUPABASE_KEY,
-      'Authorization': `Bearer ${config.SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    muteHttpExceptions: true,
-  };
-
-  const response = UrlFetchApp.fetch(url, options);
-  const responseCode = response.getResponseCode();
+  var responseCode = response.getResponseCode();
 
   if (responseCode !== 200) {
-    throw new Error(`Supabase API error: ${responseCode} - ${response.getContentText()}`);
+    throw new Error('Supabase API error: ' + responseCode + ' - ' + response.getContentText());
   }
 
   return JSON.parse(response.getContentText());
 }
 
 // ================================
-// SHEET UPDATE FUNCTIONS
+// SHEET FUNCTIONS
 // ================================
 
 /**
- * Update complaints sheet with data
+ * Get list of complaint IDs already in the sheet
+ */
+function getExistingIds(sheet) {
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow <= 1) {
+    return []; // Only header or empty
+  }
+
+  // Column A contains IDs
+  var range = sheet.getRange(2, 1, lastRow - 1, 1);
+  var values = range.getValues();
+
+  return values.map(function(row) {
+    return Number(row[0]);
+  }).filter(function(id) {
+    return id > 0;
+  });
+}
+
+/**
+ * Append new complaints to the sheet (without clearing existing data)
+ */
+function appendNewComplaints(sheet, complaints) {
+  var lastRow = sheet.getLastRow();
+
+  // Initialize headers if sheet is empty
+  if (lastRow === 0) {
+    initializeHeaders(sheet);
+    lastRow = 1;
+  }
+
+  // Prepare rows for new complaints
+  var rows = complaints.map(function(complaint) {
+    return complaintToRow(complaint);
+  });
+
+  // Append at the end
+  if (rows.length > 0) {
+    sheet.getRange(lastRow + 1, 1, rows.length, HEADERS.length).setValues(rows);
+
+    // Apply status coloring to new rows
+    applyStatusColorsToRange(sheet, lastRow + 1, rows.length);
+  }
+}
+
+/**
+ * Update complaints sheet with ALL data (clears and rewrites)
  */
 function updateComplaintsSheet(sheet, complaints) {
-  // Clear existing data (except header)
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clear();
-  }
+  // Clear existing data
+  sheet.clear();
 
-  // Set headers if first run
-  if (sheet.getLastRow() === 0) {
-    const headers = [
-      'Número de Reclamo',
-      'Fecha de Reclamo',
-      'Nombre y Apellido',
-      'Dirección',
-      'Número',
-      'DNI',
-      'Teléfono',
-      'Email',
-      'Servicio',
-      'Causa',
-      'Zona',
-      'Desde Cuándo',
-      'Medio de Contacto',
-      'Detalle',
-      'Estado',
-      'Derivado',
-      'Responsable de Carga',
-      'Fecha de Carga',
-      'Última Modificación',
-    ];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-    sheet.getRange(1, 1, 1, headers.length).setBackground('#0E3F75');
-    sheet.getRange(1, 1, 1, headers.length).setFontColor('#FFFFFF');
-    sheet.setFrozenRows(1);
-  }
+  // Set headers
+  initializeHeaders(sheet);
 
   // Prepare data rows
-  const rows = complaints.map(complaint => [
-    complaint.complaint_number,
+  var rows = complaints.map(function(complaint) {
+    return complaintToRow(complaint);
+  });
+
+  // Write data
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
+
+    // Auto-resize columns
+    for (var i = 1; i <= HEADERS.length; i++) {
+      sheet.autoResizeColumn(i);
+    }
+
+    // Apply status coloring
+    applyStatusColorsToRange(sheet, 2, rows.length);
+  }
+}
+
+/**
+ * Initialize sheet headers
+ */
+function initializeHeaders(sheet) {
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+  sheet.getRange(1, 1, 1, HEADERS.length).setBackground('#0E3F75');
+  sheet.getRange(1, 1, 1, HEADERS.length).setFontColor('#FFFFFF');
+  sheet.setFrozenRows(1);
+}
+
+/**
+ * Convert complaint object to row array
+ */
+function complaintToRow(complaint) {
+  return [
+    complaint.id,
     formatDate(complaint.complaint_date),
     complaint.complainant_name,
     complaint.address,
@@ -264,35 +311,18 @@ function updateComplaintsSheet(sheet, complaints) {
     complaint.loaded_by_name,
     formatDateTime(complaint.created_at),
     formatDateTime(complaint.updated_at),
-  ]);
-
-  // Write data
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-
-    // Auto-resize columns
-    for (let i = 1; i <= rows[0].length; i++) {
-      sheet.autoResizeColumn(i);
-    }
-
-    // Apply alternating row colors
-    const dataRange = sheet.getRange(2, 1, rows.length, rows[0].length);
-    dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
-
-    // Apply status coloring
-    applyStatusColors(sheet, rows.length);
-  }
+  ];
 }
 
 /**
  * Apply conditional coloring to status column
  */
-function applyStatusColors(sheet, numRows) {
-  const statusColumn = 15; // Column O (Estado)
+function applyStatusColorsToRange(sheet, startRow, numRows) {
+  var statusColumn = 15; // Column O (Estado)
 
-  for (let row = 2; row <= numRows + 1; row++) {
-    const cell = sheet.getRange(row, statusColumn);
-    const status = cell.getValue();
+  for (var row = startRow; row < startRow + numRows; row++) {
+    var cell = sheet.getRange(row, statusColumn);
+    var status = cell.getValue();
 
     switch (status) {
       case 'En proceso':
@@ -311,59 +341,6 @@ function applyStatusColors(sheet, numRows) {
   }
 }
 
-/**
- * Update services sheet
- */
-function updateServicesSheet(sheet, services) {
-  // Clear and set headers
-  sheet.clear();
-  const headers = ['ID', 'Servicio', 'Causas'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-  sheet.getRange(1, 1, 1, headers.length).setBackground('#0E3F75');
-  sheet.getRange(1, 1, 1, headers.length).setFontColor('#FFFFFF');
-  sheet.setFrozenRows(1);
-
-  // Prepare rows
-  const rows = services.map(service => [
-    service.id,
-    service.name,
-    service.causes ? service.causes.map(c => c.name).join(', ') : '',
-  ]);
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-    sheet.autoResizeColumns(1, headers.length);
-  }
-}
-
-/**
- * Update users sheet
- */
-function updateUsersSheet(sheet, users) {
-  // Clear and set headers
-  sheet.clear();
-  const headers = ['Nombre y Apellido', 'Email', 'Rol', 'Fecha de Alta'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-  sheet.getRange(1, 1, 1, headers.length).setBackground('#0E3F75');
-  sheet.getRange(1, 1, 1, headers.length).setFontColor('#FFFFFF');
-  sheet.setFrozenRows(1);
-
-  // Prepare rows
-  const rows = users.map(user => [
-    user.full_name,
-    user.email,
-    user.role,
-    formatDateTime(user.created_at),
-  ]);
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-    sheet.autoResizeColumns(1, headers.length);
-  }
-}
-
 // ================================
 // UTILITY FUNCTIONS
 // ================================
@@ -372,8 +349,8 @@ function updateUsersSheet(sheet, users) {
  * Get or create a sheet by name
  */
 function getOrCreateSheet(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(sheetName);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -388,14 +365,14 @@ function getOrCreateSheet(sheetName) {
 function formatDate(dateString) {
   if (!dateString) return '';
 
-  const date = new Date(dateString);
+  var date = new Date(dateString);
   if (isNaN(date.getTime())) return '';
 
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
+  var day = String(date.getDate()).padStart(2, '0');
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var year = date.getFullYear();
 
-  return `${day}/${month}/${year}`;
+  return day + '/' + month + '/' + year;
 }
 
 /**
@@ -404,96 +381,16 @@ function formatDate(dateString) {
 function formatDateTime(dateString) {
   if (!dateString) return '';
 
-  const date = new Date(dateString);
+  var date = new Date(dateString);
   if (isNaN(date.getTime())) return '';
 
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var year = date.getFullYear();
+  var hours = String(date.getHours()).padStart(2, '0');
+  var minutes = String(date.getMinutes()).padStart(2, '0');
 
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
-}
-
-/**
- * Update sync status tracking sheet
- */
-function updateSyncStatus(syncType, recordCount, status, errorMessage) {
-  const sheet = getOrCreateSheet(SYNC_STATUS_SHEET);
-  const now = new Date();
-
-  // Initialize headers if needed
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, 5).setValues([['Tipo', 'Última Sincronización', 'Registros', 'Estado', 'Error']]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-  }
-
-  // Find or create row for this sync type
-  const data = sheet.getDataRange().getValues();
-  let rowIndex = -1;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === syncType) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-
-  if (rowIndex === -1) {
-    rowIndex = sheet.getLastRow() + 1;
-  }
-
-  // Update row
-  sheet.getRange(rowIndex, 1, 1, 5).setValues([[
-    syncType,
-    formatDateTime(now.toISOString()),
-    recordCount,
-    status === 'success' ? '✓ OK' : '✗ Error',
-    errorMessage || '',
-  ]]);
-
-  // Color the status cell
-  const statusCell = sheet.getRange(rowIndex, 4);
-  if (status === 'success') {
-    statusCell.setBackground('#D1FAE5');
-    statusCell.setFontColor('#065F46');
-  } else {
-    statusCell.setBackground('#FEE2E2');
-    statusCell.setFontColor('#991B1B');
-  }
-}
-
-/**
- * Send error notification email
- */
-function sendErrorNotification(error, functionName) {
-  const config = getConfig();
-
-  if (!config.ADMIN_EMAIL) {
-    Logger.log('No admin email configured for error notifications');
-    return;
-  }
-
-  const subject = `[SGR] Error en sincronización: ${functionName}`;
-  const body = `Se produjo un error al sincronizar los datos:
-
-Función: ${functionName}
-Fecha/Hora: ${new Date().toLocaleString('es-AR')}
-Error: ${error.message}
-
-Stack trace:
-${error.stack || 'No disponible'}
-
----
-Sistema de Gestión de Reclamos - Sincronización Automática`;
-
-  try {
-    MailApp.sendEmail(config.ADMIN_EMAIL, subject, body);
-    Logger.log('Error notification sent to ' + config.ADMIN_EMAIL);
-  } catch (emailError) {
-    Logger.log('Could not send error notification: ' + emailError.message);
-  }
+  return day + '/' + month + '/' + year + ' ' + hours + ':' + minutes;
 }
 
 // ================================
@@ -504,85 +401,189 @@ Sistema de Gestión de Reclamos - Sincronización Automática`;
  * Create custom menu when spreadsheet opens
  */
 function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('SGR - Sincronización')
-    .addItem('Sincronizar Todo', 'syncAll')
+  SpreadsheetApp.getUi()
+    .createMenu('SGR - Backup')
+    .addItem('Sincronizar TODOS los Reclamos', 'syncAllComplaints')
+    .addItem('Sincronizar Reclamos de HOY', 'syncNewComplaintsManual')
     .addSeparator()
-    .addItem('Sincronizar Reclamos', 'syncComplaintsToSheet')
-    .addItem('Sincronizar Servicios', 'syncServicesToSheet')
-    .addItem('Sincronizar Usuarios', 'syncUsersToSheet')
+    .addItem('Configurar Sync Diario (11 PM)', 'setupAutoSync')
+    .addItem('Desactivar Sync Automático', 'removeAutoSync')
     .addSeparator()
-    .addItem('Ver Estado de Sincronización', 'showSyncStatus')
     .addItem('Verificar Configuración', 'verifyConfiguration')
     .addToUi();
 }
 
 /**
- * Show sync status dialog
+ * Manual trigger for syncing today's complaints (with UI feedback)
  */
-function showSyncStatus() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_STATUS_SHEET);
-  const ui = SpreadsheetApp.getUi();
+function syncNewComplaintsManual() {
+  try {
+    Logger.log('Starting TODAY\'s complaints sync (manual)...');
 
-  if (!sheet || sheet.getLastRow() <= 1) {
-    ui.alert('Estado de Sincronización', 'No se han realizado sincronizaciones aún.', ui.ButtonSet.OK);
+    // Fetch only today's complaints
+    var todayComplaints = fetchTodayComplaintsFromSupabase();
+
+    if (todayComplaints.length === 0) {
+      SpreadsheetApp.getUi().alert(
+        'Sin Reclamos Hoy',
+        'No hay reclamos creados hoy.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+
+    var sheet = getOrCreateSheet(COMPLAINTS_SHEET);
+    var existingIds = getExistingIds(sheet);
+
+    var newComplaints = todayComplaints.filter(function(complaint) {
+      return existingIds.indexOf(complaint.id) === -1;
+    });
+
+    if (newComplaints.length === 0) {
+      SpreadsheetApp.getUi().alert(
+        'Ya Sincronizados',
+        'Los ' + todayComplaints.length + ' reclamos de hoy ya están en la hoja.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+
+    appendNewComplaints(sheet, newComplaints);
+
+    SpreadsheetApp.getUi().alert(
+      'Sincronización Completada',
+      'Se agregaron ' + newComplaints.length + ' reclamos de hoy.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (error) {
+    Logger.log('Error: ' + error.message);
+    SpreadsheetApp.getUi().alert(
+      'Error',
+      'Error: ' + error.message,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+// ================================
+// AUTO SYNC (TRIGGERS)
+// ================================
+
+/**
+ * Set up automatic daily sync at 11 PM
+ */
+function setupAutoSync() {
+  var ui = SpreadsheetApp.getUi();
+
+  var response = ui.alert(
+    'Configurar Sincronización Diaria',
+    'Esto configurará la sincronización automática de reclamos NUEVOS todos los días a las 11:00 PM.\n\n¿Desea continuar?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
     return;
   }
 
-  const data = sheet.getDataRange().getValues();
-  let message = 'Estado actual de sincronización:\n\n';
+  try {
+    // Remove existing triggers first
+    removeAutoSync(true);
 
-  for (let i = 1; i < data.length; i++) {
-    message += `${data[i][0]}: ${data[i][3]} (${data[i][2]} registros)\n`;
-    message += `  Última sync: ${data[i][1]}\n\n`;
+    // Create daily trigger at 11 PM (hour 23)
+    ScriptApp.newTrigger('syncNewComplaints')
+      .timeBased()
+      .atHour(23)
+      .everyDays(1)
+      .create();
+
+    ui.alert(
+      'Sincronización Configurada',
+      '✓ Sincronización diaria activada.\n\nLos reclamos NUEVOS se sincronizarán todos los días a las 11:00 PM.',
+      ui.ButtonSet.OK
+    );
+  } catch (error) {
+    ui.alert('Error', 'No se pudo configurar: ' + error.message, ui.ButtonSet.OK);
   }
-
-  ui.alert('Estado de Sincronización', message, ui.ButtonSet.OK);
 }
+
+/**
+ * Remove automatic sync triggers
+ */
+function removeAutoSync(silent) {
+  var triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach(function(trigger) {
+    ScriptApp.deleteTrigger(trigger);
+  });
+
+  if (!silent) {
+    SpreadsheetApp.getUi().alert(
+      'Sincronización Desactivada',
+      'Se eliminaron ' + triggers.length + ' trigger(s).',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+// ================================
+// CONFIGURATION CHECK
+// ================================
 
 /**
  * Verify configuration is set up correctly
  */
 function verifyConfiguration() {
-  const ui = SpreadsheetApp.getUi();
-  const config = getConfig();
-
-  let issues = [];
+  var ui = SpreadsheetApp.getUi();
+  var config = getConfig();
 
   if (!config.SUPABASE_URL) {
-    issues.push('- SUPABASE_URL no está configurada');
+    ui.alert(
+      'Configuración Incompleta',
+      'Falta SUPABASE_URL.\n\nVe a Project Settings > Script Properties para configurar.',
+      ui.ButtonSet.OK
+    );
+    return;
   }
 
   if (!config.SUPABASE_KEY) {
-    issues.push('- SUPABASE_KEY no está configurada');
+    ui.alert(
+      'Configuración Incompleta',
+      'Falta SUPABASE_KEY.\n\nVe a Project Settings > Script Properties para configurar.',
+      ui.ButtonSet.OK
+    );
+    return;
   }
 
-  if (!config.ADMIN_EMAIL) {
-    issues.push('- ADMIN_EMAIL no está configurada (opcional)');
-  }
+  // Test connection
+  try {
+    var testUrl = config.SUPABASE_URL + '/rest/v1/services?select=id&limit=1';
+    var response = UrlFetchApp.fetch(testUrl, {
+      method: 'get',
+      headers: {
+        'apikey': config.SUPABASE_KEY,
+        'Authorization': 'Bearer ' + config.SUPABASE_KEY,
+      },
+      muteHttpExceptions: true,
+    });
 
-  if (issues.length === 0) {
-    // Test connection
-    try {
-      const testUrl = `${config.SUPABASE_URL}/rest/v1/services?select=id&limit=1`;
-      const response = UrlFetchApp.fetch(testUrl, {
-        method: 'get',
-        headers: {
-          'apikey': config.SUPABASE_KEY,
-          'Authorization': `Bearer ${config.SUPABASE_KEY}`,
-        },
-        muteHttpExceptions: true,
-      });
-
-      if (response.getResponseCode() === 200) {
-        ui.alert('Verificación', '✓ Configuración correcta.\n✓ Conexión a Supabase exitosa.', ui.ButtonSet.OK);
-      } else {
-        ui.alert('Verificación', `✓ Configuración encontrada.\n✗ Error de conexión: ${response.getResponseCode()}`, ui.ButtonSet.OK);
-      }
-    } catch (e) {
-      ui.alert('Verificación', `✓ Configuración encontrada.\n✗ Error de conexión: ${e.message}`, ui.ButtonSet.OK);
+    if (response.getResponseCode() === 200) {
+      ui.alert(
+        'Verificación Exitosa',
+        '✓ Configuración correcta.\n✓ Conexión a Supabase exitosa.',
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert(
+        'Error de Conexión',
+        '✓ Configuración encontrada.\n✗ Error: ' + response.getResponseCode() + '\n\n' + response.getContentText(),
+        ui.ButtonSet.OK
+      );
     }
-  } else {
-    ui.alert('Verificación', 'Problemas encontrados:\n\n' + issues.join('\n') + '\n\nVe a Configuración del Proyecto > Propiedades del script para configurar.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert(
+      'Error de Conexión',
+      '✓ Configuración encontrada.\n✗ Error: ' + e.message,
+      ui.ButtonSet.OK
+    );
   }
 }

@@ -1,13 +1,8 @@
-# Google Apps Script - Sistema de Gestión de Reclamos
+# Google Apps Script - Backup de Reclamos
 
-Este directorio contiene los scripts de Google Apps Script para sincronizar datos del Sistema de Gestión de Reclamos a Google Sheets.
+Script para sincronizar reclamos desde Supabase a Google Sheets.
 
-## Archivos
-
-- **Code.gs** - Script principal con funciones de sincronización
-- **Triggers.gs** - Gestión de triggers para sincronización automática
-
-## Instrucciones de Configuración
+## Configuración Paso a Paso
 
 ### 1. Crear Google Sheet
 
@@ -23,26 +18,23 @@ Este directorio contiene los scripts de Google Apps Script para sincronizar dato
 ### 3. Agregar el Código
 
 1. Eliminar cualquier código existente en `Code.gs`
-2. Copiar todo el contenido de `Code.gs` de este directorio
+2. Copiar todo el contenido del archivo `Code.gs` de este directorio
 3. Pegarlo en el editor
-4. Crear un nuevo archivo: **Archivo > Nuevo > Script**
-5. Nombrarlo `Triggers` (sin extensión)
-6. Copiar y pegar el contenido de `Triggers.gs`
-7. Guardar el proyecto (Ctrl+S o Cmd+S)
+4. Guardar el proyecto (Ctrl+S o Cmd+S)
 
-### 4. Configurar Credenciales
+### 4. Configurar Credenciales de Supabase
 
-1. En el editor de Apps Script, ir a **Configuración del proyecto** (ícono de engranaje)
+1. En el editor de Apps Script, hacer click en el **ícono de engranaje** (Configuración del proyecto)
 2. Ir a la sección **Propiedades del script**
-3. Agregar las siguientes propiedades:
+3. Hacer click en **Agregar propiedad de script**
+4. Agregar las siguientes propiedades:
 
-| Propiedad | Valor | Descripción |
-|-----------|-------|-------------|
-| `SUPABASE_URL` | `https://xxxxx.supabase.co` | URL de tu proyecto Supabase |
-| `SUPABASE_KEY` | `eyJhbGci...` | Clave anon/pública de Supabase |
-| `ADMIN_EMAIL` | `admin@example.com` | Email para notificaciones de error (opcional) |
+| Propiedad | Valor |
+|-----------|-------|
+| `SUPABASE_URL` | `https://tu-proyecto.supabase.co` |
+| `SUPABASE_KEY` | Tu clave anon/pública de Supabase |
 
-**Para obtener las credenciales de Supabase:**
+**Para obtener las credenciales:**
 1. Ir a [Supabase Dashboard](https://supabase.com/dashboard)
 2. Seleccionar tu proyecto
 3. Ir a **Settings > API**
@@ -51,32 +43,47 @@ Este directorio contiene los scripts de Google Apps Script para sincronizar dato
 ### 5. Verificar Configuración
 
 1. Volver al Google Sheet
-2. Recargar la página (F5)
-3. Aparecerá un menú **SGR - Sincronización**
-4. Ir a **SGR - Sincronización > Verificar Configuración**
+2. **Recargar la página** (F5)
+3. Aparecerá un menú **SGR - Backup**
+4. Ir a **SGR - Backup > Verificar Configuración**
 5. Debe mostrar "✓ Configuración correcta"
 
-### 6. Ejecutar Primera Sincronización
+### 6. Primera Sincronización
 
-1. Ir a **SGR - Sincronización > Sincronizar Todo**
+1. Ir a **SGR - Backup > Sincronizar TODOS los Reclamos**
 2. La primera vez pedirá autorización - aceptar todos los permisos
-3. Verificar que se creen las hojas: `Reclamos`, `Servicios`, `Usuarios`
+3. Verificar que se cree la hoja `Reclamos` con los datos
 
-### 7. Configurar Sincronización Automática
+### 7. Sincronización Automática (Opcional)
 
-1. Ir a **SGR - Sincronización > Triggers > Configurar Triggers**
+1. Ir a **SGR - Backup > Configurar Sync Diario (11 PM)**
 2. Confirmar la configuración
-3. La sincronización automática quedará activa:
-   - **Reclamos**: cada 15 minutos
-   - **Servicios**: cada hora
-   - **Usuarios**: cada hora
+3. Los reclamos NUEVOS se sincronizarán automáticamente todos los días a las 11 PM
 
-## Estructura de las Hojas
+Para desactivar: **SGR - Backup > Desactivar Sync Automático**
 
-### Reclamos
+## Opciones del Menú
+
+| Opción | Descripción |
+|--------|-------------|
+| **Sincronizar TODOS los Reclamos** | Borra y reescribe todos los reclamos (usar para setup inicial) |
+| **Sincronizar Reclamos de HOY** | Solo agrega reclamos creados hoy (desde las 3 AM) |
+| **Configurar Sync Diario (11 PM)** | Activa sincronización automática diaria a las 11 PM |
+| **Desactivar Sync Automático** | Elimina el trigger de sincronización |
+| **Verificar Configuración** | Prueba la conexión a Supabase |
+
+## Cómo Funciona la Sincronización Diaria
+
+1. El trigger se ejecuta todos los días a las 11 PM
+2. Consulta Supabase por reclamos creados **hoy** (desde las 3 AM)
+3. Verifica cuáles ya están en la hoja
+4. Solo agrega los reclamos nuevos (evita duplicados)
+
+## Estructura de la Hoja "Reclamos"
+
 | Columna | Descripción |
 |---------|-------------|
-| Número de Reclamo | SASP-R000001 |
+| Número de Reclamo | ID numérico (ej: 123) |
 | Fecha de Reclamo | DD/MM/YYYY |
 | Nombre y Apellido | Nombre del reclamante |
 | Dirección | Calle |
@@ -90,57 +97,30 @@ Este directorio contiene los scripts de Google Apps Script para sincronizar dato
 | Desde Cuándo | Fecha del problema |
 | Medio de Contacto | Presencial/Teléfono/Email/WhatsApp |
 | Detalle | Descripción completa |
-| Estado | En proceso/Resuelto/No resuelto |
+| Estado | En proceso/Resuelto/No resuelto (con colores) |
 | Derivado | Sí/No |
 | Responsable de Carga | Usuario que cargó |
 | Fecha de Carga | Timestamp de creación |
 | Última Modificación | Timestamp de última actualización |
 
-### Servicios
-| Columna | Descripción |
-|---------|-------------|
-| ID | Identificador |
-| Servicio | Nombre del servicio |
-| Causas | Lista de causas separadas por coma |
-
-### Usuarios
-| Columna | Descripción |
-|---------|-------------|
-| Nombre y Apellido | Nombre completo |
-| Email | Correo electrónico |
-| Rol | Admin/Administrativo |
-| Fecha de Alta | Fecha de creación |
-
-## Monitoreo
-
-### Ver Estado de Sincronización
-1. Ir a **SGR - Sincronización > Ver Estado de Sincronización**
-2. O revisar la hoja oculta `_SyncStatus`
-
-### Notificaciones de Error
-Si configuraste `ADMIN_EMAIL`, recibirás emails cuando:
-- Falle una sincronización
-- Haya errores de conexión con Supabase
-
 ## Solución de Problemas
 
 ### "No se encontró la vista complaint_details"
-Ejecutar la migración SQL en Supabase:
-```sql
-CREATE VIEW complaint_details AS
-SELECT ... (ver migración completa)
-```
+
+La vista `complaint_details` debe existir en Supabase. Verificar en el SQL Editor.
 
 ### "Error de autorización"
-1. En Apps Script, ir a **Ejecutar > Ejecutar función > syncAll**
+
+1. En Apps Script, ir a **Ejecutar > Ejecutar función > syncComplaintsToSheet**
 2. Seguir el proceso de autorización
 
-### Sincronización no funciona
-1. Verificar triggers: **SGR - Sincronización > Triggers > Ver Triggers Activos**
-2. Revisar logs: En Apps Script, ir a **Ver > Registros**
+### No aparece el menú "SGR - Backup"
+
+1. Recargar la página del Google Sheet (F5)
+2. Si no aparece, ir a Apps Script y ejecutar `onOpen` manualmente
 
 ## Seguridad
 
 - Las credenciales se almacenan en Script Properties (no en código)
-- El Google Sheet debe compartirse solo lectura con usuarios
+- El Google Sheet debe compartirse solo lectura con otros usuarios
 - Solo el propietario puede editar el script
