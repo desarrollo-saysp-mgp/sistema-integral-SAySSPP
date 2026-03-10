@@ -157,7 +157,7 @@ describe("ComplaintForm", () => {
     });
   });
 
-  it("should not render phone field when no contact method is selected", async () => {
+  it("should always render phone field regardless of contact method", async () => {
     render(
       <ComplaintForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
     );
@@ -167,12 +167,12 @@ describe("ComplaintForm", () => {
       expect(cancelButtons.length).toBeGreaterThan(0);
     });
 
-    // Phone field should not be visible initially
+    // Phone field should be visible always
     const phoneFields = screen.queryAllByPlaceholderText(/ingrese teléfono/i);
-    expect(phoneFields.length).toBe(0);
+    expect(phoneFields.length).toBeGreaterThan(0);
   });
 
-  it("should not render email field when no contact method is selected", async () => {
+  it("should always render email field regardless of contact method", async () => {
     const { container } = render(
       <ComplaintForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
     );
@@ -182,9 +182,9 @@ describe("ComplaintForm", () => {
       expect(cancelButtons.length).toBeGreaterThan(0);
     });
 
-    // Email field should not be visible initially (conditional on contact_method)
+    // Email field should be visible always
     const emailInput = container.querySelector('input[id="email"][type="email"]');
-    expect(emailInput).toBeNull();
+    expect(emailInput).not.toBeNull();
   });
 
   it("should render since_when as dropdown (not date input)", async () => {

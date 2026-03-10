@@ -153,12 +153,16 @@ CREATE INDEX idx_causes_active ON causes(active);
 
 ### Auto-generate Complaint Number
 
+The complaint number is a numeric BIGINT that equals the row's primary key ID.
+
 ```sql
--- Function to generate complaint number
+-- Function to generate complaint number (sets it equal to the row ID)
 CREATE OR REPLACE FUNCTION generate_complaint_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.complaint_number := 'SASP-R' || LPAD(NEW.id::TEXT, 6, '0');
+    UPDATE complaints
+    SET complaint_number = NEW.id
+    WHERE id = NEW.id AND complaint_number IS NULL;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

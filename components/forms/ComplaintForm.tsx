@@ -229,22 +229,6 @@ export function ComplaintForm({
     }
   }, [formData.service_id, causes, isEditing]);
 
-  // Clear phone/email when contact method changes
-  useEffect(() => {
-    // Clear phone number if contact method is not Telefono or WhatsApp
-    if (
-      formData.contact_method !== "Telefono" &&
-      formData.contact_method !== "WhatsApp" &&
-      formData.phone_number
-    ) {
-      setFormData((prev) => ({ ...prev, phone_number: "" }));
-    }
-
-    // Clear email if contact method is not Email
-    if (formData.contact_method !== "Email" && formData.email) {
-      setFormData((prev) => ({ ...prev, email: "" }));
-    }
-  }, [formData.contact_method]);
 
   const fetchServicesAndCauses = async () => {
     setIsLoadingServices(true);
@@ -525,15 +509,9 @@ export function ComplaintForm({
             )}
           </div>
 
-          {/* Conditional Phone Number Field - Show when Telefono or WhatsApp is selected */}
-          {(formData.contact_method === "Telefono" ||
-            formData.contact_method === "WhatsApp") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="phone_number">
-                {formData.contact_method === "WhatsApp"
-                  ? "Número de WhatsApp"
-                  : "Número de Teléfono"}
-              </Label>
+              <Label htmlFor="phone_number">Teléfono</Label>
               <Input
                 id="phone_number"
                 value={formData.phone_number}
@@ -549,10 +527,7 @@ export function ComplaintForm({
                 Solo números, máximo 50 caracteres
               </p>
             </div>
-          )}
 
-          {/* Conditional Email Field - Show when Email is selected */}
-          {formData.contact_method === "Email" && (
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -566,7 +541,7 @@ export function ComplaintForm({
                 <p className="text-sm text-red-500 mt-1">{errors.email}</p>
               )}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 

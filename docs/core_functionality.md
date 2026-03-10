@@ -36,7 +36,7 @@ Users can create new complaints with the following fields:
 
 **Required Fields:**
 
-- **Complaint Number**: Auto-generated format `SASP-R[padded-id]`
+- **Complaint Number**: Auto-generated numeric ID (equals the row's primary key)
 - **Complaint Date**: Defaults to current date (editable)
 - **Full Name**: First and last name of the person filing the complaint
 - **Address**: Location where service is required

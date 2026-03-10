@@ -28,19 +28,19 @@ global.fetch = mockFetch;
 describe("ComplaintViewPage", () => {
   const mockComplaint = {
     id: 1,
-    complaint_number: "SASP-R000001",
+    complaint_number: 1,
     complaint_date: "2024-01-15",
     complainant_name: "Juan Pérez",
     address: "Calle Principal",
     street_number: "123",
     dni: "12345678",
-    phone_number: null,
+    phone_number: "3514567890",
     email: "juan@example.com",
     service_id: 1,
     cause_id: 1,
     zone: "Centro",
     since_when: "2024-01-10",
-    contact_method: "Email",
+    contact_method: "Presencial",
     details: "Problema con el alumbrado público",
     status: "En proceso",
     referred: false,
@@ -94,12 +94,11 @@ describe("ComplaintViewPage", () => {
     render(<ComplaintViewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("SASP-R000001")).toBeInTheDocument();
+      expect(screen.getByText("1")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("Calle Principal")).toBeInTheDocument();
-    expect(screen.getByText("123")).toBeInTheDocument();
+    expect(screen.getByText("Calle Principal 123")).toBeInTheDocument();
     expect(screen.getByText("Centro")).toBeInTheDocument();
     expect(screen.getByText("Alumbrado Público")).toBeInTheDocument();
     expect(screen.getByText("Lámpara fundida")).toBeInTheDocument();
@@ -120,7 +119,7 @@ describe("ComplaintViewPage", () => {
     });
   });
 
-  it("should show email when contact method is Email", async () => {
+  it("should always show phone and email fields", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ data: mockComplaint }),
@@ -129,29 +128,35 @@ describe("ComplaintViewPage", () => {
     render(<ComplaintViewPage />);
 
     await waitFor(() => {
+      const phones = screen.getAllByText("3514567890");
+      expect(phones.length).toBeGreaterThan(0);
       const emails = screen.getAllByText("juan@example.com");
       expect(emails.length).toBeGreaterThan(0);
     });
   });
 
-  it("should show phone when contact method is Telefono", async () => {
-    const complaintWithPhone = {
+  it("should show dash when phone or email are empty", async () => {
+    const complaintNoContact = {
       ...mockComplaint,
-      contact_method: "Telefono",
-      phone_number: "1234567890",
+      phone_number: null,
       email: null,
     };
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ data: complaintWithPhone }),
+      json: () => Promise.resolve({ data: complaintNoContact }),
     });
 
     render(<ComplaintViewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("1234567890")).toBeInTheDocument();
+      const headings = screen.getAllByText("Datos del Reclamante");
+      expect(headings.length).toBeGreaterThan(0);
     });
+
+    // Phone and email labels should still be present with "-" as value
+    const dashes = screen.getAllByText("-");
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
   it("should have edit button that navigates to edit page", async () => {

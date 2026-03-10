@@ -140,11 +140,15 @@ CREATE TRIGGER update_causes_updated_at
 
 #### 2.2 Auto-Generate Complaint Number
 
+The complaint number is a numeric BIGINT that equals the row's primary key ID.
+
 ```sql
 CREATE OR REPLACE FUNCTION generate_complaint_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.complaint_number := 'SASP-R' || LPAD(NEW.id::TEXT, 6, '0');
+    UPDATE complaints
+    SET complaint_number = NEW.id
+    WHERE id = NEW.id AND complaint_number IS NULL;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

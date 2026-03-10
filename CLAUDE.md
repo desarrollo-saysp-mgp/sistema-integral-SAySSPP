@@ -64,7 +64,7 @@ Work through these tasks in order. Mark completed tasks with `[x]`.
 ### Phase 4: Complaint Management - Core Features
 
 - [x] Create complaint form page (`/dashboard/complaints/new`)
-- [x] Implement auto-generated complaint number (SASP-R format)
+- [x] Implement auto-generated complaint number (numeric ID)
 - [x] Create cascading service/cause dropdowns in form
 - [x] Implement form validation with proper error messages
 - [x] Create complaint save functionality
@@ -636,15 +636,15 @@ import { describe, it, expect } from "vitest";
 import { generateComplaintNumber } from "@/lib/utils/complaint";
 
 describe("Complaint Number Generation", () => {
-  it("should generate complaint number in SASP-R format", () => {
+  it("should generate complaint number equal to the ID", () => {
     const number = generateComplaintNumber(123);
-    expect(number).toBe("SASP-R000123");
+    expect(number).toBe(123);
   });
 
-  it("should pad numbers with leading zeros", () => {
-    expect(generateComplaintNumber(1)).toBe("SASP-R000001");
-    expect(generateComplaintNumber(999)).toBe("SASP-R000999");
-    expect(generateComplaintNumber(1000)).toBe("SASP-R001000");
+  it("should use sequential numeric IDs", () => {
+    expect(generateComplaintNumber(1)).toBe(1);
+    expect(generateComplaintNumber(999)).toBe(999);
+    expect(generateComplaintNumber(1000)).toBe(1000);
   });
 });
 ```
@@ -658,7 +658,7 @@ import { ComplaintCard } from '@/components/complaints/ComplaintCard'
 
 describe('ComplaintCard', () => {
   const mockComplaint = {
-    complaint_number: 'SASP-R000123',
+    complaint_number: 123,
     complainant_name: 'Juan Pérez',
     status: 'En proceso',
     created_at: new Date('2024-01-15')
@@ -667,7 +667,7 @@ describe('ComplaintCard', () => {
   it('should render complaint information', () => {
     render(<ComplaintCard complaint={mockComplaint} />)
 
-    expect(screen.getByText('SASP-R000123')).toBeInTheDocument()
+    expect(screen.getByText('123')).toBeInTheDocument()
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
     expect(screen.getByText('En proceso')).toBeInTheDocument()
   })
