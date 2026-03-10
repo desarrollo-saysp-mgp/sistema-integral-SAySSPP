@@ -223,17 +223,20 @@ AS $$
 $$;
 
 -- Función para generar número de reclamo automáticamente
+-- El número de reclamo es un BIGINT que iguala al ID primario
 CREATE OR REPLACE FUNCTION generate_complaint_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.complaint_number := 'SASP-R' || LPAD(NEW.id::TEXT, 6, '0');
+    UPDATE complaints
+    SET complaint_number = NEW.id
+    WHERE id = NEW.id AND complaint_number IS NULL;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger para auto-generar número de reclamo
 CREATE TRIGGER set_complaint_number
-    BEFORE INSERT ON complaints
+    AFTER INSERT ON complaints
     FOR EACH ROW
     EXECUTE FUNCTION generate_complaint_number();
 ```

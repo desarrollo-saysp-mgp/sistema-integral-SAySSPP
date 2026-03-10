@@ -207,7 +207,7 @@ import { Complaint } from "@/types/database";
 
 ### Complaint Management
 
-- Create complaints with auto-generated numbers (SASP-R000000 format)
+- Create complaints with auto-generated numeric IDs
 - Track status: En proceso → Resuelto/No resuelto
 - Link complaints to services and causes
 - Record contact method and complainant details
