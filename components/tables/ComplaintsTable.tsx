@@ -32,7 +32,7 @@ import {
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { type CellHookData } from "jspdf-autotable";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -60,6 +60,11 @@ interface ComplaintsTableProps {
   complaints: ComplaintWithDetails[];
   onStatusChange?: (complaintId: number, newStatus: string) => Promise<void>;
 }
+
+type PdfStatusColors = {
+  fillColor: [number, number, number];
+  textColor: [number, number, number];
+};
 
 export function ComplaintsTable({
   complaints,
@@ -122,6 +127,31 @@ export function ComplaintsTable({
     }
   };
 
+  const getPdfStatusColors = (status: string): PdfStatusColors => {
+    switch (status) {
+      case "En proceso":
+        return {
+          fillColor: [254, 249, 195],
+          textColor: [133, 77, 14],
+        };
+      case "Resuelto":
+        return {
+          fillColor: [220, 252, 231],
+          textColor: [22, 101, 52],
+        };
+      case "No resuelto":
+        return {
+          fillColor: [254, 226, 226],
+          textColor: [153, 27, 27],
+        };
+      default:
+        return {
+          fillColor: [243, 244, 246],
+          textColor: [55, 65, 81],
+        };
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return formatLocalDate(dateString);
   };
@@ -160,6 +190,29 @@ export function ComplaintsTable({
     ];
   };
 
+  const loadImageAsDataUrl = (src: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("No se pudo procesar la imagen"));
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg"));
+      };
+      image.onerror = () => reject(new Error("No se pudo cargar el logo"));
+      image.src = src;
+    });
+  };
+
   const exportToExcel = () => {
     try {
       const formattedData = complaints.map((item) => ({
@@ -196,7 +249,7 @@ export function ComplaintsTable({
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     try {
       const doc = new jsPDF({
         orientation: "landscape",
@@ -204,12 +257,31 @@ export function ComplaintsTable({
         format: "a4",
       });
 
-      doc.setFontSize(16);
-      doc.text("Sistema de Gestión de Reclamos", 14, 14);
+      let logoDataUrl: string | null = null;
+
+      try {
+        logoDataUrl = await loadImageAsDataUrl("/logo-general-pico-horizontal.jpg");
+      } catch (error) {
+        console.warn("No se pudo cargar el logo para el PDF:", error);
+      }
+
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, "JPEG", 14, 10, 34, 12);
+      }
+
+      doc.setFontSize(18);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Sistema de Gestión de Reclamos", 52, 15);
 
       doc.setFontSize(10);
-      doc.text(`Cantidad de reclamos exportados: ${complaints.length}`, 14, 21);
-      doc.text(`Fecha de exportación: ${new Date().toLocaleString("es-AR")}`, 14, 27);
+      doc.setTextColor(71, 85, 105);
+      doc.text("Atención Ciudadana - General Pico", 52, 21);
+      doc.text(`Cantidad de reclamos exportados: ${complaints.length}`, 14, 31);
+      doc.text(
+        `Fecha de exportación: ${new Date().toLocaleString("es-AR")}`,
+        14,
+        37,
+      );
 
       const tableData = complaints.map((item) => [
         item.complaint_number,
@@ -224,7 +296,7 @@ export function ComplaintsTable({
       ]);
 
       autoTable(doc, {
-        startY: 32,
+        startY: 44,
         head: [[
           "N°",
           "Fecha",
@@ -237,16 +309,55 @@ export function ComplaintsTable({
           "Cargado por",
         ]],
         body: tableData,
+        theme: "grid",
         styles: {
           fontSize: 8,
-          cellPadding: 2,
+          cellPadding: 2.5,
+          textColor: [51, 65, 85],
+          lineColor: [226, 232, 240],
+          lineWidth: 0.15,
+          valign: "middle",
         },
         headStyles: {
           fillColor: [16, 185, 129],
-          textColor: 255,
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
         },
         alternateRowStyles: {
           fillColor: [248, 250, 252],
+        },
+        columnStyles: {
+          0: { cellWidth: 12, halign: "center" },
+          1: { cellWidth: 22 },
+          2: { cellWidth: 38 },
+          3: { cellWidth: 28 },
+          4: { cellWidth: 34 },
+          5: { cellWidth: 14, halign: "center" },
+          6: { cellWidth: 24 },
+          7: { cellWidth: 28, halign: "center" },
+          8: { cellWidth: 34 },
+        },
+        didParseCell: (data: CellHookData) => {
+          if (data.section === "body" && data.column.index === 7) {
+            const status = String(data.cell.raw ?? "");
+            const colors = getPdfStatusColors(status);
+
+            data.cell.styles.fillColor = colors.fillColor;
+            data.cell.styles.textColor = colors.textColor;
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.halign = "center";
+            data.cell.styles.lineColor = colors.fillColor;
+          }
+        },
+        didDrawPage: (data) => {
+          const pageCount = doc.getNumberOfPages();
+          doc.setFontSize(9);
+          doc.setTextColor(100);
+          doc.text(
+            `Página ${data.pageNumber} de ${pageCount}`,
+            doc.internal.pageSize.getWidth() - 28,
+            doc.internal.pageSize.getHeight() - 8,
+          );
         },
       });
 
