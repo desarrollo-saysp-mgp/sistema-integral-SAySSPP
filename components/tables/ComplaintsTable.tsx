@@ -21,7 +21,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  ChevronLeft,
+  ChevronRight,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -149,6 +160,104 @@ export function ComplaintsTable({
     ];
   };
 
+  const exportToExcel = () => {
+    try {
+      const formattedData = complaints.map((item) => ({
+        Número: item.complaint_number,
+        Fecha: formatDate(item.complaint_date),
+        Nombre: item.complainant_name,
+        Servicio: item.service?.name ?? "",
+        Causa: item.cause?.name ?? "",
+        Zona: item.zone,
+        "Desde Cuándo": item.since_when,
+        Estado: item.status,
+        "Cargado por": item.loaded_by_user?.full_name ?? "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(formattedData);
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Reclamos");
+
+      const excelBuffer = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+
+      const blob = new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+      });
+
+      saveAs(blob, "reclamos_filtrados.xlsx");
+      toast.success("Excel exportado correctamente");
+    } catch (error) {
+      console.error("Error exporting Excel:", error);
+      toast.error("Error al exportar Excel");
+    }
+  };
+
+  const exportToPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      doc.setFontSize(16);
+      doc.text("Sistema de Gestión de Reclamos", 14, 14);
+
+      doc.setFontSize(10);
+      doc.text(`Cantidad de reclamos exportados: ${complaints.length}`, 14, 21);
+      doc.text(`Fecha de exportación: ${new Date().toLocaleString("es-AR")}`, 14, 27);
+
+      const tableData = complaints.map((item) => [
+        item.complaint_number,
+        formatDate(item.complaint_date),
+        item.complainant_name,
+        item.service?.name ?? "",
+        item.cause?.name ?? "",
+        item.zone,
+        item.since_when,
+        item.status,
+        item.loaded_by_user?.full_name ?? "",
+      ]);
+
+      autoTable(doc, {
+        startY: 32,
+        head: [[
+          "N°",
+          "Fecha",
+          "Nombre",
+          "Servicio",
+          "Causa",
+          "Zona",
+          "Desde Cuándo",
+          "Estado",
+          "Cargado por",
+        ]],
+        body: tableData,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+        },
+        headStyles: {
+          fillColor: [16, 185, 129],
+          textColor: 255,
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252],
+        },
+      });
+
+      doc.save("reclamos_filtrados.pdf");
+      toast.success("PDF exportado correctamente");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Error al exportar PDF");
+    }
+  };
+
   if (complaints.length === 0) {
     return (
       <div className="py-12 text-center">
@@ -164,7 +273,29 @@ export function ComplaintsTable({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={exportToExcel}
+          className="gap-2"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Exportar Excel
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={exportToPDF}
+          className="gap-2"
+        >
+          <FileText className="h-4 w-4" />
+          Exportar PDF
+        </Button>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -190,8 +321,8 @@ export function ComplaintsTable({
                   key={complaint.id}
                   className={
                     isEvenRow
-                      ? "bg-background hover:bg-accent/40 transition-colors"
-                      : "bg-muted/25 hover:bg-accent/40 transition-colors"
+                      ? "bg-background transition-colors hover:bg-accent/40"
+                      : "bg-muted/25 transition-colors hover:bg-accent/40"
                   }
                 >
                   <TableCell className="font-medium">

@@ -113,7 +113,8 @@ export async function PATCH(
     const body = await request.json();
 
     // Validate status if provided
-    if (body.status) {
+    // Validate status if provided
+    if (body.status !== undefined) {
       const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
       if (!validStatuses.includes(body.status)) {
         return NextResponse.json(
@@ -121,14 +122,6 @@ export async function PATCH(
           { status: 400 },
         );
       }
-
-      if (!validSinceWhenValues.includes(body.since_when)) {
-        return NextResponse.json(
-          { error: "Valor inválido para 'Desde Cuándo'" },
-          { status: 400 },
-        );
-      }
-
     }
 
     // Validate contact method if provided
