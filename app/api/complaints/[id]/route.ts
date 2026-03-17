@@ -15,6 +15,15 @@ const validateEmail = (email: string): boolean => {
   return emailPattern.test(email.trim()) && email.trim().length <= 100;
 };
 
+const validSinceWhenValues = [
+  "En el día",
+  "1 semana",
+  "1 mes",
+  "3 meses",
+  "6 meses",
+  "1 año",
+];
+
 /**
  * GET /api/complaints/[id]
  * Get a single complaint by ID
@@ -112,6 +121,14 @@ export async function PATCH(
           { status: 400 },
         );
       }
+
+      if (!validSinceWhenValues.includes(body.since_when)) {
+        return NextResponse.json(
+          { error: "Valor inválido para 'Desde Cuándo'" },
+          { status: 400 },
+        );
+      }
+
     }
 
     // Validate contact method if provided
@@ -130,6 +147,17 @@ export async function PATCH(
       }
     }
 
+
+    if (
+      body.since_when !== undefined &&
+      body.since_when &&
+      !validSinceWhenValues.includes(body.since_when)
+    ) {
+      return NextResponse.json(
+        { error: "Valor inválido para 'Desde Cuándo'" },
+        { status: 400 },
+      );
+    }
     // Validate phone_number if provided
     if (
       body.phone_number !== undefined &&
@@ -232,8 +260,15 @@ export async function DELETE(
   try {
     const supabase = await createClient();
     const { id } = await context.params;
+    const complaintId = parseInt(id);
 
-    // Check authentication
+    if (Number.isNaN(complaintId)) {
+      return NextResponse.json(
+        { error: "ID de reclamo inválido" },
+        { status: 400 },
+      );
+    }
+
     const {
       data: { user: authUser },
       error: authError,
@@ -243,12 +278,18 @@ export async function DELETE(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: userError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
+
+    if (userError) {
+      return NextResponse.json(
+        { error: "No se pudo validar el usuario" },
+        { status: 500 },
+      );
+    }
 
     if (!currentUser || currentUser.role !== "Admin") {
       return NextResponse.json(
@@ -257,17 +298,28 @@ export async function DELETE(
       );
     }
 
-    // Delete complaint
-    const { error } = await supabase
+    // Intentar borrar y verificar que realmente se haya borrado una fila
+    const { data: deletedRows, error: deleteError } = await supabase
       .from("complaints")
       .delete()
-      .eq("id", parseInt(id));
+      .eq("id", complaintId)
+      .select("id");
 
-    if (error) {
-      console.error("Error deleting complaint:", error);
+    if (deleteError) {
+      console.error("Error deleting complaint:", deleteError);
       return NextResponse.json(
         { error: "Error al eliminar reclamo" },
         { status: 500 },
+      );
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se pudo eliminar el reclamo. Verificá permisos o políticas de la base de datos.",
+        },
+        { status: 403 },
       );
     }
 
@@ -282,3 +334,4 @@ export async function DELETE(
     );
   }
 }
+

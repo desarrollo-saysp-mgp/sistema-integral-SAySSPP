@@ -13,19 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Plus, Filter } from "lucide-react";
 import type { Service } from "@/types";
 import { toast } from "sonner";
 
 export default function ComplaintsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [complaints, setComplaints] = useState([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -35,6 +35,18 @@ export default function ComplaintsPage() {
   useEffect(() => {
     fetchServices();
   }, []);
+
+  useEffect(() => {
+    const statusFromUrl = searchParams.get("status");
+    if (
+      statusFromUrl &&
+      ["En proceso", "Resuelto", "No resuelto"].includes(statusFromUrl)
+    ) {
+      setStatusFilter(statusFromUrl);
+    } else {
+      setStatusFilter("all");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchComplaints();
@@ -58,12 +70,18 @@ export default function ComplaintsPage() {
       const params = new URLSearchParams();
 
       if (searchTerm) params.append("search", searchTerm);
-      if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
-      if (serviceFilter && serviceFilter !== "all") params.append("service_id", serviceFilter);
+      if (statusFilter && statusFilter !== "all") {
+        params.append("status", statusFilter);
+      }
+      if (serviceFilter && serviceFilter !== "all") {
+        params.append("service_id", serviceFilter);
+      }
       if (dateFromFilter) params.append("date_from", dateFromFilter);
       if (dateToFilter) params.append("date_to", dateToFilter);
 
-      const response = await fetch(`/api/complaints?${params.toString()}`);
+      const response = await fetch(`/api/complaints?${params.toString()}`, {
+        cache: "no-store",
+      });
       const data = await response.json();
 
       if (response.ok && data.data) {
@@ -79,7 +97,10 @@ export default function ComplaintsPage() {
     }
   };
 
-  const handleStatusChange = async (complaintId: number, newStatus: string) => {
+  const handleStatusChange = async (
+    complaintId: number,
+    newStatus: string,
+  ) => {
     try {
       const response = await fetch(`/api/complaints/${complaintId}`, {
         method: "PATCH",
@@ -94,7 +115,6 @@ export default function ComplaintsPage() {
         throw new Error(data.error || "Error al actualizar");
       }
 
-      // Refresh the complaints list
       await fetchComplaints();
     } catch (error) {
       throw error;
@@ -103,22 +123,22 @@ export default function ComplaintsPage() {
 
   const clearFilters = () => {
     setSearchTerm("");
-    setStatusFilter("");
-    setServiceFilter("");
+    setStatusFilter("all");
+    setServiceFilter("all");
     setDateFromFilter("");
     setDateToFilter("");
+    router.push("/dashboard/complaints");
   };
 
   const hasActiveFilters =
     searchTerm ||
-    statusFilter ||
-    serviceFilter ||
+    statusFilter !== "all" ||
+    serviceFilter !== "all" ||
     dateFromFilter ||
     dateToFilter;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Reclamos</h1>
@@ -126,115 +146,108 @@ export default function ComplaintsPage() {
             Gestión y seguimiento de reclamos ciudadanos
           </p>
         </div>
-        <Button onClick={() => router.push("/dashboard/complaints/new")}>
-          <Plus className="w-4 h-4 mr-2" />
+        <Button
+          onClick={() => router.push("/dashboard/complaints/new")}
+          className="h-12 rounded-xl bg-[#00A27F] px-6 text-white font-semibold shadow-md transition-all hover:bg-[#008568] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <Plus className="mr-2 h-5 w-5" />
           Nuevo Reclamo
         </Button>
       </div>
 
-      {/* Search and Filters */}
       <Card>
-        <CardContent className="pt-6 space-y-4">
-          {/* Search Bar */}
-          <div className="flex gap-4">
-            <div className="flex-1">
+        <CardContent className="pt-5 pb-5 space-y-4">
+          <div className="flex items-center gap-2 border-b pb-3">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Filtros
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
+            <div className="xl:col-span-4 flex flex-col gap-1.5">
+              <Label htmlFor="search">Buscar</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
+                  id="search"
                   placeholder="Buscar por nombre..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-11"
                 />
               </div>
             </div>
-            <Button
-              variant={showFilters ? "default" : "outline"}
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filtros
-            </Button>
+
+            <div className="xl:col-span-2 flex flex-col gap-1.5">
+              <Label htmlFor="status-filter">Estado</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger id="status-filter" className="h-11 w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="En proceso">En proceso</SelectItem>
+                  <SelectItem value="Resuelto">Resuelto</SelectItem>
+                  <SelectItem value="No resuelto">No resuelto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="xl:col-span-2 flex flex-col gap-1.5">
+              <Label htmlFor="service-filter">Servicio</Label>
+              <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                <SelectTrigger id="service-filter" className="h-11 w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.id.toString()}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="xl:col-span-2 flex flex-col gap-1.5">
+              <Label htmlFor="date-from">Desde</Label>
+              <Input
+                id="date-from"
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                className="h-11"
+              />
+            </div>
+
+            <div className="xl:col-span-2 flex flex-col gap-1.5">
+              <Label htmlFor="date-to">Hasta</Label>
+              <Input
+                id="date-to"
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                className="h-11"
+              />
+            </div>
           </div>
 
-          {/* Filters Panel */}
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t items-end">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="status-filter" className="text-sm font-medium">
-                  Estado
-                </Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger id="status-filter" className="h-10">
-                    <SelectValue placeholder="Todos los estados" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    <SelectItem value="En proceso">En proceso</SelectItem>
-                    <SelectItem value="Resuelto">Resuelto</SelectItem>
-                    <SelectItem value="No resuelto">No resuelto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="service-filter" className="text-sm font-medium">
-                  Servicio
-                </Label>
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger id="service-filter" className="h-10">
-                    <SelectValue placeholder="Todos los servicios" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los servicios</SelectItem>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id.toString()}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="date-from" className="text-sm font-medium">
-                  Desde
-                </Label>
-                <Input
-                  id="date-from"
-                  type="date"
-                  value={dateFromFilter}
-                  onChange={(e) => setDateFromFilter(e.target.value)}
-                  className="h-10"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="date-to" className="text-sm font-medium">
-                  Hasta
-                </Label>
-                <Input
-                  id="date-to"
-                  type="date"
-                  value={dateToFilter}
-                  onChange={(e) => setDateToFilter(e.target.value)}
-                  className="h-10"
-                />
-              </div>
-
-              {hasActiveFilters && (
-                <div className="md:col-span-4 flex justify-end">
-                  <Button variant="ghost" onClick={clearFilters}>
-                    Limpiar filtros
-                  </Button>
-                </div>
-              )}
+          {hasActiveFilters && (
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="outline"
+                onClick={clearFilters}
+                className="rounded-xl"
+              >
+                Limpiar filtros
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Results Count */}
       {!loading && (
         <div className="text-sm text-muted-foreground">
           {complaints.length} reclamo{complaints.length !== 1 ? "s" : ""}{" "}
@@ -242,7 +255,6 @@ export default function ComplaintsPage() {
         </div>
       )}
 
-      {/* Complaints Table */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="text-muted-foreground">Cargando reclamos...</div>

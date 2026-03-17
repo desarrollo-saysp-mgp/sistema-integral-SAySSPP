@@ -15,6 +15,15 @@ const validateEmail = (email: string): boolean => {
   return emailPattern.test(email.trim()) && email.trim().length <= 100;
 };
 
+const validSinceWhenValues = [
+  "En el día",
+  "1 semana",
+  "1 mes",
+  "3 meses",
+  "6 meses",
+  "1 año",
+];
+
 /**
  * GET /api/complaints
  * List all complaints with optional filters

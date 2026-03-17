@@ -25,6 +25,11 @@ type ComplaintWithDetails = Complaint & {
   loaded_by_user: UserType;
 };
 
+const parseLocalDate = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export default function ComplaintViewPage() {
   const router = useRouter();
   const params = useParams();
@@ -73,8 +78,9 @@ export default function ComplaintViewPage() {
     }
   };
 
+  // Para columnas tipo DATE (sin hora)
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseLocalDate(dateString);
     return date.toLocaleDateString("es-AR", {
       day: "2-digit",
       month: "2-digit",
@@ -82,6 +88,7 @@ export default function ComplaintViewPage() {
     });
   };
 
+  // Para columnas tipo TIMESTAMP / TIMESTAMPTZ
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString("es-AR", {
@@ -115,7 +122,6 @@ export default function ComplaintViewPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div className="space-y-2">
           <Button
@@ -127,6 +133,7 @@ export default function ComplaintViewPage() {
             <ArrowLeft className="w-4 h-4 mr-1" />
             Volver
           </Button>
+
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">
               {complaint.complaint_number}
@@ -135,17 +142,18 @@ export default function ComplaintViewPage() {
               {complaint.status}
             </Badge>
           </div>
+
           <p className="text-sm text-muted-foreground">
-            Creado el {formatDate(complaint.complaint_date)}
+            Creado el {formatDateTime(complaint.created_at)}
           </p>
         </div>
+
         <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
           <Pencil className="w-4 h-4 mr-2" />
           Editar Reclamo
         </Button>
       </div>
 
-      {/* Complainant + Contact Info */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -156,7 +164,7 @@ export default function ComplaintViewPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <InfoField label="Nombre y Apellido" value={complaint.complainant_name} />
-            <InfoField label="DNI" value={complaint.dni || "-"} />
+            
             <InfoField
               label="Dirección"
               value={`${complaint.address} ${complaint.street_number}`}
@@ -168,16 +176,10 @@ export default function ComplaintViewPage() {
               value={complaint.phone_number || "-"}
               icon={<Phone className="w-4 h-4 text-muted-foreground" />}
             />
-            <InfoField
-              label="Email"
-              value={complaint.email || "-"}
-              icon={<Mail className="w-4 h-4 text-muted-foreground" />}
-            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Complaint Details */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -192,10 +194,11 @@ export default function ComplaintViewPage() {
             <InfoField label="Zona" value={complaint.zone} />
             <InfoField
               label="Desde Cuándo"
-              value={formatDate(complaint.since_when)}
+              value={complaint.since_when}
               icon={<CalendarDays className="w-4 h-4 text-muted-foreground" />}
             />
           </div>
+
           <div className="mt-4">
             <p className="text-sm font-medium text-muted-foreground mb-2">Detalle</p>
             <p className="text-sm whitespace-pre-wrap bg-muted/50 p-4 rounded-md leading-relaxed">
@@ -205,7 +208,6 @@ export default function ComplaintViewPage() {
         </CardContent>
       </Card>
 
-      {/* Status, Follow-up & System Info */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -221,9 +223,14 @@ export default function ComplaintViewPage() {
                 {complaint.status}
               </Badge>
             </div>
+
             <InfoField label="Derivado" value={complaint.referred ? "Sí" : "No"} />
-            <InfoField label="Responsable de Carga" value={complaint.loaded_by_user?.full_name || "-"} />
+            <InfoField
+              label="Responsable de Carga"
+              value={complaint.loaded_by_user?.full_name || "-"}
+            />
           </div>
+
           <div className="border-t mt-5 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
               <p className="text-xs text-muted-foreground">

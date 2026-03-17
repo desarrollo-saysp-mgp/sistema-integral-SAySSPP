@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Complaint, Service, Cause, User } from "@/types";
 import {
   Table,
@@ -21,7 +21,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+
+const ITEMS_PER_PAGE = 20;
+
+const parseLocalDate = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const formatLocalDate = (dateStr: string): string => {
+  const date = parseLocalDate(dateStr);
+  return date.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
 
 type ComplaintWithDetails = Complaint & {
   service: Service;
@@ -40,6 +56,21 @@ export function ComplaintsTable({
 }: ComplaintsTableProps) {
   const router = useRouter();
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(complaints.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [complaints.length, currentPage, totalPages]);
+
+  const paginatedComplaints = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return complaints.slice(start, end);
+  }, [complaints, currentPage]);
 
   const handleStatusChange = async (
     complaintId: number,
@@ -70,65 +101,57 @@ export function ComplaintsTable({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "En proceso":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100";
+        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200";
       case "Resuelto":
-        return "bg-green-100 text-green-800 hover:bg-green-100";
+        return "bg-green-100 text-green-800 hover:bg-green-100 border-green-200";
       case "No resuelto":
-        return "bg-red-100 text-red-800 hover:bg-red-100";
+        return "bg-red-100 text-red-800 hover:bg-red-100 border-red-200";
       default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-100";
+        return "bg-muted text-muted-foreground hover:bg-muted border-border";
     }
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatLocalDate(dateString);
   };
 
-  const formatTimeSince = (dateString: string): string => {
-    const sinceDate = new Date(dateString);
-    const today = new Date();
+  const getVisibleRangeText = () => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+    const end = Math.min(currentPage * ITEMS_PER_PAGE, complaints.length);
+    return { start, end };
+  };
 
-    // Reset time to midnight for accurate day calculation
-    today.setHours(0, 0, 0, 0);
-    sinceDate.setHours(0, 0, 0, 0);
-
-    // Calculate total days difference
-    const diffTime = today.getTime() - sinceDate.getTime();
-    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    // Handle same day or future dates
-    if (totalDays <= 0) {
-      return "Hoy";
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
 
-    // Less than 30 days: show in days
-    if (totalDays < 30) {
-      return totalDays === 1 ? "1 día" : `${totalDays} días`;
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5];
     }
 
-    // 30+ days: calculate months and remaining days
-    const months = Math.floor(totalDays / 30);
-    const remainingDays = totalDays % 30;
-
-    // Build the display string
-    let result = months === 1 ? "1 mes" : `${months} meses`;
-
-    if (remainingDays > 0) {
-      const daysText = remainingDays === 1 ? "1 día" : `${remainingDays} días`;
-      result += ` y ${daysText}`;
+    if (currentPage >= totalPages - 3) {
+      return [
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
     }
 
-    return result;
+    return [
+      currentPage - 2,
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      currentPage + 2,
+    ];
   };
 
   if (complaints.length === 0) {
     return (
-      <div className="text-center py-12">
+      <div className="py-12 text-center">
         <p className="text-muted-foreground">
           No se encontraron reclamos que coincidan con los filtros.
         </p>
@@ -136,93 +159,195 @@ export function ComplaintsTable({
     );
   }
 
+  const { start, end } = getVisibleRangeText();
+  const pageNumbers = getPageNumbers();
+
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Número</TableHead>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Nombre</TableHead>
-            <TableHead>Servicio</TableHead>
-            <TableHead>Causa</TableHead>
-            <TableHead>Zona</TableHead>
-            <TableHead>Desde Cuándo</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Cargado por</TableHead>
-            <TableHead className="text-center">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {complaints.map((complaint) => (
-            <TableRow
-              key={complaint.id}
-              className="hover:bg-muted/50"
-            >
-              <TableCell className="font-medium">
-                {complaint.complaint_number}
-              </TableCell>
-              <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
-              <TableCell>{complaint.complainant_name}</TableCell>
-              <TableCell>{complaint.service.name}</TableCell>
-              <TableCell>{complaint.cause.name}</TableCell>
-              <TableCell>{complaint.zone}</TableCell>
-              <TableCell>{formatTimeSince(complaint.since_when)}</TableCell>
-              <TableCell>
-                <div>
-                  {onStatusChange ? (
-                    <Select
-                      value={complaint.status}
-                      onValueChange={(value) =>
-                        handleStatusChange(complaint.id, value)
-                      }
-                      disabled={updatingStatus === complaint.id}
-                    >
-                      <SelectTrigger
-                        className={`w-[140px] ${getStatusColor(complaint.status)}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="En proceso">En proceso</SelectItem>
-                        <SelectItem value="Resuelto">Resuelto</SelectItem>
-                        <SelectItem value="No resuelto">No resuelto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge className={getStatusColor(complaint.status)}>
-                      {complaint.status}
-                    </Badge>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>{complaint.loaded_by_user.full_name}</TableCell>
-              <TableCell>
-                <div className="flex justify-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleView(complaint.id)}
-                    title="Ver reclamo"
-                    className="hover:bg-blue-100 hover:text-blue-700 active:bg-blue-200 active:scale-95 transition-all"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEdit(complaint.id)}
-                    title="Editar reclamo"
-                    className="hover:bg-amber-100 hover:text-amber-700 active:bg-amber-200 active:scale-95 transition-all"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead>Número</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Servicio</TableHead>
+              <TableHead>Causa</TableHead>
+              <TableHead>Zona</TableHead>
+              <TableHead>Desde Cuándo</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Cargado por</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {paginatedComplaints.map((complaint, index) => {
+              const isEvenRow = index % 2 === 0;
+
+              return (
+                <TableRow
+                  key={complaint.id}
+                  className={
+                    isEvenRow
+                      ? "bg-background hover:bg-accent/40 transition-colors"
+                      : "bg-muted/25 hover:bg-accent/40 transition-colors"
+                  }
+                >
+                  <TableCell className="font-medium">
+                    {complaint.complaint_number}
+                  </TableCell>
+                  <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
+                  <TableCell>{complaint.complainant_name}</TableCell>
+                  <TableCell>{complaint.service.name}</TableCell>
+                  <TableCell>{complaint.cause.name}</TableCell>
+                  <TableCell>{complaint.zone}</TableCell>
+                  <TableCell>{complaint.since_when}</TableCell>
+                  <TableCell>
+                    <div>
+                      {onStatusChange ? (
+                        <Select
+                          value={complaint.status}
+                          onValueChange={(value) =>
+                            handleStatusChange(complaint.id, value)
+                          }
+                          disabled={updatingStatus === complaint.id}
+                        >
+                          <SelectTrigger
+                            className={`w-[140px] ${getStatusColor(complaint.status)}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="En proceso">
+                              En proceso
+                            </SelectItem>
+                            <SelectItem value="Resuelto">Resuelto</SelectItem>
+                            <SelectItem value="No resuelto">
+                              No resuelto
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge className={getStatusColor(complaint.status)}>
+                          {complaint.status}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{complaint.loaded_by_user.full_name}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(complaint.id)}
+                        title="Ver reclamo"
+                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(complaint.id)}
+                        title="Editar reclamo"
+                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-muted-foreground">
+          Mostrando <span className="font-medium text-foreground">{start}</span>{" "}
+          a <span className="font-medium text-foreground">{end}</span> de{" "}
+          <span className="font-medium text-foreground">{complaints.length}</span>{" "}
+          reclamos
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="gap-1"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Anterior
+          </Button>
+
+          {pageNumbers[0] > 1 && (
+            <>
+              <Button
+                type="button"
+                variant={currentPage === 1 ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                className="min-w-9"
+              >
+                1
+              </Button>
+              {pageNumbers[0] > 2 && (
+                <span className="px-1 text-sm text-muted-foreground">...</span>
+              )}
+            </>
+          )}
+
+          {pageNumbers.map((page) => (
+            <Button
+              key={page}
+              type="button"
+              variant={currentPage === page ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentPage(page)}
+              className="min-w-9"
+            >
+              {page}
+            </Button>
           ))}
-        </TableBody>
-      </Table>
+
+          {pageNumbers[pageNumbers.length - 1] < totalPages && (
+            <>
+              {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
+                <span className="px-1 text-sm text-muted-foreground">...</span>
+              )}
+              <Button
+                type="button"
+                variant={currentPage === totalPages ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                className="min-w-9"
+              >
+                {totalPages}
+              </Button>
+            </>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages}
+            className="gap-1"
+          >
+            Siguiente
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

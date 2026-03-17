@@ -58,16 +58,16 @@ export default function DashboardPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "En proceso":
-        return "text-yellow-600";
+        return "bg-[#FFF7E8] text-[#C48814] border-[#F4D9A6]";
       case "Resuelto":
-        return "text-green-600";
+        return "bg-[#ECFDF7] text-[#00A27F] border-[#B7E7D9]";
       case "No resuelto":
-        return "text-red-600";
+        return "bg-[#FFF0F3] text-[#D85C76] border-[#F2C6D1]";
       default:
-        return "text-gray-600";
+        return "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
     }
   };
 
@@ -80,149 +80,195 @@ export default function DashboardPage() {
     });
   };
 
+  const goToFilteredComplaints = (status?: string) => {
+    if (!status) {
+      router.push("/dashboard/complaints");
+      return;
+    }
+
+    router.push(`/dashboard/complaints?status=${encodeURIComponent(status)}`);
+  };
+
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-muted-foreground">Cargando estadísticas...</div>
+      <div className="p-2">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-[#6B7280]">Cargando estadísticas...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-4xl font-bold tracking-tight text-[#373737]">
+            Dashboard
+          </h1>
+          <p className="mt-2 text-base text-[#6B7280]">
             Resumen general del sistema de reclamos
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => router.push("/dashboard/complaints/new")}>
-            <Plus className="w-4 h-4 mr-2" />
+
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={() => router.push("/dashboard/complaints/new")}
+            className="h-12 rounded-xl bg-[#00A27F] px-6 text-white font-semibold shadow-md transition-all hover:bg-[#008568] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="mr-2 h-5 w-5" />
             Nuevo Reclamo
           </Button>
+
           <Button
             variant="outline"
             onClick={() => router.push("/dashboard/complaints")}
+            className="h-11 rounded-xl border-[#D8E3DE] bg-white px-5 text-[#373737] hover:bg-[#F8FAF9]"
           >
-            <List className="w-4 h-4 mr-2" />
+            <List className="mr-2 h-4 w-4" />
             Ver Todos
           </Button>
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Complaints */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <Card
+          className="cursor-pointer rounded-2xl border-[#D8E3DE] bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => goToFilteredComplaints()}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-[#373737]">
               Total de Reclamos
             </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-full bg-[#00A27F]/10 p-2">
+              <FileText className="h-4 w-4 text-[#00A27F]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.total || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <div className="text-3xl font-bold text-[#373737]">
+              {stats?.total || 0}
+            </div>
+            <p className="mt-2 text-sm text-[#6B7280]">
               Reclamos registrados
             </p>
           </CardContent>
         </Card>
 
-        {/* In Progress */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Proceso</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
+        <Card
+          className="cursor-pointer rounded-2xl border-[#D8E3DE] bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => goToFilteredComplaints("En proceso")}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-[#373737]">
+              En Proceso
+            </CardTitle>
+            <div className="rounded-full bg-[#FFF7E8] p-2">
+              <Clock className="h-4 w-4 text-[#C48814]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-3xl font-bold text-[#C48814]">
               {stats?.inProgress || 0}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-2 text-sm text-[#6B7280]">
               Pendientes de resolución
             </p>
           </CardContent>
         </Card>
 
-        {/* Resolved */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resueltos</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+        <Card
+          className="cursor-pointer rounded-2xl border-[#D8E3DE] bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => goToFilteredComplaints("Resuelto")}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-[#373737]">
+              Resueltos
+            </CardTitle>
+            <div className="rounded-full bg-[#ECFDF7] p-2">
+              <CheckCircle className="h-4 w-4 text-[#00A27F]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-3xl font-bold text-[#00A27F]">
               {stats?.resolved || 0}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-2 text-sm text-[#6B7280]">
               Casos completados
             </p>
           </CardContent>
         </Card>
 
-        {/* Unresolved */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">No Resueltos</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
+        <Card
+          className="cursor-pointer rounded-2xl border-[#D8E3DE] bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => goToFilteredComplaints("No resuelto")}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-[#373737]">
+              No Resueltos
+            </CardTitle>
+            <div className="rounded-full bg-[#FFF0F3] p-2">
+              <XCircle className="h-4 w-4 text-[#D85C76]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-3xl font-bold text-[#D85C76]">
               {stats?.unresolved || 0}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-2 text-sm text-[#6B7280]">
               Casos sin resolución
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Complaints */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Reclamos Recientes</CardTitle>
+      <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl text-[#373737]">
+            Reclamos Recientes
+          </CardTitle>
         </CardHeader>
+
         <CardContent>
           {stats?.recentComplaints && stats.recentComplaints.length > 0 ? (
             <div className="space-y-4">
               {stats.recentComplaints.map((complaint) => (
                 <div
                   key={complaint.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  className="flex cursor-pointer flex-col gap-4 rounded-2xl border border-[#E3E8E5] bg-[#FCFCFC] p-5 transition-colors hover:bg-[#F8FAF9] md:flex-row md:items-center md:justify-between"
                   onClick={() =>
-                    router.push(`/dashboard/complaints/${complaint.id}`)
+                    router.push(`/dashboard/complaints/${complaint.id}/view`)
                   }
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-[#6B7280]">
+                      <span className="font-semibold text-[#373737]">
                         {complaint.complaint_number}
                       </span>
-                      <span className="text-sm text-muted-foreground">•</span>
-                      <span className="text-sm text-muted-foreground">
-                        {formatDate(complaint.complaint_date)}
-                      </span>
+                      <span>•</span>
+                      <span>{formatDate(complaint.complaint_date)}</span>
                     </div>
-                    <div className="text-sm text-muted-foreground mt-1">
+
+                    <div className="mt-2 text-base font-medium text-[#373737]">
                       {complaint.complainant_name}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+
+                    <div className="mt-1 text-sm text-[#6B7280]">
                       {complaint.service.name} - {complaint.cause.name}
                     </div>
                   </div>
-                  <div className={`font-medium ${getStatusColor(complaint.status)}`}>
+
+                  <div
+                    className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getStatusBadge(
+                      complaint.status
+                    )}`}
+                  >
                     {complaint.status}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="py-10 text-center text-[#6B7280]">
               No hay reclamos registrados
             </div>
           )}

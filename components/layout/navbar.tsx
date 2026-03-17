@@ -3,6 +3,7 @@
 import { useUser } from "@/hooks/useUser";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -41,83 +42,104 @@ export function Navbar() {
   };
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") {
-      return pathname === href;
-    }
+    if (href === "/dashboard") return pathname === href;
     return pathname?.startsWith(href);
   };
 
   const isAdmin = profile?.role === "Admin";
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-[#88C1ED]/20 bg-[#0E3F75] text-white shadow-md">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5CADEB] font-bold text-white shadow-sm">
-            SGR
+    <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+      <div className="flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Logo + título */}
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 transition-opacity hover:opacity-90"
+        >
+          <div className="relative h-11 w-[110px] shrink-0 sm:w-[125px]">
+            <Image
+              src="/logo-general-pico-horizontal.jpg"
+              alt="General Pico"
+              fill
+              priority
+              className="object-contain object-left"
+            />
           </div>
-          <div className="hidden lg:flex flex-col">
-            <span className="text-base font-semibold leading-tight">
+
+          <div className="hidden xl:flex flex-col border-l border-[#D8E3DE] pl-3">
+            <span className="text-sm font-semibold leading-tight text-[#373737]">
               Sistema de Gestión de Reclamos
             </span>
-            <span className="text-xs text-[#88C1ED]">Secretaría Municipal</span>
+            <span className="text-xs leading-tight text-[#6B7280]">
+              Atención Ciudadana
+            </span>
           </div>
-          <span className="lg:hidden text-base font-semibold">SGR</span>
         </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-2">
-          {/* Dashboard Link */}
           <Link href="/dashboard">
             <Button
               variant="ghost"
               className={cn(
-                "text-white hover:bg-[#5CADEB]/20 hover:text-white",
-                isActive("/dashboard") && !pathname?.includes("complaints") && "bg-[#5CADEB] font-semibold"
+                "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                isActive("/dashboard") &&
+                  !pathname?.includes("complaints") &&
+                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
               )}
             >
-              <Home className="h-4 w-4 mr-2" />
+              <Home className="mr-2 h-4 w-4" />
               Dashboard
             </Button>
           </Link>
 
-          {/* Reclamos Dropdown */}
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 className={cn(
-                  "text-white hover:bg-[#5CADEB]/20 hover:text-white",
-                  pathname?.includes("complaints") && "bg-[#5CADEB]/20"
+                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                  pathname?.includes("complaints") &&
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
                 )}
               >
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="mr-2 h-4 w-4" />
                 Reclamos
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" side="bottom" className="w-[280px]">
+            <DropdownMenuContent
+              align="center"
+              side="bottom"
+              className="w-[280px] rounded-2xl border-[#D8E3DE]"
+            >
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/complaints/new" className="cursor-pointer">
+                <Link
+                  href="/dashboard/complaints/new"
+                  className="cursor-pointer rounded-xl"
+                >
                   <div className="flex flex-col gap-1 py-1">
                     <div className="flex items-center gap-2">
-                      <PlusCircle className="h-4 w-4 text-[#5CADEB]" />
+                      <PlusCircle className="h-4 w-4 text-[#00A27F]" />
                       <span className="font-medium">Nuevo Reclamo</span>
                     </div>
-                    <p className="text-xs text-muted-foreground ml-6">
+                    <p className="ml-6 text-xs text-muted-foreground">
                       Crear un nuevo reclamo ciudadano
                     </p>
                   </div>
                 </Link>
               </DropdownMenuItem>
+
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/complaints" className="cursor-pointer">
+                <Link
+                  href="/dashboard/complaints"
+                  className="cursor-pointer rounded-xl"
+                >
                   <div className="flex flex-col gap-1 py-1">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-[#5CADEB]" />
+                      <FileText className="h-4 w-4 text-[#00A27F]" />
                       <span className="font-medium">Ver Todos</span>
                     </div>
-                    <p className="text-xs text-muted-foreground ml-6">
+                    <p className="ml-6 text-xs text-muted-foreground">
                       Lista completa de reclamos
                     </p>
                   </div>
@@ -126,43 +148,52 @@ export function Navbar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Admin Dropdown - Only for Admins */}
           {isAdmin && (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   className={cn(
-                    "text-white hover:bg-[#5CADEB]/20 hover:text-white",
-                    pathname?.includes("admin") && "bg-[#5CADEB]/20"
+                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                    pathname?.includes("admin") &&
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
                   )}
                 >
-                  <FolderKanban className="h-4 w-4 mr-2" />
+                  <FolderKanban className="mr-2 h-4 w-4" />
                   Administración
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="bottom" className="w-[280px]">
+
+              <DropdownMenuContent
+                align="center"
+                side="bottom"
+                className="w-[280px] rounded-2xl border-[#D8E3DE]"
+              >
                 <DropdownMenuItem asChild>
-                  <Link href="/admin/users" className="cursor-pointer">
+                  <Link href="/admin/users" className="cursor-pointer rounded-xl">
                     <div className="flex flex-col gap-1 py-1">
                       <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-[#5CADEB]" />
+                        <Users className="h-4 w-4 text-[#00A27F]" />
                         <span className="font-medium">Usuarios</span>
                       </div>
-                      <p className="text-xs text-muted-foreground ml-6">
+                      <p className="ml-6 text-xs text-muted-foreground">
                         Gestionar usuarios del sistema
                       </p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
+
                 <DropdownMenuItem asChild>
-                  <Link href="/admin/services" className="cursor-pointer">
+                  <Link
+                    href="/admin/services"
+                    className="cursor-pointer rounded-xl"
+                  >
                     <div className="flex flex-col gap-1 py-1">
                       <div className="flex items-center gap-2">
-                        <FolderKanban className="h-4 w-4 text-[#5CADEB]" />
+                        <FolderKanban className="h-4 w-4 text-[#00A27F]" />
                         <span className="font-medium">Servicios</span>
                       </div>
-                      <p className="text-xs text-muted-foreground ml-6">
+                      <p className="ml-6 text-xs text-muted-foreground">
                         Configurar servicios y causas
                       </p>
                     </div>
@@ -173,54 +204,67 @@ export function Navbar() {
           )}
         </div>
 
-        {/* User Menu */}
+        {/* User */}
         <div className="flex items-center gap-2">
-          {/* Mobile Menu Button */}
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden text-white hover:bg-[#5CADEB]/20 hover:text-white"
+            className="text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] md:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </Button>
 
-          {/* User Dropdown */}
           {profile && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex items-center gap-2 text-white hover:bg-[#5CADEB]/20 hover:text-white"
+                  className="flex items-center gap-2 rounded-xl text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]"
                 >
-                  <User className="h-5 w-5" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00A27F]/12">
+                    <User className="h-4 w-4 text-[#00A27F]" />
+                  </div>
+
                   <div className="hidden lg:flex flex-col items-start">
                     <span className="text-sm font-medium">
                       {profile.full_name}
                     </span>
-                    <span className="text-xs text-[#88C1ED]">{profile.role}</span>
+                    <span className="text-xs text-[#6B7280]">
+                      {profile.role}
+                    </span>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+
+              <DropdownMenuContent
+                align="end"
+                className="w-56 rounded-2xl border-[#D8E3DE]"
+              >
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium">{profile.full_name}</p>
                     <p className="text-xs text-muted-foreground">
                       {profile.email}
                     </p>
-                    <p className="text-xs font-semibold text-[#5CADEB]">
+                    <p className="text-xs font-semibold text-[#00A27F]">
                       {profile.role}
                     </p>
                   </div>
                 </DropdownMenuLabel>
+
                 <DropdownMenuSeparator />
+
                 <DropdownMenuItem
                   onClick={handleSignOut}
-                  className="text-red-600 cursor-pointer"
+                  className="cursor-pointer text-[#D85C76] focus:text-[#D85C76]"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Cerrar Sesión</span>
+                  <span>Cerrar sesión</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -230,16 +274,16 @@ export function Navbar() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-[#88C1ED]/20 bg-[#0E3F75]">
-          <div className="px-4 py-4 space-y-2">
+        <div className="border-t border-[#D8E3DE] bg-white md:hidden">
+          <div className="space-y-2 px-4 py-4">
             <Link
               href="/dashboard"
               onClick={() => setMobileMenuOpen(false)}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                 isActive("/dashboard") && !pathname?.includes("complaints")
-                  ? "bg-[#5CADEB] text-white"
-                  : "text-white hover:bg-[#5CADEB]/20"
+                  ? "bg-[#00A27F]/12 text-[#00A27F]"
+                  : "text-[#373737] hover:bg-[#00A27F]/8"
               )}
             >
               <Home className="h-5 w-5" />
@@ -247,30 +291,32 @@ export function Navbar() {
             </Link>
 
             <div className="space-y-1">
-              <div className="px-4 py-2 text-xs font-semibold text-[#88C1ED] uppercase">
+              <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
                 Reclamos
               </div>
+
               <Link
                 href="/dashboard/complaints/new"
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                   isActive("/dashboard/complaints/new")
-                    ? "bg-[#5CADEB] text-white"
-                    : "text-white hover:bg-[#5CADEB]/20"
+                    ? "bg-[#00A27F]/12 text-[#00A27F]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8"
                 )}
               >
                 <PlusCircle className="h-5 w-5" />
                 <span>Nuevo Reclamo</span>
               </Link>
+
               <Link
                 href="/dashboard/complaints"
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                   pathname === "/dashboard/complaints"
-                    ? "bg-[#5CADEB] text-white"
-                    : "text-white hover:bg-[#5CADEB]/20"
+                    ? "bg-[#00A27F]/12 text-[#00A27F]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8"
                 )}
               >
                 <FileText className="h-5 w-5" />
@@ -279,31 +325,33 @@ export function Navbar() {
             </div>
 
             {isAdmin && (
-              <div className="space-y-1 pt-2 mt-2 border-t border-[#88C1ED]/20">
-                <div className="px-4 py-2 text-xs font-semibold text-[#88C1ED] uppercase">
+              <div className="mt-2 space-y-1 border-t border-[#D8E3DE] pt-2">
+                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
                   Administración
                 </div>
+
                 <Link
                   href="/admin/users"
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/users")
-                      ? "bg-[#5CADEB] text-white"
-                      : "text-white hover:bg-[#5CADEB]/20"
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8"
                   )}
                 >
                   <Users className="h-5 w-5" />
                   <span>Usuarios</span>
                 </Link>
+
                 <Link
                   href="/admin/services"
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/services")
-                      ? "bg-[#5CADEB] text-white"
-                      : "text-white hover:bg-[#5CADEB]/20"
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8"
                   )}
                 >
                   <FolderKanban className="h-5 w-5" />

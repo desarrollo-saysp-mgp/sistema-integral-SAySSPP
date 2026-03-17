@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import type { Complaint, ComplaintWithDetails, Service, Cause, SinceWhenPeriod } from "@/types";
+import { useState, useEffect, useMemo, useRef } from "react";
+import type {
+  Complaint,
+  ComplaintWithDetails,
+  Service,
+  Cause,
+  SinceWhenPeriod,
+} from "@/types";
 import { SINCE_WHEN_OPTIONS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { STREETS } from "@/lib/constants/streets";
 import {
   Select,
   SelectContent,
@@ -15,6 +22,14 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUser } from "@/hooks/useUser";
+import { Check, ChevronDown } from "lucide-react";
+
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export interface ComplaintFormData {
   complaint_date: string;
@@ -27,7 +42,7 @@ export interface ComplaintFormData {
   service_id: string;
   cause_id: string;
   zone: string;
-  since_when_period: SinceWhenPeriod | "";
+  since_when: SinceWhenPeriod | "";
   contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp" | "";
   details: string;
   status: "En proceso" | "Resuelto" | "No resuelto";
@@ -50,8 +65,7 @@ export function ComplaintForm({
   const { profile } = useUser();
   const isEditing = !!complaint;
 
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split("T")[0];
+  const today = formatLocalDate(new Date());
 
   const [formData, setFormData] = useState<ComplaintFormData>({
     complaint_date: today,
@@ -64,12 +78,15 @@ export function ComplaintForm({
     service_id: "",
     cause_id: "",
     zone: "",
-    since_when_period: "",
+    since_when: "",
     contact_method: "",
     details: "",
     status: "En proceso",
     referred: false,
   });
+
+  const [addressQuery, setAddressQuery] = useState("");
+  const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
 
   const [services, setServices] = useState<Service[]>([]);
   const [causes, setCauses] = useState<Cause[]>([]);
@@ -80,99 +97,75 @@ export function ComplaintForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
 
-  // Track if we've initialized the form for edit mode to prevent cause_id reset
   const isInitializedRef = useRef(false);
+  const addressContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Helper function to convert period to date
-  const calculateDateFromPeriod = (
-    period: SinceWhenPeriod,
-    referenceDate: string = today,
-  ): string => {
-    const date = new Date(referenceDate);
+  const filteredStreets = useMemo(() => {
+    const query = addressQuery.trim().toLowerCase();
 
-    switch (period) {
-      case "En el día":
-        // Same day as reference
-        return date.toISOString().split("T")[0];
-      case "1 semana":
-        date.setDate(date.getDate() - 7);
-        break;
-      case "1 mes":
-        date.setMonth(date.getMonth() - 1);
-        break;
-      case "3 meses":
-        date.setMonth(date.getMonth() - 3);
-        break;
-      case "6 meses":
-        date.setMonth(date.getMonth() - 6);
-        break;
-      case "1 año":
-        date.setFullYear(date.getFullYear() - 1);
-        break;
-    }
+    if (!query) return STREETS.slice(0, 12);
 
-    return date.toISOString().split("T")[0];
-  };
+    return STREETS.filter((street) =>
+      street.toLowerCase().includes(query),
+    ).slice(0, 12);
+  }, [addressQuery]);
 
-  // Helper function to convert date to closest period (for edit mode)
-  const getClosestPeriod = (
-    sinceWhenDate: string,
-    complaintDate: string,
-  ): SinceWhenPeriod => {
-    const since = new Date(sinceWhenDate);
-    const complaint = new Date(complaintDate);
-    const diffMs = complaint.getTime() - since.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    // Map to closest period
-    if (diffDays === 0) return "En el día";
-    if (diffDays <= 10) return "1 semana";
-    if (diffDays <= 45) return "1 mes";
-    if (diffDays <= 135) return "3 meses";
-    if (diffDays <= 270) return "6 meses";
-    return "1 año";
-  };
-
-  // Validation helper functions
   const validatePhone = (phone: string): boolean => {
-    if (!phone.trim()) return true; // Optional field
-    // Only digits allowed, max 50 chars
+    if (!phone.trim()) return true;
     const digitsOnly = /^\d+$/;
     return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
   };
 
   const validateEmail = (email: string): boolean => {
-    if (!email.trim()) return true; // Optional field
-    // Basic email format, max 100 chars
+    if (!email.trim()) return true;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailPattern.test(email.trim()) && email.trim().length <= 100;
   };
 
-  // Load services and causes on mount
+  const isValidStreet = (value: string) => {
+    return (STREETS as readonly string[]).includes(value);
+  };
+
   useEffect(() => {
     fetchServicesAndCauses();
   }, []);
 
-  // Update form when complaint changes (for editing)
-  // Also re-apply when services/causes finish loading to ensure dropdowns show correct values
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        addressContainerRef.current &&
+        !addressContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsAddressDropdownOpen(false);
+
+        if (!isValidStreet(addressQuery)) {
+          setAddressQuery(formData.address || "");
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [addressQuery, formData.address]);
+
   useEffect(() => {
     if (complaint && services.length > 0 && causes.length > 0) {
-      // First, filter causes for this service
       let filtered = causes.filter(
-        (cause) =>
-          cause.service_id === complaint.service_id && cause.active,
+        (cause) => cause.service_id === complaint.service_id && cause.active,
       );
 
-      // Ensure the complaint's current cause is always in the list
-      // (in case it's inactive or somehow not in the fetched causes)
       const complaintWithDetails = complaint as ComplaintWithDetails;
-      if (complaintWithDetails.cause && !filtered.some(c => c.id === complaintWithDetails.cause.id)) {
+      if (
+        complaintWithDetails.cause &&
+        !filtered.some((c) => c.id === complaintWithDetails.cause.id)
+      ) {
         filtered = [...filtered, complaintWithDetails.cause];
       }
 
       setFilteredCauses(filtered);
 
-      // Set form data after filtered causes are ready
       setFormData({
         complaint_date: complaint.complaint_date,
         complainant_name: complaint.complainant_name,
@@ -184,26 +177,28 @@ export function ComplaintForm({
         service_id: complaint.service_id.toString(),
         cause_id: complaint.cause_id.toString(),
         zone: complaint.zone,
-        since_when_period: getClosestPeriod(
-          complaint.since_when,
-          complaint.complaint_date,
-        ),
+        since_when: complaint.since_when as SinceWhenPeriod,
         contact_method: complaint.contact_method,
         details: complaint.details,
         status: complaint.status,
         referred: complaint.referred,
       });
 
-      // Mark as initialized after a short delay to allow state to settle
+      setAddressQuery(complaint.address);
+
       setTimeout(() => {
         isInitializedRef.current = true;
       }, 100);
     }
   }, [complaint, services, causes]);
 
-  // Filter causes when service changes
   useEffect(() => {
-    // Skip this effect during edit mode initialization - the edit useEffect handles it
+    if (!complaint && !formData.address) {
+      setAddressQuery("");
+    }
+  }, [complaint, formData.address]);
+
+  useEffect(() => {
     if (isEditing && !isInitializedRef.current) {
       return;
     }
@@ -215,7 +210,6 @@ export function ComplaintForm({
       );
       setFilteredCauses(filtered);
 
-      // Only reset cause_id if causes are loaded and current cause_id is not in filtered list
       if (
         causes.length > 0 &&
         formData.cause_id &&
@@ -229,11 +223,9 @@ export function ComplaintForm({
     }
   }, [formData.service_id, causes, isEditing]);
 
-
   const fetchServicesAndCauses = async () => {
     setIsLoadingServices(true);
     try {
-      // Fetch services
       const servicesRes = await fetch("/api/services");
       const servicesData = await servicesRes.json();
 
@@ -241,7 +233,6 @@ export function ComplaintForm({
         setServices(servicesData.data.filter((s: Service) => s.active));
       }
 
-      // Fetch causes
       const causesRes = await fetch("/api/causes");
       const causesData = await causesRes.json();
 
@@ -258,13 +249,14 @@ export function ComplaintForm({
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof ComplaintFormData, string>> = {};
 
-    // Required fields validation
     if (!formData.complainant_name.trim()) {
       newErrors.complainant_name = "El nombre y apellido es requerido";
     }
 
     if (!formData.address.trim()) {
       newErrors.address = "La dirección es requerida";
+    } else if (!isValidStreet(formData.address)) {
+      newErrors.address = "Debe seleccionar una calle válida del listado";
     }
 
     if (!formData.street_number.trim()) {
@@ -283,18 +275,16 @@ export function ComplaintForm({
       newErrors.zone = "La zona es requerida";
     }
 
-    if (!formData.since_when_period) {
-      newErrors.since_when_period =
+    if (!formData.since_when) {
+      newErrors.since_when =
         "Debe seleccionar desde cuándo existe el problema";
     }
 
-    // Phone validation (optional but must be valid if provided)
     if (formData.phone_number.trim() && !validatePhone(formData.phone_number)) {
       newErrors.phone_number =
         "Formato inválido. Solo números, máximo 50 caracteres";
     }
 
-    // Email validation (optional but must be valid if provided)
     if (formData.email.trim() && !validateEmail(formData.email)) {
       newErrors.email = "Formato de email inválido";
     }
@@ -303,17 +293,10 @@ export function ComplaintForm({
       newErrors.contact_method = "El medio de contacto es requerido";
     }
 
-    if (!formData.details.trim()) {
-      newErrors.details = "El detalle es requerido";
-    } else if (formData.details.trim().length < 10) {
-      newErrors.details = "El detalle debe tener al menos 10 caracteres";
-    }
-
     if (!formData.complaint_date) {
       newErrors.complaint_date = "La fecha de reclamo es requerida";
     }
 
-    // Date validations
     if (formData.complaint_date && formData.complaint_date > today) {
       newErrors.complaint_date = "La fecha no puede ser futura";
     }
@@ -332,26 +315,9 @@ export function ComplaintForm({
     setIsSubmitting(true);
 
     try {
-      // Convert since_when_period to actual date before submitting
-      const since_when = formData.since_when_period
-        ? calculateDateFromPeriod(
-            formData.since_when_period,
-            formData.complaint_date,
-          )
-        : "";
-
-      // Create submission data with since_when as date
-      const submissionData: any = {
-        ...formData,
-        since_when,
-      };
-      // Remove since_when_period from submission
-      delete submissionData.since_when_period;
-
-      const result = await onSubmit(submissionData);
+      const result = await onSubmit(formData);
 
       if (!result.success) {
-        // Show error from parent component
         setErrors({ complainant_name: result.error || "Error al guardar" });
       }
     } finally {
@@ -364,7 +330,6 @@ export function ComplaintForm({
     value: string | boolean,
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -374,15 +339,26 @@ export function ComplaintForm({
     }
   };
 
+  const handleAddressInputChange = (value: string) => {
+    setAddressQuery(value);
+    setIsAddressDropdownOpen(true);
+    handleChange("address", "");
+  };
+
+  const handleAddressSelect = (street: string) => {
+    setAddressQuery(street);
+    handleChange("address", street);
+    setIsAddressDropdownOpen(false);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Basic Information */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Información Básica</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+        <CardContent className="space-y-6 pt-0">
+          <div className="space-y-2">
             <Label htmlFor="complaint_date">
               Fecha de Reclamo <span className="text-red-500">*</span>
             </Label>
@@ -394,7 +370,7 @@ export function ComplaintForm({
               max={today}
             />
             {errors.complaint_date && (
-              <p className="text-sm text-red-500 mt-1">
+              <p className="mt-1 text-sm text-red-500">
                 {errors.complaint_date}
               </p>
             )}
@@ -402,13 +378,12 @@ export function ComplaintForm({
         </CardContent>
       </Card>
 
-      {/* Complainant Information */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Datos del Reclamante</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+        <CardContent className="space-y-6 pt-0">
+          <div className="space-y-2">
             <Label htmlFor="complainant_name">
               Nombre y Apellido <span className="text-red-500">*</span>
             </Label>
@@ -421,61 +396,93 @@ export function ComplaintForm({
               placeholder="Ingrese nombre y apellido"
             />
             {errors.complainant_name && (
-              <p className="text-sm text-red-500 mt-1">
+              <p className="mt-1 text-sm text-red-500">
                 {errors.complainant_name}
               </p>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <Label htmlFor="address">
-                Dirección <span className="text-red-500">*</span>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="address-search">
+                Calle <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleChange("address", e.target.value)}
-                placeholder="Ingrese dirección"
-              />
+
+              <div ref={addressContainerRef} className="relative">
+                <div className="relative">
+                  <Input
+                    id="address-search"
+                    value={addressQuery}
+                    onChange={(e) => handleAddressInputChange(e.target.value)}
+                    onFocus={() => setIsAddressDropdownOpen(true)}
+                    placeholder="Busque y seleccione una calle"
+                    autoComplete="off"
+                    className="pr-10"
+                  />
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+
+                {isAddressDropdownOpen && (
+                  <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+                    {filteredStreets.length > 0 ? (
+                      filteredStreets.map((street) => {
+                        const isSelected = formData.address === street;
+
+                        return (
+                          <button
+                            key={street}
+                            type="button"
+                            onClick={() => handleAddressSelect(street)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                          >
+                            <span>{street}</span>
+                            {isSelected && <Check className="h-4 w-4" />}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No se encontraron calles
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {errors.address && (
-                <p className="text-sm text-red-500 mt-1">{errors.address}</p>
+                <p className="mt-1 text-sm text-red-500">{errors.address}</p>
               )}
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="street_number">
                 Número <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="street_number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={formData.street_number}
-                onChange={(e) => handleChange("street_number", e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "");
+                  handleChange("street_number", value);
+                }}
                 placeholder="Nro."
               />
               {errors.street_number && (
-                <p className="text-sm text-red-500 mt-1">
+                <p className="mt-1 text-sm text-red-500">
                   {errors.street_number}
                 </p>
               )}
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="dni">DNI</Label>
-            <Input
-              id="dni"
-              value={formData.dni}
-              onChange={(e) => handleChange("dni", e.target.value)}
-              placeholder="Ingrese DNI (opcional)"
-            />
-          </div>
-
-          <div>
+          <div className="space-y-3">
             <Label>
               Medio de Contacto <span className="text-red-500">*</span>
             </Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {(
                 [
                   "Presencial",
@@ -486,7 +493,7 @@ export function ComplaintForm({
               ).map((method) => (
                 <label
                   key={method}
-                  className="flex items-center space-x-2 cursor-pointer"
+                  className="flex cursor-pointer items-center gap-2"
                 >
                   <input
                     type="radio"
@@ -496,63 +503,52 @@ export function ComplaintForm({
                     onChange={(e) =>
                       handleChange("contact_method", e.target.value)
                     }
-                    className="w-4 h-4"
+                    className="h-4 w-4"
                   />
                   <span>{method}</span>
                 </label>
               ))}
             </div>
             {errors.contact_method && (
-              <p className="text-sm text-red-500 mt-1">
+              <p className="mt-1 text-sm text-red-500">
                 {errors.contact_method}
               </p>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="phone_number">Teléfono</Label>
               <Input
                 id="phone_number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={50}
                 value={formData.phone_number}
-                onChange={(e) => handleChange("phone_number", e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "");
+                  handleChange("phone_number", value);
+                }}
                 placeholder="Ingrese teléfono (opcional, solo números)"
               />
               {errors.phone_number && (
-                <p className="text-sm text-red-500 mt-1">
+                <p className="mt-1 text-sm text-red-500">
                   {errors.phone_number}
                 </p>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                Solo números, máximo 50 caracteres
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleChange("email", e.target.value)}
-                placeholder="Ingrese email (opcional)"
-              />
-              {errors.email && (
-                <p className="text-sm text-red-500 mt-1">{errors.email}</p>
               )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Complaint Details */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Detalles del Reclamo</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+        <CardContent className="space-y-6 pt-0">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="service_id">
                 Servicio <span className="text-red-500">*</span>
               </Label>
@@ -573,13 +569,13 @@ export function ComplaintForm({
                 </SelectContent>
               </Select>
               {errors.service_id && (
-                <p className="text-sm text-red-500 mt-1">
+                <p className="mt-1 text-sm text-red-500">
                   {errors.service_id}
                 </p>
               )}
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="cause_id">
                 Causa <span className="text-red-500">*</span>
               </Label>
@@ -607,34 +603,46 @@ export function ComplaintForm({
                 </SelectContent>
               </Select>
               {errors.cause_id && (
-                <p className="text-sm text-red-500 mt-1">{errors.cause_id}</p>
+                <p className="mt-1 text-sm text-red-500">{errors.cause_id}</p>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="zone">
                 Zona <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="zone"
+              <Select
                 value={formData.zone}
-                onChange={(e) => handleChange("zone", e.target.value)}
-                placeholder="Ingrese zona"
-              />
+                onValueChange={(value) => handleChange("zone", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione una zona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 16 }, (_, i) => {
+                    const zone = String(i + 1);
+                    return (
+                      <SelectItem key={zone} value={zone}>
+                        {zone}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
               {errors.zone && (
-                <p className="text-sm text-red-500 mt-1">{errors.zone}</p>
+                <p className="mt-1 text-sm text-red-500">{errors.zone}</p>
               )}
             </div>
 
-            <div>
-              <Label htmlFor="since_when_period">
+            <div className="space-y-2">
+              <Label htmlFor="since_when">
                 Desde Cuándo <span className="text-red-500">*</span>
               </Label>
               <Select
-                value={formData.since_when_period}
-                onValueChange={(value) => handleChange("since_when_period", value)}
+                value={formData.since_when}
+                onValueChange={(value) => handleChange("since_when", value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione el período" />
@@ -647,47 +655,44 @@ export function ComplaintForm({
                   ))}
                 </SelectContent>
               </Select>
-              {errors.since_when_period && (
-                <p className="text-sm text-red-500 mt-1">
-                  {errors.since_when_period}
+              {errors.since_when && (
+                <p className="mt-1 text-sm text-red-500">
+                  {errors.since_when}
                 </p>
               )}
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="details">
-              Detalle <span className="text-red-500">*</span>
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="details">Detalle</Label>
             <textarea
               id="details"
               value={formData.details}
               onChange={(e) => handleChange("details", e.target.value)}
-              placeholder="Describa el reclamo en detalle (mínimo 10 caracteres)"
-              className="w-full min-h-[100px] px-3 py-2 border border-input rounded-md bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Detalle del reclamo"
+              className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               rows={4}
             />
             {errors.details && (
-              <p className="text-sm text-red-500 mt-1">{errors.details}</p>
+              <p className="mt-1 text-sm text-red-500">{errors.details}</p>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Status and Follow-up */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Estado y Seguimiento</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+        <CardContent className="space-y-6 pt-0">
+          <div className="space-y-3">
             <Label>Estado</Label>
-            <div className="flex gap-4 mt-2">
+            <div className="flex flex-wrap gap-4">
               {(["En proceso", "Resuelto", "No resuelto"] as const).map(
                 (statusOption) => (
                   <label
                     key={statusOption}
-                    className="flex items-center space-x-2 cursor-pointer"
+                    className="flex cursor-pointer items-center gap-2"
                   >
                     <input
                       type="radio"
@@ -695,7 +700,7 @@ export function ComplaintForm({
                       value={statusOption}
                       checked={formData.status === statusOption}
                       onChange={(e) => handleChange("status", e.target.value)}
-                      className="w-4 h-4"
+                      className="h-4 w-4"
                     />
                     <span>{statusOption}</span>
                   </label>
@@ -704,20 +709,7 @@ export function ComplaintForm({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="referred"
-              checked={formData.referred}
-              onChange={(e) => handleChange("referred", e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300"
-            />
-            <Label htmlFor="referred" className="cursor-pointer">
-              Derivado
-            </Label>
-          </div>
-
-          <div>
+          <div className="space-y-2">
             <Label>Responsable de Carga</Label>
             <Input
               value={profile?.full_name || "Usuario no disponible"}
@@ -725,7 +717,7 @@ export function ComplaintForm({
               className="bg-muted"
             />
             {!profile && (
-              <p className="text-sm text-amber-600 mt-1">
+              <p className="mt-1 text-sm text-amber-600">
                 ⚠️ No se pudo cargar el perfil del usuario
               </p>
             )}
@@ -733,8 +725,7 @@ export function ComplaintForm({
         </CardContent>
       </Card>
 
-      {/* Form Actions */}
-      <div className="flex gap-4 justify-end">
+      <div className="flex justify-end gap-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
