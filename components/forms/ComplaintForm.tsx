@@ -64,28 +64,54 @@ export function ComplaintForm({
 }: ComplaintFormProps) {
   const { profile } = useUser();
   const isEditing = !!complaint;
-
   const today = formatLocalDate(new Date());
 
-  const [formData, setFormData] = useState<ComplaintFormData>({
-    complaint_date: today,
-    complainant_name: "",
-    address: "",
-    street_number: "",
-    dni: "",
-    phone_number: "",
-    email: "",
-    service_id: "",
-    cause_id: "",
-    zone: "",
-    since_when: "",
-    contact_method: "",
-    details: "",
-    status: "En proceso",
-    referred: false,
-  });
+  const getInitialFormData = (
+    complaintData?: Complaint | ComplaintWithDetails | null,
+  ): ComplaintFormData => {
+    if (complaintData) {
+      return {
+        complaint_date: complaintData.complaint_date,
+        complainant_name: complaintData.complainant_name,
+        address: complaintData.address,
+        street_number: complaintData.street_number,
+        dni: complaintData.dni || "",
+        phone_number: complaintData.phone_number || "",
+        email: complaintData.email || "",
+        service_id: complaintData.service_id.toString(),
+        cause_id: complaintData.cause_id.toString(),
+        zone: complaintData.zone,
+        since_when: complaintData.since_when as SinceWhenPeriod,
+        contact_method: complaintData.contact_method,
+        details: complaintData.details,
+        status: complaintData.status,
+        referred: complaintData.referred,
+      };
+    }
 
-  const [addressQuery, setAddressQuery] = useState("");
+    return {
+      complaint_date: today,
+      complainant_name: "",
+      address: "",
+      street_number: "",
+      dni: "",
+      phone_number: "",
+      email: "",
+      service_id: "",
+      cause_id: "",
+      zone: "",
+      since_when: "",
+      contact_method: "",
+      details: "",
+      status: "En proceso",
+      referred: false,
+    };
+  };
+
+  const [formData, setFormData] = useState<ComplaintFormData>(() =>
+    getInitialFormData(complaint),
+  );
+  const [addressQuery, setAddressQuery] = useState(() => complaint?.address || "");
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
 
   const [services, setServices] = useState<Service[]>([]);
@@ -97,7 +123,6 @@ export function ComplaintForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
 
-  const isInitializedRef = useRef(false);
   const addressContainerRef = useRef<HTMLDivElement | null>(null);
 
   const filteredStreets = useMemo(() => {
@@ -151,77 +176,46 @@ export function ComplaintForm({
   }, [addressQuery, formData.address]);
 
   useEffect(() => {
-    if (complaint && services.length > 0 && causes.length > 0) {
-      let filtered = causes.filter(
-        (cause) => cause.service_id === complaint.service_id && cause.active,
-      );
-
-      const complaintWithDetails = complaint as ComplaintWithDetails;
-      if (
-        complaintWithDetails.cause &&
-        !filtered.some((c) => c.id === complaintWithDetails.cause.id)
-      ) {
-        filtered = [...filtered, complaintWithDetails.cause];
-      }
-
-      setFilteredCauses(filtered);
-
-      setFormData({
-        complaint_date: complaint.complaint_date,
-        complainant_name: complaint.complainant_name,
-        address: complaint.address,
-        street_number: complaint.street_number,
-        dni: complaint.dni || "",
-        phone_number: complaint.phone_number || "",
-        email: complaint.email || "",
-        service_id: complaint.service_id.toString(),
-        cause_id: complaint.cause_id.toString(),
-        zone: complaint.zone,
-        since_when: complaint.since_when as SinceWhenPeriod,
-        contact_method: complaint.contact_method,
-        details: complaint.details,
-        status: complaint.status,
-        referred: complaint.referred,
-      });
-
-      setAddressQuery(complaint.address);
-
-      setTimeout(() => {
-        isInitializedRef.current = true;
-      }, 100);
-    }
-  }, [complaint, services, causes]);
-
-  useEffect(() => {
     if (!complaint && !formData.address) {
       setAddressQuery("");
     }
   }, [complaint, formData.address]);
 
   useEffect(() => {
-    if (isEditing && !isInitializedRef.current) {
+    if (!formData.service_id) {
+      setFilteredCauses([]);
+      if (formData.cause_id) {
+        setFormData((prev) => ({ ...prev, cause_id: "" }));
+      }
       return;
     }
 
-    if (formData.service_id) {
-      const filtered = causes.filter(
-        (cause) =>
-          cause.service_id === parseInt(formData.service_id) && cause.active,
-      );
-      setFilteredCauses(filtered);
+    let filtered = causes.filter(
+      (cause) =>
+        cause.service_id === parseInt(formData.service_id) && cause.active,
+    );
 
+    if (isEditing && complaint) {
+      const complaintWithDetails = complaint as ComplaintWithDetails;
       if (
-        causes.length > 0 &&
-        formData.cause_id &&
-        !filtered.some((c) => c.id === parseInt(formData.cause_id))
+        complaintWithDetails.cause &&
+        complaintWithDetails.cause.service_id === parseInt(formData.service_id) &&
+        !filtered.some((c) => c.id === complaintWithDetails.cause.id)
       ) {
-        setFormData((prev) => ({ ...prev, cause_id: "" }));
+        filtered = [...filtered, complaintWithDetails.cause];
       }
-    } else {
-      setFilteredCauses([]);
+    }
+
+    setFilteredCauses(filtered);
+
+    if (
+      causes.length > 0 &&
+      formData.cause_id &&
+      !filtered.some((c) => c.id === parseInt(formData.cause_id))
+    ) {
       setFormData((prev) => ({ ...prev, cause_id: "" }));
     }
-  }, [formData.service_id, causes, isEditing]);
+  }, [formData.service_id, formData.cause_id, causes, isEditing, complaint]);
 
   const fetchServicesAndCauses = async () => {
     setIsLoadingServices(true);
@@ -305,7 +299,7 @@ export function ComplaintForm({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -352,7 +346,7 @@ export function ComplaintForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmitForm} className="space-y-6">
       <Card>
         <CardHeader className="pb-4">
           <CardTitle>Información Básica</CardTitle>

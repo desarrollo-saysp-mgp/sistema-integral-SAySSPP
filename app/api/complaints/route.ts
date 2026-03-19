@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintInsert, SearchFilters } from "@/types";
+import { obtenerLatLon } from "@/lib/geocoding";
 
 // Validation helper functions
 const validatePhone = (phone: string): boolean => {
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
     ];
 
     for (const field of requiredFields) {
-      if (!body[field]) {
+      if (!body[field] || !String(body[field]).trim()) {
         return NextResponse.json(
           { error: `El campo ${field} es requerido` },
           { status: 400 },
@@ -167,10 +168,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate since_when
+    if (!validSinceWhenValues.includes(body.since_when)) {
+      return NextResponse.json(
+        { error: "Valor de 'Desde cuándo' inválido" },
+        { status: 400 },
+      );
+    }
+
     // Validate phone_number if provided (optional field)
     if (body.phone_number && !validatePhone(body.phone_number)) {
       return NextResponse.json(
-        { error: "Formato de teléfono inválido. Solo números, máximo 50 caracteres" },
+        {
+          error:
+            "Formato de teléfono inválido. Solo números, máximo 50 caracteres",
+        },
         { status: 400 },
       );
     }
@@ -182,6 +194,10 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    // Obtener lat/lon automáticamente a partir de calle + número
+    // No se muestra al usuario; solo se guarda en BD
+    const latlon = await obtenerLatLon(body.address, body.street_number);
 
     // Prepare complaint data
     const complaintData: ComplaintInsert = {
@@ -200,7 +216,9 @@ export async function POST(request: NextRequest) {
       status: body.status || "En proceso",
       referred: body.referred || false,
       loaded_by: authUser.id,
-      complaint_date: body.complaint_date || new Date().toISOString().split("T")[0],
+      complaint_date:
+        body.complaint_date || new Date().toISOString().split("T")[0],
+      latlon, // <- se guarda automáticamente
     };
 
     // Insert complaint

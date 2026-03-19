@@ -27,10 +27,11 @@ export interface Database {
           updated_at?: string;
         };
       };
+
       complaints: {
         Row: {
           id: number;
-          complaint_number: string;
+          complaint_number: string | null;
           complaint_date: string;
           complainant_name: string;
           address: string;
@@ -47,6 +48,7 @@ export interface Database {
           status: "En proceso" | "Resuelto" | "No resuelto";
           referred: boolean;
           loaded_by: string;
+          latlon: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -69,6 +71,7 @@ export interface Database {
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
           loaded_by: string;
+          latlon?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -91,33 +94,12 @@ export interface Database {
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
           loaded_by?: string;
+          latlon?: string | null;
           created_at?: string;
           updated_at?: string;
         };
       };
-      services: {
-        Row: {
-          id: number;
-          name: string;
-          active: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: number;
-          name: string;
-          active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: number;
-          name?: string;
-          active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
+
       causes: {
         Row: {
           id: number;
@@ -144,16 +126,44 @@ export interface Database {
           updated_at?: string;
         };
       };
+
+      services: {
+        Row: {
+          id: number;
+          name: string;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
+
     Views: {
       [_ in never]: never;
     };
+
     Functions: {
       [_ in never]: never;
     };
+
     Enums: {
       [_ in never]: never;
     };
+
     CompositeTypes: {
       [_ in never]: never;
     };
