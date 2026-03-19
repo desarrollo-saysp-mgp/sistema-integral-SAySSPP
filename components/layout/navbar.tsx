@@ -58,7 +58,7 @@ export function Navbar() {
         >
           <div className="relative h-11 w-[110px] shrink-0 sm:w-[125px]">
             <Image
-              src="/logo-general-pico-horizontal.jpg"
+              src="/logo-general-pico-horizontal.png"
               alt="General Pico"
               fill
               priority
@@ -364,4 +364,4 @@ export function Navbar() {
       )}
     </nav>
   );
-}
+} 

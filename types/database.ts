@@ -6,7 +6,7 @@ export interface Database {
           id: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Administrative";
+          role: "Admin" | "Reclamos";
           created_at: string;
           updated_at: string;
         };
@@ -14,7 +14,7 @@ export interface Database {
           id?: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Administrative";
+          role: "Admin" | "Reclamos";
           created_at?: string;
           updated_at?: string;
         };
@@ -22,7 +22,7 @@ export interface Database {
           id?: string;
           full_name?: string;
           email?: string;
-          role?: "Admin" | "Administrative";
+          role?: "Admin" | "Reclamos";
           created_at?: string;
           updated_at?: string;
         };
@@ -188,4 +188,4 @@ export type ComplaintWithDetails = Complaint & {
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";
 export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp";
-export type UserRole = "Admin" | "Administrative";
+export type UserRole = "Admin" | "Reclamos";

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { UserProvider } from "@/hooks/useUser";
 import { Toaster } from "@/components/ui/sonner";
+import { Footer } from "@/components/layout/Footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Gestión de Reclamos",
+  title: "Sistema Integral SAySSPP",
   description:
-    "Portal interno para la gestión de reclamos ciudadanos - Secretaría Municipal",
+    "Portal Interno - Secretaría Municipal",
 };
 
 export default function RootLayout({
@@ -28,10 +29,16 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-screen flex-col`}
       >
         <UserProvider>
-          {children}
+          {/* CONTENIDO PRINCIPAL */}
+          <main className="flex-1">{children}</main>
+
+          {/* FOOTER */}
+          <Footer />
+
+          {/* TOAST */}
           <Toaster />
         </UserProvider>
       </body>

@@ -112,9 +112,9 @@ export async function PATCH(
     const { full_name, email, role, password } = body;
 
     // Validate role if provided
-    if (role && role !== "Admin" && role !== "Administrative") {
+    if (role && role !== "Admin" && role !== "Reclamos") {
       return NextResponse.json(
-        { error: 'Rol inválido. Debe ser "Admin" o "Administrative"' },
+        { error: 'Rol inválido. Debe ser "Admin" o "Reclamos"' },
         { status: 400 },
       );
     }

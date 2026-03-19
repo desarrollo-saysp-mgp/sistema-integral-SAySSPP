@@ -28,6 +28,7 @@ import {
   ChevronRight,
   FileSpreadsheet,
   FileText,
+  Loader2,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -95,12 +96,18 @@ export function ComplaintsTable({
     if (!onStatusChange) return;
 
     setUpdatingStatus(complaintId);
+    const toastId = toast.loading("Actualizando estado del reclamo...");
+
     try {
       await onStatusChange(complaintId, newStatus);
-      toast.success("Estado actualizado exitosamente");
+      toast.success("Estado actualizado correctamente", {
+        id: toastId,
+      });
     } catch (error) {
-      toast.error("Error al actualizar el estado");
       console.error("Error updating status:", error);
+      toast.error("No se pudo actualizar el estado", {
+        id: toastId,
+      });
     } finally {
       setUpdatingStatus(null);
     }
@@ -426,6 +433,7 @@ export function ComplaintsTable({
           <TableBody>
             {paginatedComplaints.map((complaint, index) => {
               const isEvenRow = index % 2 === 0;
+              const isUpdating = updatingStatus === complaint.id;
 
               return (
                 <TableRow
@@ -453,12 +461,21 @@ export function ComplaintsTable({
                           onValueChange={(value) =>
                             handleStatusChange(complaint.id, value)
                           }
-                          disabled={updatingStatus === complaint.id}
+                          disabled={isUpdating}
                         >
                           <SelectTrigger
-                            className={`w-[140px] ${getStatusColor(complaint.status)}`}
+                            className={`w-[150px] ${getStatusColor(
+                              complaint.status,
+                            )} ${isUpdating ? "opacity-80" : ""}`}
                           >
-                            <SelectValue />
+                            {isUpdating ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Guardando...</span>
+                              </div>
+                            ) : (
+                              <SelectValue />
+                            )}
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="En proceso">

@@ -224,7 +224,6 @@ export default function ComplaintViewPage() {
               </Badge>
             </div>
 
-            <InfoField label="Derivado" value={complaint.referred ? "Sí" : "No"} />
             <InfoField
               label="Responsable de Carga"
               value={complaint.loaded_by_user?.full_name || "-"}

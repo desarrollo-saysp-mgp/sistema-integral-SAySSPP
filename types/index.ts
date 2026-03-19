@@ -24,7 +24,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "Admin" | "Administrative";
+  role: "Admin" | "Reclamos";
 }
 
 export interface DashboardStats {
@@ -37,13 +37,14 @@ export interface DashboardStats {
 
 export interface UserFilters {
   search?: string;
-  role?: "Admin" | "Administrative";
+  role?: "Admin" | "Reclamos";
 }
 
 export interface UserFormData {
   full_name: string;
   email: string;
-  role: "Admin" | "Administrative";
+  role: "Admin" | "Reclamos";
+  password?: string;
 }
 
 // Dropdown values for "since_when" field (UI only - database stores calculated date)

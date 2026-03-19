@@ -1,17 +1,11 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import type { UserInsert, UserFilters } from "@/types";
+import type { UserInsert } from "@/types";
 
-/**
- * GET /api/users
- * List all users with optional filters
- * Requires: Admin role
- */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -21,7 +15,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
     const { data: currentUser } = await supabase
       .from("users")
       .select("role")
@@ -35,18 +28,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse filters from query params
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
-    const role = searchParams.get("role") as "Admin" | "Administrative" | null;
+    const role = searchParams.get("role") as "Admin" | "Reclamos" | null;
 
-    // Build query
     let query = supabase
       .from("users")
       .select("*")
       .order("created_at", { ascending: false });
 
-    // Apply filters
     if (search) {
       query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
     }
@@ -75,16 +65,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * POST /api/users
- * Create a new user
- * Requires: Admin role
- */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -94,7 +78,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
     const { data: currentUser } = await supabase
       .from("users")
       .select("role")
@@ -108,42 +91,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse request body
     const body = await request.json();
-    const { full_name, email, role } = body;
+    const { full_name, email, role, password } = body;
 
-    // Validate required fields
-    if (!full_name || !email || !role) {
+    if (!full_name || !email || !role || !password) {
       return NextResponse.json(
         {
-          error: "Todos los campos son requeridos: full_name, email, role",
+          error:
+            "Todos los campos son requeridos: full_name, email, role, password",
         },
         { status: 400 },
       );
     }
 
-    // Validate role
-    if (role !== "Admin" && role !== "Administrative") {
+    if (role !== "Admin" && role !== "Reclamos") {
       return NextResponse.json(
-        { error: 'Rol inválido. Debe ser "Admin" o "Administrative"' },
+        { error: 'Rol inválido. Debe ser "Admin" o "Reclamos"' },
         { status: 400 },
       );
     }
 
-    // Create admin client for auth operations
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "La contraseña debe tener al menos 6 caracteres" },
+        { status: 400 },
+      );
+    }
+
     const adminClient = await createAdminClient();
 
-    // Invite user via email - this sends an invitation email automatically
-    // Determine site URL:
-    // - On Vercel: use VERCEL_URL (automatically set for both production & preview)
-    // - Locally: use NEXT_PUBLIC_SITE_URL from .env.local
-    const siteUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_SITE_URL;
-
     const { data: newAuthUser, error: authCreateError } =
-      await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/set-password`,
+      await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
       });
 
     if (authCreateError || !newAuthUser.user) {
@@ -158,7 +139,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in users table
     const userInsert: UserInsert = {
       id: newAuthUser.user.id,
       full_name,
@@ -174,8 +154,8 @@ export async function POST(request: NextRequest) {
 
     if (dbError) {
       console.error("Error creating user in database:", dbError);
-      // Rollback: delete auth user if database insert fails
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
+
       return NextResponse.json(
         { error: "Error al crear usuario en la base de datos" },
         { status: 500 },

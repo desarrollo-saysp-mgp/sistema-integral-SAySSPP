@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { User, UserFormData } from "@/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,14 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 interface UserFormProps {
   user?: User | null;
@@ -30,6 +29,14 @@ interface UserFormProps {
   ) => Promise<{ success: boolean; error?: string }>;
 }
 
+type FormState = {
+  full_name: string;
+  email: string;
+  role: "Admin" | "Reclamos";
+  password: string;
+  confirmPassword: string;
+};
+
 export function UserForm({
   user,
   open,
@@ -38,51 +45,88 @@ export function UserForm({
 }: UserFormProps) {
   const isEditing = !!user;
 
-  const [formData, setFormData] = useState<UserFormData>({
+  const [formData, setFormData] = useState<FormState>({
     full_name: "",
     email: "",
-    role: "Administrative",
+    role: "Reclamos",
+    password: "",
+    confirmPassword: "",
   });
 
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof UserFormData, string>>
-  >({});
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
+    {},
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when dialog opens/closes or user changes
   useEffect(() => {
-    if (open && user) {
+    if (user) {
       setFormData({
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
+        full_name: user.full_name || "",
+        email: user.email || "",
+        role: user.role || "Reclamos",
+        password: "",
+        confirmPassword: "",
       });
-      setErrors({});
-    } else if (open && !user) {
+    } else {
       setFormData({
         full_name: "",
         email: "",
-        role: "Administrative",
+        role: "Reclamos",
+        password: "",
+        confirmPassword: "",
       });
-      setErrors({});
     }
-  }, [open, user]);
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof UserFormData, string>> = {};
+    setErrors({});
+  }, [user, open]);
+
+  const handleChange = (field: keyof FormState, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: Partial<Record<keyof FormState, string>> = {};
 
     if (!formData.full_name.trim()) {
-      newErrors.full_name = "El nombre completo es requerido";
+      newErrors.full_name = "El nombre es requerido";
     }
 
     if (!formData.email.trim()) {
       newErrors.email = "El email es requerido";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "El email no es válido";
     }
 
     if (!formData.role) {
       newErrors.role = "El rol es requerido";
+    }
+
+    if (!isEditing) {
+      if (!formData.password.trim()) {
+        newErrors.password = "La contraseña es requerida";
+      } else if (formData.password.length < 6) {
+        newErrors.password = "La contraseña debe tener al menos 6 caracteres";
+      }
+
+      if (!formData.confirmPassword.trim()) {
+        newErrors.confirmPassword = "Debe confirmar la contraseña";
+      } else if (formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = "Las contraseñas no coinciden";
+      }
+    } else {
+      if (formData.password && formData.password.length < 6) {
+        newErrors.password = "La contraseña debe tener al menos 6 caracteres";
+      }
+
+      if (formData.password && formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = "Las contraseñas no coinciden";
+      }
     }
 
     setErrors(newErrors);
@@ -92,116 +136,146 @@ export function UserForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
 
-    try {
-      const result = await onSubmit(formData);
+    const payload: UserFormData = {
+      full_name: formData.full_name.trim(),
+      email: formData.email.trim(),
+      role: formData.role,
+      ...(formData.password ? { password: formData.password } : {}),
+    };
 
-      if (result.success) {
-        onOpenChange(false);
-      } else {
-        setErrors({ email: result.error || "Error al guardar usuario" });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    const result = await onSubmit(payload);
 
-  const handleChange = (field: keyof UserFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setIsSubmitting(false);
+
+    if (result.success) {
+      onOpenChange(false);
+    } else if (result.error) {
+      setErrors((prev) => ({
+        ...prev,
+        email: result.error,
+      }));
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Editar usuario" : "Crear nuevo usuario"}
+            {isEditing ? "Editar usuario" : "Nuevo usuario"}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifica los datos del usuario."
-              : "Completa los datos para crear un nuevo usuario. Se enviará un email de invitación automáticamente para que el usuario configure su contraseña."}
+              ? "Actualiza los datos del usuario. La contraseña es opcional."
+              : "Completa los datos para crear un usuario con contraseña."}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            {/* Full Name */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="full_name">Nombre completo *</Label>
+            <Input
+              id="full_name"
+              value={formData.full_name}
+              onChange={(e) => handleChange("full_name", e.target.value)}
+              placeholder="Ingrese nombre completo"
+            />
+            {errors.full_name && (
+              <p className="text-sm text-red-500">{errors.full_name}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              placeholder="Ingrese email"
+            />
+            {errors.email && (
+              <p className="text-sm text-red-500">{errors.email}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">Rol *</Label>
+            <Select
+              value={formData.role}
+              onValueChange={(value) =>
+                handleChange("role", value as "Admin" | "Reclamos")
+              }
+            >
+              <SelectTrigger id="role">
+                <SelectValue placeholder="Seleccione un rol" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="Reclamos">Reclamos</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.role && (
+              <p className="text-sm text-red-500">{errors.role}</p>
+            )}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="full_name">
-                Nombre completo <span className="text-destructive">*</span>
+              <Label htmlFor="password">
+                {isEditing ? "Nueva contraseña" : "Contraseña *"}
               </Label>
               <Input
-                id="full_name"
-                placeholder="Ej: Juan Pérez"
-                value={formData.full_name}
-                onChange={(e) => handleChange("full_name", e.target.value)}
-                className={errors.full_name ? "border-destructive" : ""}
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => handleChange("password", e.target.value)}
+                placeholder={
+                  isEditing
+                    ? "Opcional para editar"
+                    : "Ingrese una contraseña"
+                }
               />
-              {errors.full_name && (
-                <p className="text-sm text-destructive">{errors.full_name}</p>
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password}</p>
               )}
             </div>
 
-            {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">
-                Email <span className="text-destructive">*</span>
+              <Label htmlFor="confirmPassword">
+                {isEditing
+                  ? "Confirmar nueva contraseña"
+                  : "Confirmar contraseña *"}
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="usuario@ejemplo.com"
-                value={formData.email}
-                onChange={(e) => handleChange("email", e.target.value)}
-                className={errors.email ? "border-destructive" : ""}
-                disabled={isEditing}
+                id="confirmPassword"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) =>
+                  handleChange("confirmPassword", e.target.value)
+                }
+                placeholder="Repita la contraseña"
               />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email}</p>
-              )}
-              {!isEditing && (
-                <p className="text-sm text-muted-foreground">
-                  Se enviará un email de invitación a esta dirección
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-500">
+                  {errors.confirmPassword}
                 </p>
-              )}
-            </div>
-
-            {/* Role */}
-            <div className="space-y-2">
-              <Label htmlFor="role">
-                Rol <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => handleChange("role", value)}
-              >
-                <SelectTrigger
-                  className={errors.role ? "border-destructive" : ""}
-                >
-                  <SelectValue placeholder="Selecciona un rol" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Administrative">Administrative</SelectItem>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.role && (
-                <p className="text-sm text-destructive">{errors.role}</p>
               )}
             </div>
           </div>
 
-          <DialogFooter>
+          {!isEditing && (
+            <p className="text-sm text-muted-foreground">
+              El usuario será creado con la contraseña definida por el
+              administrador.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
@@ -212,12 +286,14 @@ export function UserForm({
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
-                ? "Guardando..."
+                ? isEditing
+                  ? "Guardando..."
+                  : "Creando..."
                 : isEditing
-                  ? "Actualizar"
-                  : "Crear"}
+                  ? "Guardar cambios"
+                  : "Crear usuario"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

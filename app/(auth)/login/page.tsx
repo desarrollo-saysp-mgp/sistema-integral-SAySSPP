@@ -74,7 +74,7 @@ export default function LoginPage() {
             <Card className="rounded-3xl border border-white/60 bg-white shadow-[0_40px_120px_rgba(0,0,0,0.25)] backdrop-blur-sm">
               <CardHeader className="space-y-3 px-8 pt-10 text-center sm:px-10">
                 <CardTitle className="text-4xl font-bold text-[#373737]">
-                  Sistema de Gestión de Reclamos
+                  Sistema Integral SAySSPP
                 </CardTitle>
 
                 <CardDescription className="text-base text-slate-500">
@@ -116,15 +116,6 @@ export default function LoginPage() {
                       disabled={isLoading}
                       className="h-14 rounded-xl border-slate-200 px-4 text-base focus-visible:ring-2 focus-visible:ring-[#00A27F] focus-visible:ring-offset-0"
                     />
-                  </div>
-
-                  <div className="flex justify-center pt-1">
-                    <Link
-                      href="/reset-password"
-                      className="text-sm font-medium text-[#00A27F] transition hover:text-[#008568] hover:underline"
-                    >
-                      ¿Olvidaste tu contraseña?
-                    </Link>
                   </div>
 
                   <Button
