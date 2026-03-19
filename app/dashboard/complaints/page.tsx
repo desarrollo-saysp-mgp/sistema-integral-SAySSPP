@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ComplaintsTable } from "@/components/tables/ComplaintsTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,16 +18,25 @@ import { Search, Plus, Filter } from "lucide-react";
 import type { Service } from "@/types";
 import { toast } from "sonner";
 
+const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
+
 export default function ComplaintsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const latestRequestRef = useRef(0);
+
+  const statusFromUrl = searchParams.get("status");
+  const initialStatus =
+    statusFromUrl && VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+      ? statusFromUrl
+      : "all";
 
   const [complaints, setComplaints] = useState([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [serviceFilter, setServiceFilter] = useState("all");
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
@@ -37,16 +46,13 @@ export default function ComplaintsPage() {
   }, []);
 
   useEffect(() => {
-    const statusFromUrl = searchParams.get("status");
-    if (
-      statusFromUrl &&
-      ["En proceso", "Resuelto", "No resuelto"].includes(statusFromUrl)
-    ) {
-      setStatusFilter(statusFromUrl);
-    } else {
-      setStatusFilter("all");
-    }
-  }, [searchParams]);
+    const nextStatus =
+      statusFromUrl && VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+        ? statusFromUrl
+        : "all";
+
+    setStatusFilter((prev) => (prev !== nextStatus ? nextStatus : prev));
+  }, [statusFromUrl]);
 
   useEffect(() => {
     fetchComplaints();
@@ -65,7 +71,9 @@ export default function ComplaintsPage() {
   };
 
   const fetchComplaints = async () => {
+    const requestId = ++latestRequestRef.current;
     setLoading(true);
+
     try {
       const params = new URLSearchParams();
 
@@ -82,7 +90,12 @@ export default function ComplaintsPage() {
       const response = await fetch(`/api/complaints?${params.toString()}`, {
         cache: "no-store",
       });
+
       const data = await response.json();
+
+      if (requestId !== latestRequestRef.current) {
+        return;
+      }
 
       if (response.ok && data.data) {
         setComplaints(data.data);
@@ -90,10 +103,16 @@ export default function ComplaintsPage() {
         toast.error(data.error || "Error al cargar reclamos");
       }
     } catch (error) {
+      if (requestId !== latestRequestRef.current) {
+        return;
+      }
+
       console.error("Error fetching complaints:", error);
       toast.error("Error al cargar reclamos");
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -138,17 +157,17 @@ export default function ComplaintsPage() {
     dateToFilter;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto space-y-6 p-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Reclamos</h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="mt-2 text-muted-foreground">
             Gestión y seguimiento de reclamos ciudadanos
           </p>
         </div>
         <Button
           onClick={() => router.push("/dashboard/complaints/new")}
-          className="h-12 rounded-xl bg-[#00A27F] px-6 text-white font-semibold shadow-md transition-all hover:bg-[#008568] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+          className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
         >
           <Plus className="mr-2 h-5 w-5" />
           Nuevo Reclamo
@@ -156,30 +175,30 @@ export default function ComplaintsPage() {
       </div>
 
       <Card>
-        <CardContent className="pt-5 pb-5 space-y-4">
+        <CardContent className="space-y-4 pb-5 pt-5">
           <div className="flex items-center gap-2 border-b pb-3">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Filtros
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
-            <div className="xl:col-span-4 flex flex-col gap-1.5">
+          <div className="grid grid-cols-1 items-end gap-4 xl:grid-cols-12">
+            <div className="flex flex-col gap-1.5 xl:col-span-4">
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="search"
                   placeholder="Buscar por nombre..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-11"
+                  className="h-11 pl-10"
                 />
               </div>
             </div>
 
-            <div className="xl:col-span-2 flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 xl:col-span-2">
               <Label htmlFor="status-filter">Estado</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger id="status-filter" className="h-11 w-full">
@@ -194,7 +213,7 @@ export default function ComplaintsPage() {
               </Select>
             </div>
 
-            <div className="xl:col-span-2 flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 xl:col-span-2">
               <Label htmlFor="service-filter">Servicio</Label>
               <Select value={serviceFilter} onValueChange={setServiceFilter}>
                 <SelectTrigger id="service-filter" className="h-11 w-full">
@@ -211,7 +230,7 @@ export default function ComplaintsPage() {
               </Select>
             </div>
 
-            <div className="xl:col-span-2 flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 xl:col-span-2">
               <Label htmlFor="date-from">Desde</Label>
               <Input
                 id="date-from"
@@ -222,7 +241,7 @@ export default function ComplaintsPage() {
               />
             </div>
 
-            <div className="xl:col-span-2 flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 xl:col-span-2">
               <Label htmlFor="date-to">Hasta</Label>
               <Input
                 id="date-to"

@@ -22,7 +22,7 @@ import { useUser } from "@/hooks/useUser";
 export default function ComplaintDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { isAdmin } = useUser();
+  const { profile } = useUser();
   const id = params.id as string;
 
   const [complaint, setComplaint] = useState<Complaint | null>(null);
@@ -158,8 +158,8 @@ export default function ComplaintDetailPage() {
           </p>
         </div>
 
-        {/* Delete button - Admin only */}
-        {isAdmin && (
+        {/* Delete button */}
+        {(profile?.role === "Admin" || profile?.role === "Reclamos") && (
           <Button
             variant="destructive"
             onClick={() => setShowDeleteDialog(true)}

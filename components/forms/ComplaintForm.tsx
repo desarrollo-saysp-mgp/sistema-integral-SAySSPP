@@ -621,6 +621,8 @@ export function ComplaintForm({
                   <SelectValue placeholder="Seleccione una zona" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="Sin zona">Sin zona</SelectItem>
+
                   {Array.from({ length: 16 }, (_, i) => {
                     const zone = String(i + 1);
                     return (

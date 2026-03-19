@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintUpdate } from "@/types";
 
@@ -244,7 +244,6 @@ export async function PATCH(
 /**
  * DELETE /api/complaints/[id]
  * Delete a complaint
- * Requires: Admin role
  */
 export async function DELETE(
   request: NextRequest,
@@ -252,6 +251,7 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
+    const adminClient = await createAdminClient();
     const { id } = await context.params;
     const complaintId = parseInt(id);
 
@@ -284,15 +284,20 @@ export async function DELETE(
       );
     }
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (
+      !currentUser ||
+      (currentUser.role !== "Admin" && currentUser.role !== "Reclamos")
+    ) {
       return NextResponse.json(
-        { error: "No autorizado. Solo administradores pueden eliminar reclamos" },
+        {
+          error:
+            "No autorizado. Solo usuarios Admin o Reclamos pueden eliminar reclamos",
+        },
         { status: 403 },
       );
     }
 
-    // Intentar borrar y verificar que realmente se haya borrado una fila
-    const { data: deletedRows, error: deleteError } = await supabase
+    const { data: deletedRows, error: deleteError } = await adminClient
       .from("complaints")
       .delete()
       .eq("id", complaintId)
@@ -308,11 +313,8 @@ export async function DELETE(
 
     if (!deletedRows || deletedRows.length === 0) {
       return NextResponse.json(
-        {
-          error:
-            "No se pudo eliminar el reclamo. Verificá permisos o políticas de la base de datos.",
-        },
-        { status: 403 },
+        { error: "No se encontró el reclamo a eliminar" },
+        { status: 404 },
       );
     }
 

@@ -494,7 +494,7 @@ export function ComplaintsTable({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{complaint.loaded_by_user.full_name}</TableCell>
+                  <TableCell>{complaint.loaded_by_user?.full_name ?? "Usuario no disponible"}</TableCell>
                   <TableCell>
                     <div className="flex justify-center gap-2">
                       <Button

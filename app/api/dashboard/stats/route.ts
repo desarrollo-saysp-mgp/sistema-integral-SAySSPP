@@ -10,7 +10,6 @@ export async function GET() {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user },
       error: authError,
@@ -20,62 +19,84 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Get total complaints count
-    const { count: totalCount, error: totalError } = await supabase
-      .from("complaints")
-      .select("*", { count: "exact", head: true });
+    const [
+      totalResult,
+      inProgressResult,
+      resolvedResult,
+      unresolvedResult,
+      recentResult,
+    ] = await Promise.all([
+      supabase.from("complaints").select("*", { count: "exact", head: true }),
 
-    if (totalError) {
-      console.error("Error fetching total count:", totalError);
+      supabase
+        .from("complaints")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "En proceso"),
+
+      supabase
+        .from("complaints")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "Resuelto"),
+
+      supabase
+        .from("complaints")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "No resuelto"),
+
+      supabase
+        .from("complaints")
+        .select(
+          `
+          id,
+          complaint_number,
+          complaint_date,
+          complainant_name,
+          status,
+          service:services(id, name),
+          cause:causes(id, name)
+        `,
+        )
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
+    if (totalResult.error) {
+      console.error("Error fetching total count:", totalResult.error);
       return NextResponse.json(
         { error: "Error al cargar estadísticas" },
         { status: 500 },
       );
     }
 
-    // Get counts by status
-    const { data: statusCounts, error: statusError } = await supabase
-      .from("complaints")
-      .select("status");
-
-    if (statusError) {
-      console.error("Error fetching status counts:", statusError);
+    if (inProgressResult.error) {
+      console.error(
+        "Error fetching in progress count:",
+        inProgressResult.error,
+      );
       return NextResponse.json(
         { error: "Error al cargar estadísticas" },
         { status: 500 },
       );
     }
 
-    // Calculate status counts
-    const inProgressCount = statusCounts.filter(
-      (c) => c.status === "En proceso",
-    ).length;
-    const resolvedCount = statusCounts.filter(
-      (c) => c.status === "Resuelto",
-    ).length;
-    const unresolvedCount = statusCounts.filter(
-      (c) => c.status === "No resuelto",
-    ).length;
+    if (resolvedResult.error) {
+      console.error("Error fetching resolved count:", resolvedResult.error);
+      return NextResponse.json(
+        { error: "Error al cargar estadísticas" },
+        { status: 500 },
+      );
+    }
 
-    // Get recent complaints (last 5)
-    const { data: recentComplaints, error: recentError } = await supabase
-      .from("complaints")
-      .select(
-        `
-        id,
-        complaint_number,
-        complaint_date,
-        complainant_name,
-        status,
-        service:services(id, name),
-        cause:causes(id, name)
-      `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(5);
+    if (unresolvedResult.error) {
+      console.error("Error fetching unresolved count:", unresolvedResult.error);
+      return NextResponse.json(
+        { error: "Error al cargar estadísticas" },
+        { status: 500 },
+      );
+    }
 
-    if (recentError) {
-      console.error("Error fetching recent complaints:", recentError);
+    if (recentResult.error) {
+      console.error("Error fetching recent complaints:", recentResult.error);
       return NextResponse.json(
         { error: "Error al cargar reclamos recientes" },
         { status: 500 },
@@ -84,11 +105,11 @@ export async function GET() {
 
     return NextResponse.json({
       data: {
-        total: totalCount || 0,
-        inProgress: inProgressCount,
-        resolved: resolvedCount,
-        unresolved: unresolvedCount,
-        recentComplaints: recentComplaints || [],
+        total: totalResult.count || 0,
+        inProgress: inProgressResult.count || 0,
+        resolved: resolvedResult.count || 0,
+        unresolved: unresolvedResult.count || 0,
+        recentComplaints: recentResult.data || [],
       },
     });
   } catch (error) {
