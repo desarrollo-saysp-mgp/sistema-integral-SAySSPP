@@ -203,8 +203,8 @@ export function ComplaintsTable({
       image.crossOrigin = "anonymous";
       image.onload = () => {
         const canvas = document.createElement("canvas");
-        canvas.width = image.width;
-        canvas.height = image.height;
+        canvas.width = image.width * 2;
+        canvas.height = image.height * 2;
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -212,8 +212,8 @@ export function ComplaintsTable({
           return;
         }
 
-        ctx.drawImage(image, 0, 0);
-        resolve(canvas.toDataURL("image/jpeg"));
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/png"));
       };
       image.onerror = () => reject(new Error("No se pudo cargar el logo"));
       image.src = src;
@@ -267,13 +267,13 @@ export function ComplaintsTable({
       let logoDataUrl: string | null = null;
 
       try {
-        logoDataUrl = await loadImageAsDataUrl("/logo-general-pico-horizontal.jpg");
+        logoDataUrl = await loadImageAsDataUrl("/logo-general-pico-horizontal.png");
       } catch (error) {
         console.warn("No se pudo cargar el logo para el PDF:", error);
       }
 
       if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "JPEG", 14, 10, 34, 12);
+        doc.addImage(logoDataUrl, "PNG", 14, 10, 34, 12);
       }
 
       doc.setFontSize(18);

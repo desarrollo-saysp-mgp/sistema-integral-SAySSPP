@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     fetchStats();
@@ -56,6 +57,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const navigateWithLoading = (url: string) => {
+    startTransition(() => {
+      router.push(url);
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -82,11 +89,13 @@ export default function DashboardPage() {
 
   const goToFilteredComplaints = (status?: string) => {
     if (!status) {
-      router.push("/dashboard/complaints");
+      navigateWithLoading("/dashboard/complaints");
       return;
     }
 
-    router.push(`/dashboard/complaints?status=${encodeURIComponent(status)}`);
+    navigateWithLoading(
+      `/dashboard/complaints?status=${encodeURIComponent(status)}`,
+    );
   };
 
   if (loading) {
@@ -100,7 +109,19 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="relative space-y-8">
+      {isPending && (
+        <>
+          <div className="fixed inset-0 z-40 bg-white/35 backdrop-blur-[1px]" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-[#D8E3DE] bg-white px-6 py-5 shadow-lg">
+              <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#D8E3DE] border-t-[#00A27F]" />
+              <p className="text-sm font-medium text-[#6B7280]">Cargando...</p>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-[#373737]">
@@ -113,8 +134,9 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap gap-3">
           <Button
-            onClick={() => router.push("/dashboard/complaints/new")}
+            onClick={() => navigateWithLoading("/dashboard/complaints/new")}
             className="h-12 rounded-xl bg-[#00A27F] px-6 text-white font-semibold shadow-md transition-all hover:bg-[#008568] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+            disabled={isPending}
           >
             <Plus className="mr-2 h-5 w-5" />
             Nuevo Reclamo
@@ -122,8 +144,9 @@ export default function DashboardPage() {
 
           <Button
             variant="outline"
-            onClick={() => router.push("/dashboard/complaints")}
+            onClick={() => navigateWithLoading("/dashboard/complaints")}
             className="h-11 rounded-xl border-[#D8E3DE] bg-white px-5 text-[#373737] hover:bg-[#F8FAF9]"
+            disabled={isPending}
           >
             <List className="mr-2 h-4 w-4" />
             Ver Todos
@@ -236,7 +259,9 @@ export default function DashboardPage() {
                   key={complaint.id}
                   className="flex cursor-pointer flex-col gap-4 rounded-2xl border border-[#E3E8E5] bg-[#FCFCFC] p-5 transition-colors hover:bg-[#F8FAF9] md:flex-row md:items-center md:justify-between"
                   onClick={() =>
-                    router.push(`/dashboard/complaints/${complaint.id}/view`)
+                    navigateWithLoading(
+                      `/dashboard/complaints/${complaint.id}/view`,
+                    )
                   }
                 >
                   <div className="flex-1">
@@ -259,7 +284,7 @@ export default function DashboardPage() {
 
                   <div
                     className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getStatusBadge(
-                      complaint.status
+                      complaint.status,
                     )}`}
                   >
                     {complaint.status}
