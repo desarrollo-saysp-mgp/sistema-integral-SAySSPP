@@ -100,6 +100,36 @@ export interface Database {
         };
       };
 
+      complaint_history: {
+        Row: {
+          id: number;
+          complaint_id: number;
+          field_name: string;
+          old_value: string | null;
+          new_value: string | null;
+          changed_by: string | null;
+          changed_at: string;
+        };
+        Insert: {
+          id?: number;
+          complaint_id: number;
+          field_name: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          changed_by?: string | null;
+          changed_at?: string;
+        };
+        Update: {
+          id?: number;
+          complaint_id?: number;
+          field_name?: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          changed_by?: string | null;
+          changed_at?: string;
+        };
+      };
+
       causes: {
         Row: {
           id: number;
@@ -181,6 +211,13 @@ export type ComplaintInsert =
 export type ComplaintUpdate =
   Database["public"]["Tables"]["complaints"]["Update"];
 
+export type ComplaintHistory =
+  Database["public"]["Tables"]["complaint_history"]["Row"];
+export type ComplaintHistoryInsert =
+  Database["public"]["Tables"]["complaint_history"]["Insert"];
+export type ComplaintHistoryUpdate =
+  Database["public"]["Tables"]["complaint_history"]["Update"];
+
 export type Service = Database["public"]["Tables"]["services"]["Row"];
 export type ServiceInsert = Database["public"]["Tables"]["services"]["Insert"];
 export type ServiceUpdate = Database["public"]["Tables"]["services"]["Update"];
@@ -194,6 +231,10 @@ export type ComplaintWithDetails = Complaint & {
   service: Service;
   cause: Cause;
   loaded_by_user: User;
+};
+
+export type ComplaintHistoryWithUser = ComplaintHistory & {
+  user: Pick<User, "full_name"> | null;
 };
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";

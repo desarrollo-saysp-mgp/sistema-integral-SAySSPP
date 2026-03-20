@@ -12,12 +12,19 @@ import {
   User,
   MapPin,
   Phone,
-  Mail,
   FileText,
   Clock,
   CalendarDays,
+  History,
 } from "lucide-react";
-import type { Complaint, Service, Cause, User as UserType } from "@/types";
+import type {
+  Complaint,
+  Service,
+  Cause,
+  User as UserType,
+  ComplaintHistoryWithUser,
+} from "@/types";
+import { useUser } from "@/hooks/useUser";
 
 type ComplaintWithDetails = Complaint & {
   service: Service;
@@ -30,19 +37,47 @@ const parseLocalDate = (dateStr: string): Date => {
   return new Date(year, month - 1, day);
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  complaint_date: "Fecha de reclamo",
+  complainant_name: "Nombre y apellido",
+  address: "Calle",
+  street_number: "Número",
+  dni: "DNI",
+  phone_number: "Teléfono",
+  email: "Email",
+  service_id: "Servicio",
+  cause_id: "Causa",
+  zone: "Zona",
+  since_when: "Desde cuándo",
+  contact_method: "Medio de contacto",
+  details: "Detalle",
+  status: "Estado",
+  referred: "Derivado",
+  latlon: "Lat/Lon",
+};
+
 export default function ComplaintViewPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { profile } = useUser();
 
   const [complaint, setComplaint] = useState<ComplaintWithDetails | null>(null);
+  const [history, setHistory] = useState<ComplaintHistoryWithUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchComplaint();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id && profile?.role === "Admin") {
+      fetchHistory();
+    }
+  }, [id, profile?.role]);
 
   const fetchComplaint = async () => {
     setLoading(true);
@@ -65,6 +100,25 @@ export default function ComplaintViewPage() {
     }
   };
 
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/complaints/${id}/history`);
+      const data = await response.json();
+
+      if (response.ok && data.data) {
+        setHistory(data.data);
+      } else if (response.status !== 403) {
+        toast.error(data.error || "Error al cargar historial");
+      }
+    } catch (error) {
+      console.error("Error fetching history:", error);
+      toast.error("Error al cargar historial");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "En proceso":
@@ -78,7 +132,6 @@ export default function ComplaintViewPage() {
     }
   };
 
-  // Para columnas tipo DATE (sin hora)
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString);
     return date.toLocaleDateString("es-AR", {
@@ -88,7 +141,6 @@ export default function ComplaintViewPage() {
     });
   };
 
-  // Para columnas tipo TIMESTAMP / TIMESTAMPTZ
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString("es-AR", {
@@ -98,6 +150,13 @@ export default function ComplaintViewPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const formatHistoryValue = (value: string | null) => {
+    if (value === null || value === "") return "-";
+    if (value === "true") return "Sí";
+    if (value === "false") return "No";
+    return value;
   };
 
   if (loading) {
@@ -138,7 +197,9 @@ export default function ComplaintViewPage() {
             <h1 className="text-2xl font-bold">
               {complaint.complaint_number}
             </h1>
-            <Badge className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}>
+            <Badge
+              className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}
+            >
               {complaint.status}
             </Badge>
           </div>
@@ -163,14 +224,20 @@ export default function ComplaintViewPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <InfoField label="Nombre y Apellido" value={complaint.complainant_name} />
-            
+            <InfoField
+              label="Nombre y Apellido"
+              value={complaint.complainant_name}
+            />
+
             <InfoField
               label="Dirección"
               value={`${complaint.address} ${complaint.street_number}`}
               icon={<MapPin className="w-4 h-4 text-muted-foreground" />}
             />
-            <InfoField label="Medio de Contacto" value={complaint.contact_method} />
+            <InfoField
+              label="Medio de Contacto"
+              value={complaint.contact_method}
+            />
             <InfoField
               label="Teléfono"
               value={complaint.phone_number || "-"}
@@ -200,7 +267,9 @@ export default function ComplaintViewPage() {
           </div>
 
           <div className="mt-4">
-            <p className="text-sm font-medium text-muted-foreground mb-2">Detalle</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">
+              Detalle
+            </p>
             <p className="text-sm whitespace-pre-wrap bg-muted/50 p-4 rounded-md leading-relaxed">
               {complaint.details}
             </p>
@@ -218,8 +287,12 @@ export default function ComplaintViewPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Estado</p>
-              <Badge className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}>
+              <p className="text-sm font-medium text-muted-foreground mb-1">
+                Estado
+              </p>
+              <Badge
+                className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}
+              >
                 {complaint.status}
               </Badge>
             </div>
@@ -242,6 +315,60 @@ export default function ComplaintViewPage() {
           </div>
         </CardContent>
       </Card>
+
+      {profile?.role === "Admin" && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="w-5 h-5 text-[#5CADEB]" />
+              Historial de Cambios
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {historyLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Cargando historial...
+              </p>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay cambios registrados.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {history.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-md border p-4 bg-muted/20"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm">
+                        <span className="font-semibold">
+                          {item.user?.full_name || "Usuario desconocido"}
+                        </span>{" "}
+                        modificó{" "}
+                        <span className="font-semibold">
+                          {FIELD_LABELS[item.field_name] || item.field_name}
+                        </span>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium">Antes:</span>{" "}
+                        {formatHistoryValue(item.old_value)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium">Después:</span>{" "}
+                        {formatHistoryValue(item.new_value)}
+                      </p>
+                      <p className="text-xs text-muted-foreground pt-1">
+                        {formatDateTime(item.changed_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -257,7 +384,9 @@ function InfoField({
 }) {
   return (
     <div>
-      <p className="text-sm font-medium text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-sm font-medium text-muted-foreground mb-0.5">
+        {label}
+      </p>
       <div className="flex items-center gap-1.5">
         {icon}
         <p className="text-sm">{value}</p>
