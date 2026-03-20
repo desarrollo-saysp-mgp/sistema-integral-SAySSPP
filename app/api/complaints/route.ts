@@ -1,17 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import type { ComplaintInsert, SearchFilters } from "@/types";
+import type { ComplaintInsert } from "@/types";
 import { obtenerLatLon } from "@/lib/geocoding";
 
 // Validation helper functions
 const validatePhone = (phone: string): boolean => {
-  if (!phone || !phone.trim()) return true; // Optional field
+  if (!phone || !phone.trim()) return true;
   const digitsOnly = /^\d+$/;
   return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
 };
 
 const validateEmail = (email: string): boolean => {
-  if (!email || !email.trim()) return true; // Optional field
+  if (!email || !email.trim()) return true;
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailPattern.test(email.trim()) && email.trim().length <= 100;
 };
@@ -25,16 +25,10 @@ const validSinceWhenValues = [
   "1 año",
 ];
 
-/**
- * GET /api/complaints
- * List all complaints with optional filters
- * Requires: Authenticated user
- */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -44,7 +38,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Parse filters from query params
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
     const status = searchParams.get("status");
@@ -52,51 +45,67 @@ export async function GET(request: NextRequest) {
     const date_from = searchParams.get("date_from");
     const date_to = searchParams.get("date_to");
 
-    // Build query with related data
-    let query = supabase
-      .from("complaints")
-      .select(
-        `
-        *,
-        service:services(id, name),
-        cause:causes(id, name),
-        loaded_by_user:users!loaded_by(id, full_name)
-      `,
-      )
-      .order("created_at", { ascending: false });
+    const pageSize = 1000;
+    let from = 0;
+    let allComplaints: any[] = [];
 
-    // Apply filters - search only by complainant name
-    if (search) {
-      query = query.ilike("complainant_name", `%${search}%`);
+    while (true) {
+      let query = supabase
+        .from("complaints")
+        .select(
+          `
+          *,
+          service:services(id, name),
+          cause:causes(id, name),
+          loaded_by_user:users!loaded_by(id, full_name)
+        `,
+        )
+        .order("created_at", { ascending: false });
+
+      if (search) {
+        query = query.ilike("complainant_name", `%${search}%`);
+      }
+
+      if (status && status !== "all") {
+        query = query.eq("status", status);
+      }
+
+      if (service_id && service_id !== "all") {
+        query = query.eq("service_id", parseInt(service_id));
+      }
+
+      if (date_from) {
+        query = query.gte("complaint_date", date_from);
+      }
+
+      if (date_to) {
+        query = query.lte("complaint_date", date_to);
+      }
+
+      const { data, error } = await query.range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error("Error fetching complaints:", error);
+        return NextResponse.json(
+          { error: "Error al cargar reclamos" },
+          { status: 500 },
+        );
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allComplaints = [...allComplaints, ...data];
+
+      if (data.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
     }
 
-    if (status && status !== "all") {
-      query = query.eq("status", status);
-    }
-
-    if (service_id && service_id !== "all") {
-      query = query.eq("service_id", parseInt(service_id));
-    }
-
-    if (date_from) {
-      query = query.gte("complaint_date", date_from);
-    }
-
-    if (date_to) {
-      query = query.lte("complaint_date", date_to);
-    }
-
-    const { data: complaints, error } = await query;
-
-    if (error) {
-      console.error("Error fetching complaints:", error);
-      return NextResponse.json(
-        { error: "Error al cargar reclamos" },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({ data: complaints });
+    return NextResponse.json({ data: allComplaints });
   } catch (error) {
     console.error("Unexpected error in GET /api/complaints:", error);
     return NextResponse.json(
@@ -106,16 +115,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * POST /api/complaints
- * Create a new complaint
- * Requires: Authenticated user
- */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -125,10 +128,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Parse request body
+    const { data: currentUser, error: userError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", authUser.id)
+      .single();
+
+    if (userError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo validar el usuario" },
+        { status: 500 },
+      );
+    }
+
+    if (currentUser.role === "AdminLectura") {
+      return NextResponse.json(
+        { error: "No autorizado. Usuario en modo solo lectura" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
 
-    // Validate required fields
     const requiredFields = [
       "complainant_name",
       "address",
@@ -150,7 +171,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate contact method
     const validContactMethods = ["Presencial", "Telefono", "Email", "WhatsApp"];
     if (!validContactMethods.includes(body.contact_method)) {
       return NextResponse.json(
@@ -159,7 +179,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate status if provided
     const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
     if (body.status && !validStatuses.includes(body.status)) {
       return NextResponse.json(
@@ -168,7 +187,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate since_when
     if (!validSinceWhenValues.includes(body.since_when)) {
       return NextResponse.json(
         { error: "Valor de 'Desde cuándo' inválido" },
@@ -176,7 +194,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate phone_number if provided (optional field)
     if (body.phone_number && !validatePhone(body.phone_number)) {
       return NextResponse.json(
         {
@@ -187,7 +204,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate email if provided (optional field)
     if (body.email && !validateEmail(body.email)) {
       return NextResponse.json(
         { error: "Formato de email inválido" },
@@ -195,11 +211,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Obtener lat/lon automáticamente a partir de calle + número
-    // No se muestra al usuario; solo se guarda en BD
     const latlon = await obtenerLatLon(body.address, body.street_number);
 
-    // Prepare complaint data
     const complaintData: ComplaintInsert = {
       complainant_name: body.complainant_name.trim(),
       address: body.address.trim(),
@@ -218,10 +231,9 @@ export async function POST(request: NextRequest) {
       loaded_by: authUser.id,
       complaint_date:
         body.complaint_date || new Date().toISOString().split("T")[0],
-      latlon, // <- se guarda automáticamente
+      latlon,
     };
 
-    // Insert complaint
     const { data: complaint, error } = await supabase
       .from("complaints")
       .insert(complaintData)

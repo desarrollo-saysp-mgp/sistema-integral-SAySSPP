@@ -2,11 +2,6 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { UserUpdate } from "@/types";
 
-/**
- * GET /api/users/[id]
- * Get a single user by ID
- * Requires: Admin role
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -15,7 +10,6 @@ export async function GET(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -25,7 +19,6 @@ export async function GET(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
     const { data: currentUser } = await supabase
       .from("users")
       .select("role")
@@ -39,7 +32,6 @@ export async function GET(
       );
     }
 
-    // Fetch user
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -70,11 +62,6 @@ export async function GET(
   }
 }
 
-/**
- * PATCH /api/users/[id]
- * Update a user
- * Requires: Admin role
- */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -83,7 +70,6 @@ export async function PATCH(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -93,7 +79,6 @@ export async function PATCH(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
     const { data: currentUser } = await supabase
       .from("users")
       .select("role")
@@ -107,22 +92,26 @@ export async function PATCH(
       );
     }
 
-    // Parse request body
     const body = await request.json();
     const { full_name, email, role, password } = body;
 
-    // Validate role if provided
-    if (role && role !== "Admin" && role !== "Reclamos") {
+    if (
+      role &&
+      role !== "Admin" &&
+      role !== "Reclamos" &&
+      role !== "AdminLectura"
+    ) {
       return NextResponse.json(
-        { error: 'Rol inválido. Debe ser "Admin" o "Reclamos"' },
+        {
+          error:
+            'Rol inválido. Debe ser "Admin", "Reclamos" o "AdminLectura"',
+        },
         { status: 400 },
       );
     }
 
-    // Create admin client for auth operations
     const adminClient = await createAdminClient();
 
-    // Update email in Auth if email changed
     if (email) {
       const { error: authUpdateError } =
         await adminClient.auth.admin.updateUserById(id, { email });
@@ -136,12 +125,9 @@ export async function PATCH(
       }
     }
 
-    // Update password if provided
     if (password) {
-      const { error: passwordError } = await adminClient.auth.admin.updateUserById(
-        id,
-        { password },
-      );
+      const { error: passwordError } =
+        await adminClient.auth.admin.updateUserById(id, { password });
 
       if (passwordError) {
         console.error("Error updating user password:", passwordError);
@@ -152,13 +138,11 @@ export async function PATCH(
       }
     }
 
-    // Build update object for database
     const userUpdate: UserUpdate = {};
     if (full_name) userUpdate.full_name = full_name;
     if (email) userUpdate.email = email;
     if (role) userUpdate.role = role;
 
-    // Update user in database
     const { data: updatedUser, error: dbError } = await supabase
       .from("users")
       .update(userUpdate)
@@ -187,11 +171,6 @@ export async function PATCH(
   }
 }
 
-/**
- * DELETE /api/users/[id]
- * Delete a user
- * Requires: Admin role
- */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -200,7 +179,6 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user: authUser },
       error: authError,
@@ -210,7 +188,6 @@ export async function DELETE(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Check if user is Admin
     const { data: currentUser } = await supabase
       .from("users")
       .select("role")
@@ -226,7 +203,6 @@ export async function DELETE(
       );
     }
 
-    // Prevent self-deletion
     if (authUser.id === id) {
       return NextResponse.json(
         { error: "No puedes eliminar tu propio usuario" },
@@ -234,11 +210,7 @@ export async function DELETE(
       );
     }
 
-    // Delete from database first (will cascade due to foreign keys)
-    const { error: dbError } = await supabase
-      .from("users")
-      .delete()
-      .eq("id", id);
+    const { error: dbError } = await supabase.from("users").delete().eq("id", id);
 
     if (dbError) {
       console.error("Error deleting user from database:", dbError);
@@ -248,16 +220,13 @@ export async function DELETE(
       );
     }
 
-    // Create admin client for auth operations
     const adminClient = await createAdminClient();
 
-    // Delete from Auth
-    const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(id);
+    const { error: authDeleteError } =
+      await adminClient.auth.admin.deleteUser(id);
 
     if (authDeleteError) {
       console.error("Error deleting auth user:", authDeleteError);
-      // User was deleted from DB but not from Auth - this is acceptable
-      // The Auth user will be orphaned but can't log in without a DB record
     }
 
     return NextResponse.json({ message: "Usuario eliminado exitosamente" });

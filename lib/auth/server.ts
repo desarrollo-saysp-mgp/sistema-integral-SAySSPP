@@ -15,7 +15,6 @@ export async function getUser(): Promise<User | null> {
       return null;
     }
 
-    // Get full user profile from our users table
     const { data: profile, error: profileError } = await supabase
       .from("users")
       .select("*")
@@ -45,7 +44,7 @@ export async function requireAuth(): Promise<User> {
 export async function requireAdminAuth(): Promise<User> {
   const user = await requireAuth();
 
-  if (user.role !== "Admin") {
+  if (user.role !== "Admin" && user.role !== "AdminLectura") {
     redirect("/dashboard");
   }
 

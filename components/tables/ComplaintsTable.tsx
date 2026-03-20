@@ -34,6 +34,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable, { type CellHookData } from "jspdf-autotable";
+import { useUser } from "@/hooks/useUser";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -72,6 +73,9 @@ export function ComplaintsTable({
   onStatusChange,
 }: ComplaintsTableProps) {
   const router = useRouter();
+  const { profile } = useUser();
+  const isReadOnly = profile?.role === "AdminLectura";
+
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -93,7 +97,7 @@ export function ComplaintsTable({
     complaintId: number,
     newStatus: string,
   ) => {
-    if (!onStatusChange) return;
+    if (!onStatusChange || isReadOnly) return;
 
     setUpdatingStatus(complaintId);
     const toastId = toast.loading("Actualizando estado del reclamo...");
@@ -118,6 +122,7 @@ export function ComplaintsTable({
   };
 
   const handleEdit = (complaintId: number) => {
+    if (isReadOnly) return;
     router.push(`/dashboard/complaints/${complaintId}`);
   };
 
@@ -267,7 +272,9 @@ export function ComplaintsTable({
       let logoDataUrl: string | null = null;
 
       try {
-        logoDataUrl = await loadImageAsDataUrl("/logo-general-pico-horizontal.png");
+        logoDataUrl = await loadImageAsDataUrl(
+          "/logo-general-pico-horizontal.png",
+        );
       } catch (error) {
         console.warn("No se pudo cargar el logo para el PDF:", error);
       }
@@ -455,7 +462,7 @@ export function ComplaintsTable({
                   <TableCell>{complaint.since_when}</TableCell>
                   <TableCell>
                     <div>
-                      {onStatusChange ? (
+                      {onStatusChange && !isReadOnly ? (
                         <Select
                           value={complaint.status}
                           onValueChange={(value) =>
@@ -494,7 +501,10 @@ export function ComplaintsTable({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{complaint.loaded_by_user?.full_name ?? "Usuario no disponible"}</TableCell>
+                  <TableCell>
+                    {complaint.loaded_by_user?.full_name ??
+                      "Usuario no disponible"}
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-center gap-2">
                       <Button
@@ -506,15 +516,18 @@ export function ComplaintsTable({
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(complaint.id)}
-                        title="Editar reclamo"
-                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+
+                      {!isReadOnly && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(complaint.id)}
+                          title="Editar reclamo"
+                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -528,7 +541,9 @@ export function ComplaintsTable({
         <p className="text-sm text-muted-foreground">
           Mostrando <span className="font-medium text-foreground">{start}</span>{" "}
           a <span className="font-medium text-foreground">{end}</span> de{" "}
-          <span className="font-medium text-foreground">{complaints.length}</span>{" "}
+          <span className="font-medium text-foreground">
+            {complaints.length}
+          </span>{" "}
           reclamos
         </p>
 

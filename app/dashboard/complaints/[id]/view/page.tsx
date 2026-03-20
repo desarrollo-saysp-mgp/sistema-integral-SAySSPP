@@ -61,6 +61,7 @@ export default function ComplaintViewPage() {
   const params = useParams();
   const id = params.id as string;
   const { profile } = useUser();
+  const isReadOnly = profile?.role === "AdminLectura";
 
   const [complaint, setComplaint] = useState<ComplaintWithDetails | null>(null);
   const [history, setHistory] = useState<ComplaintHistoryWithUser[]>([]);
@@ -74,7 +75,10 @@ export default function ComplaintViewPage() {
   }, [id]);
 
   useEffect(() => {
-    if (id && profile?.role === "Admin") {
+    if (
+      id &&
+      (profile?.role === "Admin" || profile?.role === "AdminLectura")
+    ) {
       fetchHistory();
     }
   }, [id, profile?.role]);
@@ -130,15 +134,6 @@ export default function ComplaintViewPage() {
       default:
         return "bg-gray-100 text-gray-800 border-gray-300";
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = parseLocalDate(dateString);
-    return date.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
   };
 
   const formatDateTime = (dateString: string) => {
@@ -209,10 +204,12 @@ export default function ComplaintViewPage() {
           </p>
         </div>
 
-        <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
-          <Pencil className="w-4 h-4 mr-2" />
-          Editar Reclamo
-        </Button>
+        {!isReadOnly && (
+          <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
+            <Pencil className="w-4 h-4 mr-2" />
+            Editar Reclamo
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -228,7 +225,6 @@ export default function ComplaintViewPage() {
               label="Nombre y Apellido"
               value={complaint.complainant_name}
             />
-
             <InfoField
               label="Dirección"
               value={`${complaint.address} ${complaint.street_number}`}
@@ -316,7 +312,7 @@ export default function ComplaintViewPage() {
         </CardContent>
       </Card>
 
-      {profile?.role === "Admin" && (
+      {(profile?.role === "Admin" || profile?.role === "AdminLectura") && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">

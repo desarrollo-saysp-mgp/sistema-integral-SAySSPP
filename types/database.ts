@@ -6,7 +6,7 @@ export interface Database {
           id: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Reclamos";
+          role: "Admin" | "Reclamos" | "AdminLectura";
           created_at: string;
           updated_at: string;
         };
@@ -14,7 +14,7 @@ export interface Database {
           id?: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Reclamos";
+          role: "Admin" | "Reclamos" | "AdminLectura";
           created_at?: string;
           updated_at?: string;
         };
@@ -22,7 +22,7 @@ export interface Database {
           id?: string;
           full_name?: string;
           email?: string;
-          role?: "Admin" | "Reclamos";
+          role?: "Admin" | "Reclamos" | "AdminLectura";
           created_at?: string;
           updated_at?: string;
         };
@@ -200,7 +200,6 @@ export interface Database {
   };
 }
 
-// Convenience type aliases
 export type User = Database["public"]["Tables"]["users"]["Row"];
 export type UserInsert = Database["public"]["Tables"]["users"]["Insert"];
 export type UserUpdate = Database["public"]["Tables"]["users"]["Update"];
@@ -226,7 +225,6 @@ export type Cause = Database["public"]["Tables"]["causes"]["Row"];
 export type CauseInsert = Database["public"]["Tables"]["causes"]["Insert"];
 export type CauseUpdate = Database["public"]["Tables"]["causes"]["Update"];
 
-// Additional types for forms and API responses
 export type ComplaintWithDetails = Complaint & {
   service: Service;
   cause: Cause;
@@ -239,4 +237,4 @@ export type ComplaintHistoryWithUser = ComplaintHistory & {
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";
 export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp";
-export type UserRole = "Admin" | "Reclamos";
+export type UserRole = "Admin" | "Reclamos" | "AdminLectura";

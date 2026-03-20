@@ -46,7 +46,8 @@ export function Navbar() {
     return pathname?.startsWith(href);
   };
 
-  const isAdmin = profile?.role === "Admin";
+  const isAdmin =
+    profile?.role === "Admin" || profile?.role === "AdminLectura";
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
@@ -84,8 +85,8 @@ export function Navbar() {
               className={cn(
                 "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                 isActive("/dashboard") &&
-                  !pathname?.includes("complaints") &&
-                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
+                !pathname?.includes("complaints") &&
+                "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
               )}
             >
               <Home className="mr-2 h-4 w-4" />
@@ -100,7 +101,7 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                   pathname?.includes("complaints") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
+                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
                 )}
               >
                 <FileText className="mr-2 h-4 w-4" />
@@ -156,7 +157,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes("admin") &&
-                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
                   )}
                 >
                   <FolderKanban className="mr-2 h-4 w-4" />

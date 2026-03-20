@@ -2,7 +2,6 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintUpdate, ComplaintHistoryInsert } from "@/types";
 
-// Validation helper functions
 const validatePhone = (phone: string): boolean => {
   if (!phone || !phone.trim()) return true;
   const digitsOnly = /^\d+$/;
@@ -30,11 +29,6 @@ const normalizeValue = (value: unknown): string | null => {
   return String(value);
 };
 
-/**
- * GET /api/complaints/[id]
- * Get a single complaint by ID
- * Requires: Authenticated user
- */
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -99,11 +93,6 @@ export async function GET(
   }
 }
 
-/**
- * PATCH /api/complaints/[id]
- * Update a complaint and save audit history
- * Requires: Authenticated user
- */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -128,6 +117,26 @@ export async function PATCH(
 
     if (authError || !authUser) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { data: currentUser, error: userError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", authUser.id)
+      .single();
+
+    if (userError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo validar el usuario" },
+        { status: 500 },
+      );
+    }
+
+    if (currentUser.role === "AdminLectura") {
+      return NextResponse.json(
+        { error: "No autorizado. Usuario en modo solo lectura" },
+        { status: 403 },
+      );
     }
 
     const body = await request.json();
@@ -264,7 +273,9 @@ export async function PATCH(
     const changes: ComplaintHistoryInsert[] = [];
 
     for (const key of updateKeys) {
-      const oldValue = normalizeValue(currentComplaint[key as keyof typeof currentComplaint]);
+      const oldValue = normalizeValue(
+        currentComplaint[key as keyof typeof currentComplaint],
+      );
       const newValue = normalizeValue(updateData[key]);
 
       if (oldValue !== newValue) {
@@ -348,10 +359,6 @@ export async function PATCH(
   }
 }
 
-/**
- * DELETE /api/complaints/[id]
- * Delete a complaint
- */
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },

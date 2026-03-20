@@ -46,8 +46,9 @@ export default function UsersPage() {
   };
 
   const handleUpdateUser = async (data: UserFormData) => {
-    if (!selectedUser)
+    if (!selectedUser) {
       return { success: false, error: "No hay usuario seleccionado" };
+    }
 
     const result = await updateUser(selectedUser.id, data);
 
@@ -103,12 +104,13 @@ export default function UsersPage() {
   };
 
   const handleRoleFilter = (role: string | undefined) => {
-    setFilters({ role: role as "Admin" | "Administrative" | undefined });
+    setFilters({
+      role: role as "Admin" | "Reclamos" | "AdminLectura" | undefined,
+    });
   };
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -124,7 +126,6 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      {/* Error message */}
       {error && (
         <Card className="border-destructive">
           <CardContent className="pt-6">
@@ -133,7 +134,6 @@ export default function UsersPage() {
         </Card>
       )}
 
-      {/* Users table */}
       <Card>
         <CardHeader>
           <CardTitle>Usuarios del sistema</CardTitle>
@@ -153,7 +153,6 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* User form dialog */}
       <UserForm
         user={selectedUser}
         open={isFormOpen}
@@ -161,7 +160,6 @@ export default function UsersPage() {
         onSubmit={selectedUser ? handleUpdateUser : handleCreateUser}
       />
 
-      {/* Delete confirmation dialog */}
       {isDeleteDialogOpen && userToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">

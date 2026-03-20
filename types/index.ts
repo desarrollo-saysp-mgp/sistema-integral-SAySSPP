@@ -24,7 +24,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "Admin" | "Reclamos";
+  role: "Admin" | "Reclamos" | "AdminLectura";
 }
 
 export interface DashboardStats {
@@ -37,13 +37,12 @@ export interface DashboardStats {
 
 export interface UserFilters {
   search?: string;
-  role?: "Admin" | "Reclamos";
+  role?: "Admin" | "Reclamos" | "AdminLectura";
 }
-
 export interface UserFormData {
   full_name: string;
   email: string;
-  role: "Admin" | "Reclamos";
+  role: "Admin" | "Reclamos" | "AdminLectura";
   password?: string;
 }
 

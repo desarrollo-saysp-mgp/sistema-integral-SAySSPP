@@ -19,7 +19,10 @@ import { ServicesTable } from "@/components/tables/ServicesTable";
 import { toast } from "sonner";
 
 export default function ServicesPage() {
-  const { isAdmin, isAuthenticated, loading } = useUser();
+  const { profile, isAuthenticated, loading } = useUser();
+
+  const canViewAdmin =
+    profile?.role === "Admin" || profile?.role === "AdminLectura";
   const router = useRouter();
 
   const [services, setServices] = useState<Service[]>([]);
@@ -33,19 +36,27 @@ export default function ServicesPage() {
   const [selectedServiceForCause, setSelectedServiceForCause] =
     useState<Service | null>(null);
 
+  console.log("SERVICES PAGE RENDER", {
+    loading,
+    isAuthenticated,
+    role: profile?.role,
+    canViewAdmin,
+  });
   // Redirect non-admin users
   useEffect(() => {
-    if (!loading && (!isAuthenticated || !isAdmin)) {
+    // Esperar a que cargue el usuario COMPLETAMENTE
+    if (loading || !profile) return;
+
+    if (!isAuthenticated || !canViewAdmin) {
       router.push("/dashboard");
     }
-  }, [isAuthenticated, isAdmin, loading, router]);
+  }, [isAuthenticated, canViewAdmin, loading, profile, router]);
 
-  // Load services and causes
   useEffect(() => {
-    if (isAuthenticated && isAdmin) {
+    if (isAuthenticated && canViewAdmin) {
       loadData();
     }
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, canViewAdmin]);
 
   const loadData = async () => {
     try {
@@ -120,9 +131,9 @@ export default function ServicesPage() {
 
       toast.success(
         result.message ||
-          (selectedService
-            ? "Servicio actualizado exitosamente"
-            : "Servicio creado exitosamente"),
+        (selectedService
+          ? "Servicio actualizado exitosamente"
+          : "Servicio creado exitosamente"),
       );
       await loadData();
       return { success: true };
@@ -156,9 +167,9 @@ export default function ServicesPage() {
 
       toast.success(
         result.message ||
-          (selectedCause
-            ? "Causa actualizada exitosamente"
-            : "Causa creada exitosamente"),
+        (selectedCause
+          ? "Causa actualizada exitosamente"
+          : "Causa creada exitosamente"),
       );
       await loadData();
       return { success: true };
@@ -268,7 +279,7 @@ export default function ServicesPage() {
     }
   };
 
-  if (loading || !isAuthenticated || !isAdmin) {
+  if (loading || !profile) {
     return null;
   }
 
@@ -333,4 +344,5 @@ export default function ServicesPage() {
       />
     </div>
   );
+
 }

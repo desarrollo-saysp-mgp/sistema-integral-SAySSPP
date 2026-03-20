@@ -32,7 +32,7 @@ interface UserFormProps {
 type FormState = {
   full_name: string;
   email: string;
-  role: "Admin" | "Reclamos";
+  role: "Admin" | "Reclamos" | "AdminLectura";
   password: string;
   confirmPassword: string;
 };
@@ -208,7 +208,10 @@ export function UserForm({
             <Select
               value={formData.role}
               onValueChange={(value) =>
-                handleChange("role", value as "Admin" | "Reclamos")
+                handleChange(
+                  "role",
+                  value as "Admin" | "Reclamos" | "AdminLectura",
+                )
               }
             >
               <SelectTrigger id="role">
@@ -217,6 +220,7 @@ export function UserForm({
               <SelectContent>
                 <SelectItem value="Admin">Admin</SelectItem>
                 <SelectItem value="Reclamos">Reclamos</SelectItem>
+                <SelectItem value="AdminLectura">Admin Lectura</SelectItem>
               </SelectContent>
             </Select>
             {errors.role && (

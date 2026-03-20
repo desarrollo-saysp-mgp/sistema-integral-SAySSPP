@@ -31,7 +31,6 @@ export function useUsers(initialFilters: UserFilters = {}): UseUsersReturn {
       setLoading(true);
       setError(null);
 
-      // Build query params from filters
       const params = new URLSearchParams();
       if (filters.search) params.append("search", filters.search);
       if (filters.role) params.append("role", filters.role);
@@ -75,7 +74,6 @@ export function useUsers(initialFilters: UserFilters = {}): UseUsersReturn {
         };
       }
 
-      // Refresh users list
       await fetchUsers();
 
       return { success: true };
@@ -108,7 +106,6 @@ export function useUsers(initialFilters: UserFilters = {}): UseUsersReturn {
         };
       }
 
-      // Refresh users list
       await fetchUsers();
 
       return { success: true };
@@ -136,7 +133,6 @@ export function useUsers(initialFilters: UserFilters = {}): UseUsersReturn {
         };
       }
 
-      // Refresh users list
       await fetchUsers();
 
       return { success: true };
@@ -147,7 +143,6 @@ export function useUsers(initialFilters: UserFilters = {}): UseUsersReturn {
     }
   };
 
-  // Fetch users when filters change
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);

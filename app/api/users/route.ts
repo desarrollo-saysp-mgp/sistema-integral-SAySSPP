@@ -1,6 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import type { UserInsert } from "@/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,16 +20,27 @@ export async function GET(request: NextRequest) {
       .eq("id", authUser.id)
       .single();
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (
+      !currentUser ||
+      (currentUser.role !== "Admin" &&
+        currentUser.role !== "AdminLectura")
+    ) {
       return NextResponse.json(
-        { error: "No autorizado. Solo administradores pueden ver usuarios" },
+        {
+          error:
+            "No autorizado. Solo administradores y administradores de lectura pueden ver usuarios",
+        },
         { status: 403 },
       );
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
-    const role = searchParams.get("role") as "Admin" | "Reclamos" | null;
+    const role = searchParams.get("role") as
+      | "Admin"
+      | "Reclamos"
+      | "AdminLectura"
+      | null;
 
     let query = supabase
       .from("users")
@@ -104,9 +114,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (role !== "Admin" && role !== "Reclamos") {
+    if (
+      role !== "Admin" &&
+      role !== "Reclamos" &&
+      role !== "AdminLectura"
+    ) {
       return NextResponse.json(
-        { error: 'Rol inválido. Debe ser "Admin" o "Reclamos"' },
+        {
+          error:
+            'Rol inválido. Debe ser "Admin", "Reclamos" o "AdminLectura"',
+        },
         { status: 400 },
       );
     }
@@ -125,6 +142,10 @@ export async function POST(request: NextRequest) {
         email,
         password,
         email_confirm: true,
+        user_metadata: {
+          full_name,
+          role,
+        },
       });
 
     if (authCreateError || !newAuthUser.user) {
@@ -139,21 +160,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userInsert: UserInsert = {
-      id: newAuthUser.user.id,
-      full_name,
-      email,
-      role,
-    };
-
+    // El trigger crea la fila en public.users.
+    // Re-leemos el usuario para devolverlo al frontend.
     const { data: newUser, error: dbError } = await supabase
       .from("users")
-      .insert(userInsert)
-      .select()
+      .select("*")
+      .eq("id", newAuthUser.user.id)
       .single();
 
-    if (dbError) {
-      console.error("Error creating user in database:", dbError);
+    if (dbError || !newUser) {
+      console.error("Error fetching created user from database:", dbError);
+
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
 
       return NextResponse.json(

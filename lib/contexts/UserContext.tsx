@@ -19,7 +19,7 @@ interface UserContextType {
   isAdmin: boolean;
   isAdministrative: boolean;
   isAuthenticated: boolean;
-  hasRole: (role: "Admin" | "Administrative") => boolean;
+  hasRole: (role: "Admin" | "Reclamos" | "AdminLectura") => boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -29,7 +29,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  // Ref to track current user ID for checking in event handlers
   const userIdRef = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
@@ -70,8 +69,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null;
 
     const initialize = async () => {
-      // FIRST: Load existing session from cookies
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (cancelled) return;
 
@@ -91,50 +91,48 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
-      // THEN: Set up listener for future auth changes (login, logout)
-      const { data } = supabase.auth.onAuthStateChange(async (event, eventSession) => {
-        if (cancelled) return;
+      const { data } = supabase.auth.onAuthStateChange(
+        async (event, eventSession) => {
+          if (cancelled) return;
 
-        // Skip INITIAL_SESSION - already handled above
-        if (event === "INITIAL_SESSION") {
-          return;
-        }
-
-        // SIGNED_IN - user just logged in
-        if (event === "SIGNED_IN" && eventSession?.user) {
-          // Skip if same user already loaded
-          if (userIdRef.current === eventSession.user.id) {
+          if (event === "INITIAL_SESSION") {
             return;
           }
 
-          userIdRef.current = eventSession.user.id;
-          setUser(eventSession.user);
+          if (event === "SIGNED_IN" && eventSession?.user) {
+            if (userIdRef.current === eventSession.user.id) {
+              return;
+            }
 
-          const profileData = await fetchProfile(eventSession.user.id);
-
-          if (!cancelled) {
-            setProfile(profileData);
-            setLoading(false);
-          }
-          return;
-        }
-
-        if (event === "SIGNED_OUT") {
-          userIdRef.current = null;
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-
-        if (event === "TOKEN_REFRESHED" && eventSession?.user) {
-          const profileData = await fetchProfile(eventSession.user.id);
-          if (!cancelled) {
+            userIdRef.current = eventSession.user.id;
             setUser(eventSession.user);
-            setProfile(profileData);
+
+            const profileData = await fetchProfile(eventSession.user.id);
+
+            if (!cancelled) {
+              setProfile(profileData);
+              setLoading(false);
+            }
+            return;
           }
-        }
-      });
+
+          if (event === "SIGNED_OUT") {
+            userIdRef.current = null;
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+            return;
+          }
+
+          if (event === "TOKEN_REFRESHED" && eventSession?.user) {
+            const profileData = await fetchProfile(eventSession.user.id);
+            if (!cancelled) {
+              setUser(eventSession.user);
+              setProfile(profileData);
+            }
+          }
+        },
+      );
 
       subscription = data.subscription;
     };
@@ -151,10 +149,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     loading,
-    isAdmin: profile?.role === "Admin",
-    isAdministrative: profile?.role === "Administrative",
+    isAdmin:
+      profile?.role === "Admin" || profile?.role === "AdminLectura",
+    isAdministrative:
+      profile?.role === "Admin" || profile?.role === "AdminLectura",
     isAuthenticated: !!user,
-    hasRole: (role: "Admin" | "Administrative") => profile?.role === role,
+    hasRole: (role: "Admin" | "Reclamos" | "AdminLectura") =>
+      profile?.role === role,
     refreshProfile,
   };
 

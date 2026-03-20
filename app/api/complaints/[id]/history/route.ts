@@ -39,7 +39,10 @@ export async function GET(
       );
     }
 
-    if (currentUser.role !== "Admin") {
+    if (
+      currentUser.role !== "Admin" &&
+      currentUser.role !== "AdminLectura"
+    ) {
       return NextResponse.json(
         { error: "No autorizado" },
         { status: 403 },
