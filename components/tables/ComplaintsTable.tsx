@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -29,6 +30,7 @@ import {
   FileSpreadsheet,
   FileText,
   Loader2,
+  MessageCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -75,9 +77,12 @@ export function ComplaintsTable({
   const router = useRouter();
   const { profile } = useUser();
   const isReadOnly = profile?.role === "AdminLectura";
+  const canSendWhatsApp =
+    profile?.role === "Admin" || profile?.role === "Reclamos";
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>([]);
 
   const totalPages = Math.max(1, Math.ceil(complaints.length / ITEMS_PER_PAGE));
 
@@ -87,11 +92,34 @@ export function ComplaintsTable({
     }
   }, [complaints.length, currentPage, totalPages]);
 
+  useEffect(() => {
+    setSelectedComplaintIds((prev) =>
+      prev.filter((id) => complaints.some((complaint) => complaint.id === id)),
+    );
+  }, [complaints]);
+
   const paginatedComplaints = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
     return complaints.slice(start, end);
   }, [complaints, currentPage]);
+
+  const selectedComplaints = useMemo(() => {
+    return complaints.filter((complaint) =>
+      selectedComplaintIds.includes(complaint.id),
+    );
+  }, [complaints, selectedComplaintIds]);
+
+  const allVisibleSelected =
+    paginatedComplaints.length > 0 &&
+    paginatedComplaints.every((complaint) =>
+      selectedComplaintIds.includes(complaint.id),
+    );
+
+  const someVisibleSelected =
+    paginatedComplaints.some((complaint) =>
+      selectedComplaintIds.includes(complaint.id),
+    ) && !allVisibleSelected;
 
   const handleStatusChange = async (
     complaintId: number,
@@ -123,6 +151,29 @@ export function ComplaintsTable({
 
   const handleEdit = (complaintId: number) => {
     router.push(`/dashboard/complaints/${complaintId}`);
+  };
+
+  const toggleComplaintSelection = (complaintId: number, checked: boolean) => {
+    setSelectedComplaintIds((prev) =>
+      checked
+        ? [...prev, complaintId]
+        : prev.filter((id) => id !== complaintId),
+    );
+  };
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    const visibleIds = paginatedComplaints.map((complaint) => complaint.id);
+
+    if (checked) {
+      setSelectedComplaintIds((prev) => [
+        ...new Set([...prev, ...visibleIds]),
+      ]);
+      return;
+    }
+
+    setSelectedComplaintIds((prev) =>
+      prev.filter((id) => !visibleIds.includes(id)),
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -222,6 +273,55 @@ export function ComplaintsTable({
       image.onerror = () => reject(new Error("No se pudo cargar el logo"));
       image.src = src;
     });
+  };
+
+  const buildWhatsAppMessage = (items: ComplaintWithDetails[]) => {
+    const partes: string[] = ["*Lista de reclamos:*", ""];
+
+    items.forEach((item, index) => {
+      const direccion = `${item.address || "-"} ${item.street_number || ""}`.trim();
+      const telefono = item.phone_number || "-";
+      const servicio = item.service?.name || "-";
+      const causa = item.cause?.name || "-";
+      const zona = item.zone || "-";
+      const desde = item.since_when || "-";
+      const detalle = item.details || "-";
+      const fecha = item.complaint_date ? formatDate(item.complaint_date) : "-";
+      const cargadoPor = item.loaded_by_user?.full_name || "-";
+
+      partes.push(`*Reclamo ${index + 1}*`);
+      partes.push(`Número: *${item.complaint_number || "-"}*`);
+      partes.push(`Fecha: *${fecha}*`);
+      partes.push(`Nombre: *${item.complainant_name || "-"}*`);
+      partes.push(`Dirección: *${direccion || "-"}*`);
+      partes.push(`Teléfono: *${telefono}*`);
+      partes.push(`Servicio: *${servicio}*`);
+      partes.push(`Causa: *${causa}*`);
+      partes.push(`Zona/Sector: *${zona}*`);
+      partes.push(`Desde: *${desde}*`);
+      partes.push(`Detalle: *${detalle}*`);
+      partes.push(`Cargado por: *${cargadoPor}*`);
+      partes.push("");
+    });
+
+    return partes.join("\n");
+  };
+
+  const handleSendWhatsApp = () => {
+    if (selectedComplaints.length === 0) {
+      toast.error("Seleccioná al menos un reclamo para enviar");
+      return;
+    }
+
+    if (!canSendWhatsApp) {
+      toast.error("No tenés permisos para enviar reclamos por WhatsApp");
+      return;
+    }
+
+    const mensaje = buildWhatsAppMessage(selectedComplaints);
+    const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const exportToExcel = () => {
@@ -401,6 +501,17 @@ export function ComplaintsTable({
         <Button
           type="button"
           variant="outline"
+          onClick={handleSendWhatsApp}
+          className="gap-2"
+          disabled={selectedComplaints.length === 0}
+        >
+          <MessageCircle className="h-4 w-4" />
+          Enviar WhatsApp
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
           onClick={exportToExcel}
           className="gap-2"
         >
@@ -419,10 +530,33 @@ export function ComplaintsTable({
         </Button>
       </div>
 
+      {selectedComplaints.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {selectedComplaints.length} reclamo(s) seleccionado(s)
+        </p>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="w-[52px] text-center">
+                <div className="flex justify-center">
+                  <Checkbox
+                    checked={
+                      allVisibleSelected
+                        ? true
+                        : someVisibleSelected
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={(checked) =>
+                      toggleVisibleSelection(checked === true)
+                    }
+                    aria-label="Seleccionar reclamos visibles"
+                  />
+                </div>
+              </TableHead>
               <TableHead>Número</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Nombre</TableHead>
@@ -440,6 +574,7 @@ export function ComplaintsTable({
             {paginatedComplaints.map((complaint, index) => {
               const isEvenRow = index % 2 === 0;
               const isUpdating = updatingStatus === complaint.id;
+              const isSelected = selectedComplaintIds.includes(complaint.id);
 
               return (
                 <TableRow
@@ -450,6 +585,21 @@ export function ComplaintsTable({
                       : "bg-muted/25 transition-colors hover:bg-accent/40"
                   }
                 >
+                  <TableCell className="text-center">
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) =>
+                          toggleComplaintSelection(
+                            complaint.id,
+                            checked === true,
+                          )
+                        }
+                        aria-label={`Seleccionar reclamo ${complaint.complaint_number}`}
+                      />
+                    </div>
+                  </TableCell>
+
                   <TableCell className="font-medium">
                     {complaint.complaint_number}
                   </TableCell>
