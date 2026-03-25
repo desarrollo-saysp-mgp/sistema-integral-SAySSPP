@@ -132,9 +132,12 @@ export async function PATCH(
       );
     }
 
-    if (currentUser.role === "AdminLectura") {
+    if (
+      currentUser.role !== "Admin" &&
+      currentUser.role !== "Reclamos"
+    ) {
       return NextResponse.json(
-        { error: "No autorizado. Usuario en modo solo lectura" },
+        { error: "No tenés permisos para guardar cambios" },
         { status: 403 },
       );
     }

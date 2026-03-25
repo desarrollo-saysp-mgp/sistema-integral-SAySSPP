@@ -122,7 +122,6 @@ export function ComplaintsTable({
   };
 
   const handleEdit = (complaintId: number) => {
-    if (isReadOnly) return;
     router.push(`/dashboard/complaints/${complaintId}`);
   };
 
@@ -517,17 +516,15 @@ export function ComplaintsTable({
                         <Eye className="h-4 w-4" />
                       </Button>
 
-                      {!isReadOnly && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(complaint.id)}
-                          title="Editar reclamo"
-                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(complaint.id)}
+                        title="Editar reclamo"
+                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

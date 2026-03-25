@@ -32,11 +32,6 @@ type ComplaintWithDetails = Complaint & {
   loaded_by_user: UserType;
 };
 
-const parseLocalDate = (dateStr: string): Date => {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day);
-};
-
 const FIELD_LABELS: Record<string, string> = {
   complaint_date: "Fecha de reclamo",
   complainant_name: "Nombre y apellido",
@@ -61,7 +56,6 @@ export default function ComplaintViewPage() {
   const params = useParams();
   const id = params.id as string;
   const { profile } = useUser();
-  const isReadOnly = profile?.role === "AdminLectura";
 
   const [complaint, setComplaint] = useState<ComplaintWithDetails | null>(null);
   const [history, setHistory] = useState<ComplaintHistoryWithUser[]>([]);
@@ -204,12 +198,10 @@ export default function ComplaintViewPage() {
           </p>
         </div>
 
-        {!isReadOnly && (
-          <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
-            <Pencil className="w-4 h-4 mr-2" />
-            Editar Reclamo
-          </Button>
-        )}
+        <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
+          <Pencil className="w-4 h-4 mr-2" />
+          Editar Reclamo
+        </Button>
       </div>
 
       <Card>

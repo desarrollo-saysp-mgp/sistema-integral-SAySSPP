@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { User } from "@/types";
 import {
   Table,
@@ -41,6 +41,12 @@ export function UserTable({
 }: UserTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
+  const availableRoles = useMemo(() => {
+    return Array.from(
+      new Set(users.map((user) => user.role).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [users]);
+
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
     onSearchChange(value);
@@ -64,7 +70,6 @@ export function UserTable({
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -75,19 +80,22 @@ export function UserTable({
             className="pl-9"
           />
         </div>
+
         <Select onValueChange={handleRoleFilterChange} defaultValue="all">
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por rol" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los roles</SelectItem>
-            <SelectItem value="Admin">Admin</SelectItem>
-            <SelectItem value="Administrative">Administrative</SelectItem>
+            {availableRoles.map((role) => (
+              <SelectItem key={role} value={role}>
+                {role}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -161,7 +169,6 @@ export function UserTable({
         </Table>
       </div>
 
-      {/* Results count */}
       {!loading && users.length > 0 && (
         <div className="text-sm text-muted-foreground">
           Mostrando {users.length} {users.length === 1 ? "usuario" : "usuarios"}

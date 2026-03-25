@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ComplaintForm, ComplaintFormData } from "@/components/forms/ComplaintForm";
+import {
+  ComplaintForm,
+  ComplaintFormData,
+} from "@/components/forms/ComplaintForm";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -71,6 +74,12 @@ export default function ComplaintDetailPage() {
 
       const data = await response.json();
 
+      if (response.status === 403) {
+        const message = data.error || "No tenés permisos para guardar cambios";
+        toast.error(message);
+        return { success: false, error: message };
+      }
+
       if (!response.ok) {
         toast.error(data.error || "Error al actualizar el reclamo");
         return { success: false, error: data.error };
@@ -137,7 +146,6 @@ export default function ComplaintDetailPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-start">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -154,11 +162,12 @@ export default function ComplaintDetailPage() {
             Reclamo {complaint.complaint_number}
           </h1>
           <p className="text-muted-foreground">
-            Editar información del reclamo
+            {profile?.role === "AdminLectura"
+              ? "Puede revisar el formulario, pero no guardar cambios"
+              : "Editar información del reclamo"}
           </p>
         </div>
 
-        {/* Delete button */}
         {(profile?.role === "Admin" || profile?.role === "Reclamos") && (
           <Button
             variant="destructive"
@@ -170,14 +179,12 @@ export default function ComplaintDetailPage() {
         )}
       </div>
 
-      {/* Form */}
       <ComplaintForm
         complaint={complaint}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
       />
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
