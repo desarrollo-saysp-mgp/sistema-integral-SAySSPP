@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintUpdate, ComplaintHistoryInsert } from "@/types";
+import { obtenerLatLon } from "@/lib/geocoding";
 
 const validatePhone = (phone: string): boolean => {
   if (!phone || !phone.trim()) return true;
@@ -264,6 +265,29 @@ export async function PATCH(
       updateData.complaint_date = body.complaint_date;
     }
 
+    const addressChanged =
+      body.address !== undefined &&
+      body.address.trim() !== (currentComplaint.address ?? "").trim();
+
+    const streetNumberChanged =
+      body.street_number !== undefined &&
+      body.street_number.trim() !==
+      (currentComplaint.street_number ?? "").trim();
+
+    if (addressChanged || streetNumberChanged) {
+      const newAddress =
+        body.address !== undefined
+          ? body.address.trim()
+          : currentComplaint.address;
+
+      const newStreetNumber =
+        body.street_number !== undefined
+          ? body.street_number.trim()
+          : currentComplaint.street_number;
+
+      updateData.latlon = await obtenerLatLon(newAddress, newStreetNumber);
+    }
+
     const updateKeys = Object.keys(updateData) as (keyof ComplaintUpdate)[];
 
     if (updateKeys.length === 0) {
@@ -276,6 +300,8 @@ export async function PATCH(
     const changes: ComplaintHistoryInsert[] = [];
 
     for (const key of updateKeys) {
+      if (key === "latlon") continue;
+
       const oldValue = normalizeValue(
         currentComplaint[key as keyof typeof currentComplaint],
       );
