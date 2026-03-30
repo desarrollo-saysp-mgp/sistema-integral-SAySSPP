@@ -23,10 +23,18 @@ import {
   User,
   Menu,
   X,
+  LayoutGrid,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  MODULES,
+  getCurrentModule,
+  getNavbarContext,
+  isAccessesPage,
+  isAdminPage,
+} from "@/lib/navigation";
 
 export function Navbar() {
   const { profile } = useUser();
@@ -49,12 +57,28 @@ export function Navbar() {
   const isAdmin =
     profile?.role === "Admin" || profile?.role === "AdminLectura";
 
+  const modules = Array.isArray(profile?.modules) ? profile.modules : [];
+  const hasMultipleModules = modules.length > 1;
+  const showAccesses = isAdmin || hasMultipleModules;
+
+  const currentModule = getCurrentModule(pathname);
+  const navbarContext = getNavbarContext(pathname);
+
+  const showCurrentModuleNav =
+    !!currentModule &&
+    modules.includes(currentModule) &&
+    !isAccessesPage(pathname) &&
+    !isAdminPage(pathname);
+
+  const currentModuleConfig = currentModule ? MODULES[currentModule] : null;
+
+  const logoHref = isAdmin ? "/dashboard/accesos" : "/dashboard";
+
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
       <div className="flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Logo + título */}
         <Link
-          href="/dashboard"
+          href={logoHref}
           className="flex items-center gap-2 transition-opacity hover:opacity-90"
         >
           <div className="relative h-11 w-[110px] shrink-0 sm:w-[125px]">
@@ -69,85 +93,123 @@ export function Navbar() {
 
           <div className="hidden xl:flex flex-col border-l border-[#D8E3DE] pl-3">
             <span className="text-sm font-semibold leading-tight text-[#373737]">
-              Sistema de Gestión de Reclamos
+              {navbarContext.title}
             </span>
             <span className="text-xs leading-tight text-[#6B7280]">
-              Atención Ciudadana
+              {navbarContext.subtitle}
             </span>
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-2">
-          <Link href="/dashboard">
-            <Button
-              variant="ghost"
-              className={cn(
-                "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
-                isActive("/dashboard") &&
-                !pathname?.includes("complaints") &&
-                "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
-              )}
-            >
-              <Home className="mr-2 h-4 w-4" />
-              Dashboard
-            </Button>
-          </Link>
-
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
+          {!isAdmin && (
+            <Link href="/dashboard">
               <Button
                 variant="ghost"
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
-                  pathname?.includes("complaints") &&
-                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
+                  isActive("/dashboard") &&
+                    !pathname?.includes("/dashboard/complaints") &&
+                    !pathname?.includes("/dashboard/accesos") &&
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                 )}
               >
-                <FileText className="mr-2 h-4 w-4" />
-                Reclamos
+                <Home className="mr-2 h-4 w-4" />
+                Inicio
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="center"
-              side="bottom"
-              className="w-[280px] rounded-2xl border-[#D8E3DE]"
-            >
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/dashboard/complaints/new"
-                  className="cursor-pointer rounded-xl"
-                >
-                  <div className="flex flex-col gap-1 py-1">
-                    <div className="flex items-center gap-2">
-                      <PlusCircle className="h-4 w-4 text-[#00A27F]" />
-                      <span className="font-medium">Nuevo Reclamo</span>
-                    </div>
-                    <p className="ml-6 text-xs text-muted-foreground">
-                      Crear un nuevo reclamo ciudadano
-                    </p>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
+            </Link>
+          )}
 
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/dashboard/complaints"
-                  className="cursor-pointer rounded-xl"
+          {showAccesses && (
+            <Link href="/dashboard/accesos">
+              <Button
+                variant="ghost"
+                className={cn(
+                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                  isActive("/dashboard/accesos") &&
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                )}
+              >
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                Accesos
+              </Button>
+            </Link>
+          )}
+
+          {showCurrentModuleNav && currentModuleConfig?.key === "complaints" && (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                    pathname?.includes(currentModuleConfig.basePath) &&
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                  )}
                 >
-                  <div className="flex flex-col gap-1 py-1">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-[#00A27F]" />
-                      <span className="font-medium">Ver Todos</span>
+                  <FileText className="mr-2 h-4 w-4" />
+                  {currentModuleConfig.shortLabel}
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                align="center"
+                side="bottom"
+                className="w-[280px] rounded-2xl border-[#D8E3DE]"
+              >
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard/complaints/home"
+                    className="cursor-pointer rounded-xl"
+                  >
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <Home className="h-4 w-4 text-[#00A27F]" />
+                        <span className="font-medium">Panel</span>
+                      </div>
+                      <p className="ml-6 text-xs text-muted-foreground">
+                        Panel principal del módulo de reclamos
+                      </p>
                     </div>
-                    <p className="ml-6 text-xs text-muted-foreground">
-                      Lista completa de reclamos
-                    </p>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard/complaints/new"
+                    className="cursor-pointer rounded-xl"
+                  >
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <PlusCircle className="h-4 w-4 text-[#00A27F]" />
+                        <span className="font-medium">Nuevo Reclamo</span>
+                      </div>
+                      <p className="ml-6 text-xs text-muted-foreground">
+                        Crear un nuevo reclamo ciudadano
+                      </p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard/complaints"
+                    className="cursor-pointer rounded-xl"
+                  >
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-[#00A27F]" />
+                        <span className="font-medium">Ver Todos</span>
+                      </div>
+                      <p className="ml-6 text-xs text-muted-foreground">
+                        Lista completa de reclamos
+                      </p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {isAdmin && (
             <DropdownMenu modal={false}>
@@ -157,7 +219,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes("admin") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]"
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                   )}
                 >
                   <FolderKanban className="mr-2 h-4 w-4" />
@@ -171,7 +233,10 @@ export function Navbar() {
                 className="w-[280px] rounded-2xl border-[#D8E3DE]"
               >
                 <DropdownMenuItem asChild>
-                  <Link href="/admin/users" className="cursor-pointer rounded-xl">
+                  <Link
+                    href="/admin/users"
+                    className="cursor-pointer rounded-xl"
+                  >
                     <div className="flex flex-col gap-1 py-1">
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-[#00A27F]" />
@@ -205,7 +270,6 @@ export function Navbar() {
           )}
         </div>
 
-        {/* User */}
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -255,6 +319,11 @@ export function Navbar() {
                     <p className="text-xs font-semibold text-[#00A27F]">
                       {profile.role}
                     </p>
+                    <p className="text-xs text-muted-foreground">
+                      {profile.is_readonly
+                        ? "Modo: solo lectura"
+                        : "Modo: edición habilitada"}
+                    </p>
                   </div>
                 </DropdownMenuLabel>
 
@@ -273,57 +342,92 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="border-t border-[#D8E3DE] bg-white md:hidden">
           <div className="space-y-2 px-4 py-4">
-            <Link
-              href="/dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
-                isActive("/dashboard") && !pathname?.includes("complaints")
-                  ? "bg-[#00A27F]/12 text-[#00A27F]"
-                  : "text-[#373737] hover:bg-[#00A27F]/8"
-              )}
-            >
-              <Home className="h-5 w-5" />
-              <span className="font-medium">Dashboard</span>
-            </Link>
+            {!isAdmin && (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                  isActive("/dashboard") &&
+                    !pathname?.includes("/dashboard/complaints") &&
+                    !pathname?.includes("/dashboard/accesos")
+                    ? "bg-[#00A27F]/12 text-[#00A27F]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8",
+                )}
+              >
+                <Home className="h-5 w-5" />
+                <span className="font-medium">Inicio</span>
+              </Link>
+            )}
 
-            <div className="space-y-1">
-              <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
-                Reclamos
+            {showAccesses && (
+              <Link
+                href="/dashboard/accesos"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                  isActive("/dashboard/accesos")
+                    ? "bg-[#00A27F]/12 text-[#00A27F]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8",
+                )}
+              >
+                <LayoutGrid className="h-5 w-5" />
+                <span className="font-medium">Accesos</span>
+              </Link>
+            )}
+
+            {showCurrentModuleNav && currentModuleConfig?.key === "complaints" && (
+              <div className="space-y-1">
+                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
+                  {currentModuleConfig.label}
+                </div>
+
+                <Link
+                  href="/dashboard/complaints/home"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                    pathname === "/dashboard/complaints/home"
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                  )}
+                >
+                  <Home className="h-5 w-5" />
+                  <span>Inicio</span>
+                </Link>
+
+                <Link
+                  href="/dashboard/complaints/new"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                    isActive("/dashboard/complaints/new")
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                  )}
+                >
+                  <PlusCircle className="h-5 w-5" />
+                  <span>Nuevo Reclamo</span>
+                </Link>
+
+                <Link
+                  href="/dashboard/complaints"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                    pathname === "/dashboard/complaints"
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                  )}
+                >
+                  <FileText className="h-5 w-5" />
+                  <span>Ver Todos</span>
+                </Link>
               </div>
-
-              <Link
-                href="/dashboard/complaints/new"
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
-                  isActive("/dashboard/complaints/new")
-                    ? "bg-[#00A27F]/12 text-[#00A27F]"
-                    : "text-[#373737] hover:bg-[#00A27F]/8"
-                )}
-              >
-                <PlusCircle className="h-5 w-5" />
-                <span>Nuevo Reclamo</span>
-              </Link>
-
-              <Link
-                href="/dashboard/complaints"
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
-                  pathname === "/dashboard/complaints"
-                    ? "bg-[#00A27F]/12 text-[#00A27F]"
-                    : "text-[#373737] hover:bg-[#00A27F]/8"
-                )}
-              >
-                <FileText className="h-5 w-5" />
-                <span>Ver Todos</span>
-              </Link>
-            </div>
+            )}
 
             {isAdmin && (
               <div className="mt-2 space-y-1 border-t border-[#D8E3DE] pt-2">
@@ -338,7 +442,7 @@ export function Navbar() {
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/users")
                       ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
                   )}
                 >
                   <Users className="h-5 w-5" />
@@ -352,7 +456,7 @@ export function Navbar() {
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/services")
                       ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
                   )}
                 >
                   <FolderKanban className="h-5 w-5" />
@@ -365,4 +469,4 @@ export function Navbar() {
       )}
     </nav>
   );
-} 
+}

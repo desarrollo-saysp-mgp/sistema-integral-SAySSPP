@@ -7,6 +7,12 @@ export interface Database {
           full_name: string;
           email: string;
           role: "Admin" | "Reclamos" | "AdminLectura";
+
+          //  NUEVO
+          modules: string[] | null;
+          is_readonly: boolean | null;
+          default_module: string | null;
+
           created_at: string;
           updated_at: string;
         };
@@ -15,6 +21,11 @@ export interface Database {
           full_name: string;
           email: string;
           role: "Admin" | "Reclamos" | "AdminLectura";
+
+          modules?: string[] | null;
+          is_readonly?: boolean | null;
+          default_module?: string | null;
+
           created_at?: string;
           updated_at?: string;
         };
@@ -23,6 +34,11 @@ export interface Database {
           full_name?: string;
           email?: string;
           role?: "Admin" | "Reclamos" | "AdminLectura";
+
+          modules?: string[] | null;
+          is_readonly?: boolean | null;
+          default_module?: string | null;
+
           created_at?: string;
           updated_at?: string;
         };
