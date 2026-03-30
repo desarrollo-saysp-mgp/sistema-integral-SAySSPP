@@ -165,7 +165,7 @@ export function Navbar() {
                     <div className="flex flex-col gap-1 py-1">
                       <div className="flex items-center gap-2">
                         <Home className="h-4 w-4 text-[#00A27F]" />
-                        <span className="font-medium">Panel</span>
+                        <span className="font-medium">Inicio</span>
                       </div>
                       <p className="ml-6 text-xs text-muted-foreground">
                         Panel principal del módulo de reclamos
