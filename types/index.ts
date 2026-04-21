@@ -20,11 +20,19 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+export type UserRole =
+  | "Admin"
+  | "Reclamos"
+  | "ReclamosArbolado"
+  | "AdminLectura"
+  | "FC_RRHH"
+  | "FC_SECTOR";
+
 export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "Admin" | "Reclamos" | "AdminLectura";
+  role: UserRole;
 }
 
 export interface DashboardStats {
@@ -37,12 +45,13 @@ export interface DashboardStats {
 
 export interface UserFilters {
   search?: string;
-  role?: "Admin" | "Reclamos" | "AdminLectura";
+  role?: UserRole;
 }
+
 export interface UserFormData {
   full_name: string;
   email: string;
-  role: "Admin" | "Reclamos" | "AdminLectura";
+  role: UserRole;
   password?: string;
 }
 

@@ -242,6 +242,7 @@ export const STREETS = [
   "Calle 25",
   "Calle 25 bis",
   "Calle 25 Oeste",
+  "Calle 250",
   "Calle 252 bis",
   "Calle 254",
   "Calle 254 bis",

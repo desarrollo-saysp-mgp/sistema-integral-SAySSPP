@@ -4,8 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ComplaintForm,
-  ComplaintFormData,
+  type ComplaintFormData,
 } from "@/components/forms/ComplaintForm";
+import {
+  ArboladoComplaintForm,
+  type ArboladoComplaintFormData,
+} from "@/components/forms/ArboladoComplaintForm";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -60,7 +64,7 @@ export default function ComplaintDetailPage() {
     }
   };
 
-  const handleSubmit = async (
+  const handleGeneralSubmit = async (
     formData: ComplaintFormData,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -69,7 +73,48 @@ export default function ComplaintDetailPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          form_variant: "general",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 403) {
+        const message = data.error || "No tenés permisos para guardar cambios";
+        toast.error(message);
+        return { success: false, error: message };
+      }
+
+      if (!response.ok) {
+        toast.error(data.error || "Error al actualizar el reclamo");
+        return { success: false, error: data.error };
+      }
+
+      toast.success("Reclamo actualizado exitosamente");
+      router.push("/dashboard/complaints");
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating complaint:", error);
+      toast.error("Error al actualizar el reclamo");
+      return { success: false, error: "Error interno del servidor" };
+    }
+  };
+
+  const handleArboladoSubmit = async (
+    formData: ArboladoComplaintFormData,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`/api/complaints/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          form_variant: "arbolado",
+        }),
       });
 
       const data = await response.json();
@@ -144,9 +189,11 @@ export default function ComplaintDetailPage() {
     );
   }
 
+  const isArbolado = complaint.form_variant === "arbolado";
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-start">
+    <div className="container mx-auto space-y-6 p-6">
+      <div className="flex items-start justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Button
@@ -154,7 +201,7 @@ export default function ComplaintDetailPage() {
               size="sm"
               onClick={() => router.push("/dashboard/complaints")}
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Volver
             </Button>
           </div>
@@ -168,22 +215,32 @@ export default function ComplaintDetailPage() {
           </p>
         </div>
 
-        {(profile?.role === "Admin" || profile?.role === "Reclamos") && (
+        {(profile?.role === "Admin" ||
+          profile?.role === "Reclamos" ||
+          profile?.role === "ReclamosArbolado") && (
           <Button
             variant="destructive"
             onClick={() => setShowDeleteDialog(true)}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Eliminar Reclamo
           </Button>
         )}
       </div>
 
-      <ComplaintForm
-        complaint={complaint}
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-      />
+      {isArbolado ? (
+        <ArboladoComplaintForm
+          complaint={complaint}
+          onSubmit={handleArboladoSubmit}
+          onCancel={handleCancel}
+        />
+      ) : (
+        <ComplaintForm
+          complaint={complaint}
+          onSubmit={handleGeneralSubmit}
+          onCancel={handleCancel}
+        />
+      )}
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

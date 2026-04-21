@@ -6,13 +6,17 @@ export interface Database {
           id: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Reclamos" | "AdminLectura";
-
-          //  NUEVO
+          role:
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR";
           modules: string[] | null;
           is_readonly: boolean | null;
           default_module: string | null;
-
+          fc_sectors: string[] | null;
           created_at: string;
           updated_at: string;
         };
@@ -20,12 +24,17 @@ export interface Database {
           id?: string;
           full_name: string;
           email: string;
-          role: "Admin" | "Reclamos" | "AdminLectura";
-
+          role:
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
-
+          fc_sectors?: string[] | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -33,12 +42,17 @@ export interface Database {
           id?: string;
           full_name?: string;
           email?: string;
-          role?: "Admin" | "Reclamos" | "AdminLectura";
-
+          role?:
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
-
+          fc_sectors?: string[] | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -49,22 +63,29 @@ export interface Database {
           id: number;
           complaint_number: string | null;
           complaint_date: string;
-          complainant_name: string;
-          address: string;
-          street_number: string;
+          complainant_name: string | null;
+          address: string | null;
+          street_number: string | null;
           dni: string | null;
           phone_number: string | null;
           email: string | null;
-          service_id: number;
-          cause_id: number;
-          zone: string;
-          since_when: string;
-          contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp";
-          details: string;
+          service_id: number | null;
+          cause_id: number | null;
+          zone: string | null;
+          since_when: string | null;
+          contact_method:
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
+          details: string | null;
           status: "En proceso" | "Resuelto" | "No resuelto";
           referred: boolean;
           loaded_by: string;
           latlon: string | null;
+          form_variant: string | null;
+          extra_data: Record<string, unknown> | null;
           created_at: string;
           updated_at: string;
         };
@@ -72,22 +93,29 @@ export interface Database {
           id?: number;
           complaint_number?: string | null;
           complaint_date?: string;
-          complainant_name: string;
-          address: string;
-          street_number: string;
+          complainant_name?: string | null;
+          address?: string | null;
+          street_number?: string | null;
           dni?: string | null;
           phone_number?: string | null;
           email?: string | null;
-          service_id: number;
-          cause_id: number;
-          zone: string;
-          since_when: string;
-          contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp";
-          details: string;
+          service_id?: number | null;
+          cause_id?: number | null;
+          zone?: string | null;
+          since_when?: string | null;
+          contact_method?:
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
+          details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
           loaded_by: string;
           latlon?: string | null;
+          form_variant?: string | null;
+          extra_data?: Record<string, unknown> | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -95,22 +123,29 @@ export interface Database {
           id?: number;
           complaint_number?: string | null;
           complaint_date?: string;
-          complainant_name?: string;
-          address?: string;
-          street_number?: string;
+          complainant_name?: string | null;
+          address?: string | null;
+          street_number?: string | null;
           dni?: string | null;
           phone_number?: string | null;
           email?: string | null;
-          service_id?: number;
-          cause_id?: number;
-          zone?: string;
-          since_when?: string;
-          contact_method?: "Presencial" | "Telefono" | "Email" | "WhatsApp";
-          details?: string;
+          service_id?: number | null;
+          cause_id?: number | null;
+          zone?: string | null;
+          since_when?: string | null;
+          contact_method?:
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
+          details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
           loaded_by?: string;
           latlon?: string | null;
+          form_variant?: string | null;
+          extra_data?: Record<string, unknown> | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -242,8 +277,8 @@ export type CauseInsert = Database["public"]["Tables"]["causes"]["Insert"];
 export type CauseUpdate = Database["public"]["Tables"]["causes"]["Update"];
 
 export type ComplaintWithDetails = Complaint & {
-  service: Service;
-  cause: Cause;
+  service: Service | null;
+  cause: Cause | null;
   loaded_by_user: User;
 };
 
@@ -253,4 +288,10 @@ export type ComplaintHistoryWithUser = ComplaintHistory & {
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";
 export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp";
-export type UserRole = "Admin" | "Reclamos" | "AdminLectura";
+export type UserRole =
+  | "Admin"
+  | "Reclamos"
+  | "ReclamosArbolado"
+  | "AdminLectura"
+  | "FC_RRHH"
+  | "FC_SECTOR";

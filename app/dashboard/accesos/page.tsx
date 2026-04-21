@@ -24,10 +24,10 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
   },
   purchase_requests: {
     key: "purchase_requests",
-    title: "Solicitud de Compra",
-    description: "Gestión de solicitudes y formularios de compra.",
+    title: "Formularios de Compra",
+    description: "Gestión de formularios de compra por sector.",
     href: "/dashboard/solicitud-compra",
-    available: false,
+    available: true,
   },
   rrhh: {
     key: "rrhh",

@@ -6,10 +6,10 @@ import {
   useEffect,
   useState,
   useRef,
-  ReactNode,
+  type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@/types/database";
+import type { User, UserRole } from "@/types";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface UserContextType {
@@ -19,7 +19,7 @@ interface UserContextType {
   isAdmin: boolean;
   isAdministrative: boolean;
   isAuthenticated: boolean;
-  hasRole: (role: "Admin" | "Reclamos" | "AdminLectura") => boolean;
+  hasRole: (role: UserRole) => boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -154,8 +154,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     isAdministrative:
       profile?.role === "Admin" || profile?.role === "AdminLectura",
     isAuthenticated: !!user,
-    hasRole: (role: "Admin" | "Reclamos" | "AdminLectura") =>
-      profile?.role === role,
+    hasRole: (role: UserRole) => profile?.role === role,
     refreshProfile,
   };
 

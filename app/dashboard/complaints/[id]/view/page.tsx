@@ -27,9 +27,20 @@ import type {
 import { useUser } from "@/hooks/useUser";
 
 type ComplaintWithDetails = Complaint & {
-  service: Service;
-  cause: Cause;
+  service: Service | null;
+  cause: Cause | null;
   loaded_by_user: UserType;
+};
+
+type ComplaintExtraData = {
+  department?: unknown;
+  description_type?: unknown;
+  level?: unknown;
+  observations?: unknown;
+  solution?: unknown;
+  resolution_date?: unknown;
+  agent?: unknown;
+  resolution_responsible?: unknown;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -49,6 +60,19 @@ const FIELD_LABELS: Record<string, string> = {
   status: "Estado",
   referred: "Derivado",
   latlon: "Lat/Lon",
+  extra_data: "Datos adicionales",
+};
+
+const getExtraData = (complaint: Complaint): ComplaintExtraData => {
+  if (
+    complaint.extra_data &&
+    typeof complaint.extra_data === "object" &&
+    !Array.isArray(complaint.extra_data)
+  ) {
+    return complaint.extra_data as ComplaintExtraData;
+  }
+
+  return {};
 };
 
 export default function ComplaintViewPage() {
@@ -141,6 +165,16 @@ export default function ComplaintViewPage() {
     });
   };
 
+  const formatDateOnly = (dateString?: string | null) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
   const formatHistoryValue = (value: string | null) => {
     if (value === null || value === "") return "-";
     if (value === "true") return "Sí";
@@ -168,26 +202,27 @@ export default function ComplaintViewPage() {
     );
   }
 
+  const isArbolado = complaint.form_variant === "arbolado";
+  const extra = getExtraData(complaint);
+
   return (
-    <div className="container mx-auto p-6 max-w-4xl space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+    <div className="container mx-auto max-w-4xl space-y-6 p-6">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="space-y-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => router.push("/dashboard/complaints")}
-            className="hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200 active:scale-95 transition-all -ml-2"
+            className="-ml-2 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95 active:bg-gray-200"
           >
-            <ArrowLeft className="w-4 h-4 mr-1" />
+            <ArrowLeft className="mr-1 h-4 w-4" />
             Volver
           </Button>
 
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">
-              {complaint.complaint_number}
-            </h1>
+            <h1 className="text-2xl font-bold">{complaint.complaint_number}</h1>
             <Badge
-              className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}
+              className={`${getStatusColor(complaint.status)} border px-3 py-1 text-sm`}
             >
               {complaint.status}
             </Badge>
@@ -199,7 +234,7 @@ export default function ComplaintViewPage() {
         </div>
 
         <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
-          <Pencil className="w-4 h-4 mr-2" />
+          <Pencil className="mr-2 h-4 w-4" />
           Editar Reclamo
         </Button>
       </div>
@@ -207,29 +242,29 @@ export default function ComplaintViewPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <User className="w-5 h-5 text-[#5CADEB]" />
+            <User className="h-5 w-5 text-[#5CADEB]" />
             Datos del Reclamante
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <InfoField
               label="Nombre y Apellido"
-              value={complaint.complainant_name}
+              value={complaint.complainant_name || "-"}
             />
             <InfoField
               label="Dirección"
-              value={`${complaint.address} ${complaint.street_number}`}
-              icon={<MapPin className="w-4 h-4 text-muted-foreground" />}
+              value={`${complaint.address || "-"} ${complaint.street_number || ""}`.trim()}
+              icon={<MapPin className="h-4 w-4 text-muted-foreground" />}
             />
             <InfoField
               label="Medio de Contacto"
-              value={complaint.contact_method}
+              value={complaint.contact_method || "-"}
             />
             <InfoField
               label="Teléfono"
               value={complaint.phone_number || "-"}
-              icon={<Phone className="w-4 h-4 text-muted-foreground" />}
+              icon={<Phone className="h-4 w-4 text-muted-foreground" />}
             />
           </div>
         </CardContent>
@@ -238,48 +273,112 @@ export default function ComplaintViewPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="w-5 h-5 text-[#5CADEB]" />
+            <FileText className="h-5 w-5 text-[#5CADEB]" />
             Detalles del Reclamo
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <InfoField label="Servicio" value={complaint.service?.name || "-"} />
-            <InfoField label="Causa" value={complaint.cause?.name || "-"} />
-            <InfoField label="Zona" value={complaint.zone} />
-            <InfoField
-              label="Desde Cuándo"
-              value={complaint.since_when}
-              icon={<CalendarDays className="w-4 h-4 text-muted-foreground" />}
-            />
-          </div>
+          {isArbolado ? (
+            <>
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+                <InfoField
+                  label="Depto"
+                  value={
+                    typeof extra.department === "string"
+                      ? extra.department
+                      : "Arbolado"
+                  }
+                />
+                <InfoField
+                  label="Nivel"
+                  value={typeof extra.level === "string" ? extra.level : "-"}
+                />
+                <InfoField
+                  label="Descripción"
+                  value={
+                    typeof extra.description_type === "string"
+                      ? extra.description_type
+                      : complaint.details || "-"
+                  }
+                />
+                <InfoField
+                  label="Solución"
+                  value={typeof extra.solution === "string" ? extra.solution : "-"}
+                />
+                <InfoField
+                  label="Agente"
+                  value={typeof extra.agent === "string" ? extra.agent : "-"}
+                />
+                <InfoField
+                  label="Responsable de Resolución"
+                  value={
+                    typeof extra.resolution_responsible === "string"
+                      ? extra.resolution_responsible
+                      : "-"
+                  }
+                />
+                <InfoField
+                  label="Fecha de Resolución"
+                  value={formatDateOnly(
+                    typeof extra.resolution_date === "string"
+                      ? extra.resolution_date
+                      : null,
+                  )}
+                />
+              </div>
 
-          <div className="mt-4">
-            <p className="text-sm font-medium text-muted-foreground mb-2">
-              Detalle
-            </p>
-            <p className="text-sm whitespace-pre-wrap bg-muted/50 p-4 rounded-md leading-relaxed">
-              {complaint.details}
-            </p>
-          </div>
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
+                  Observaciones
+                </p>
+                <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
+                  {typeof extra.observations === "string"
+                    ? extra.observations
+                    : "-"}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+                <InfoField label="Servicio" value={complaint.service?.name || "-"} />
+                <InfoField label="Causa" value={complaint.cause?.name || "-"} />
+                <InfoField label="Zona" value={complaint.zone || "-"} />
+                <InfoField
+                  label="Desde Cuándo"
+                  value={complaint.since_when || "-"}
+                  icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
+                />
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
+                  Detalle
+                </p>
+                <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
+                  {complaint.details || "-"}
+                </p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Clock className="w-5 h-5 text-[#5CADEB]" />
+            <Clock className="h-5 w-5 text-[#5CADEB]" />
             Estado y Seguimiento
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">
+              <p className="mb-1 text-sm font-medium text-muted-foreground">
                 Estado
               </p>
               <Badge
-                className={`${getStatusColor(complaint.status)} border text-sm px-3 py-1`}
+                className={`${getStatusColor(complaint.status)} border px-3 py-1 text-sm`}
               >
                 {complaint.status}
               </Badge>
@@ -291,8 +390,8 @@ export default function ComplaintViewPage() {
             />
           </div>
 
-          <div className="border-t mt-5 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+          <div className="mt-5 border-t pt-4">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2">
               <p className="text-xs text-muted-foreground">
                 Creado: {formatDateTime(complaint.created_at)}
               </p>
@@ -308,7 +407,7 @@ export default function ComplaintViewPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <History className="w-5 h-5 text-[#5CADEB]" />
+              <History className="h-5 w-5 text-[#5CADEB]" />
               Historial de Cambios
             </CardTitle>
           </CardHeader>
@@ -326,7 +425,7 @@ export default function ComplaintViewPage() {
                 {history.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-md border p-4 bg-muted/20"
+                    className="rounded-md border bg-muted/20 p-4"
                   >
                     <div className="flex flex-col gap-1">
                       <p className="text-sm">
@@ -346,7 +445,7 @@ export default function ComplaintViewPage() {
                         <span className="font-medium">Después:</span>{" "}
                         {formatHistoryValue(item.new_value)}
                       </p>
-                      <p className="text-xs text-muted-foreground pt-1">
+                      <p className="pt-1 text-xs text-muted-foreground">
                         {formatDateTime(item.changed_at)}
                       </p>
                     </div>
@@ -372,7 +471,7 @@ function InfoField({
 }) {
   return (
     <div>
-      <p className="text-sm font-medium text-muted-foreground mb-0.5">
+      <p className="mb-0.5 text-sm font-medium text-muted-foreground">
         {label}
       </p>
       <div className="flex items-center gap-1.5">

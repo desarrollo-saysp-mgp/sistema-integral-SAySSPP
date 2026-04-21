@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FileText,
   Clock,
@@ -14,21 +14,75 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+type RecentComplaint = {
+  id: number;
+  complaint_number: string | null;
+  complaint_date: string;
+  complainant_name: string | null;
+  status: "En proceso" | "Resuelto" | "No resuelto";
+  service: { id: number; name: string } | null;
+  cause: { id: number; name: string } | null;
+  details?: string | null;
+  form_variant?: string | null;
+  extra_data?: Record<string, unknown> | null;
+};
+
 interface DashboardStats {
   total: number;
   inProgress: number;
   resolved: number;
   unresolved: number;
-  recentComplaints: Array<{
-    id: number;
-    complaint_number: string;
-    complaint_date: string;
-    complainant_name: string;
-    status: string;
-    service: { id: number; name: string };
-    cause: { id: number; name: string };
-  }>;
+  recentComplaints: RecentComplaint[];
 }
+
+const formatDate = (dateString: string) => {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return date.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case "En proceso":
+      return "bg-[#FFF7E8] text-[#C48814] border-[#F4D9A6]";
+    case "Resuelto":
+      return "bg-[#ECFDF7] text-[#00A27F] border-[#B7E7D9]";
+    case "No resuelto":
+      return "bg-[#FFF0F3] text-[#D85C76] border-[#F2C6D1]";
+    default:
+      return "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
+  }
+};
+
+const getComplaintSubtitle = (complaint: RecentComplaint) => {
+  const extra =
+    complaint.extra_data &&
+    typeof complaint.extra_data === "object" &&
+    !Array.isArray(complaint.extra_data)
+      ? complaint.extra_data
+      : null;
+
+  if (complaint.form_variant === "arbolado") {
+    const depto =
+      extra && "department" in extra
+        ? String(extra.department)
+        : "Arbolado";
+
+    const descripcion =
+      extra && "description_type" in extra
+        ? String(extra.description_type)
+        : complaint.details ?? "-";
+
+    return `${depto} - ${descripcion}`;
+  }
+
+  return `${complaint.service?.name ?? "-"} - ${complaint.cause?.name ?? "-"}`;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -43,7 +97,9 @@ export default function DashboardPage() {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/dashboard/stats");
+      const response = await fetch("/api/dashboard/stats", {
+        cache: "no-store",
+      });
       const data = await response.json();
 
       if (response.ok && data.data) {
@@ -62,28 +118,6 @@ export default function DashboardPage() {
   const navigateWithLoading = (url: string) => {
     startTransition(() => {
       router.push(url);
-    });
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "En proceso":
-        return "bg-[#FFF7E8] text-[#C48814] border-[#F4D9A6]";
-      case "Resuelto":
-        return "bg-[#ECFDF7] text-[#00A27F] border-[#B7E7D9]";
-      case "No resuelto":
-        return "bg-[#FFF0F3] text-[#D85C76] border-[#F2C6D1]";
-      default:
-        return "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
     });
   };
 
@@ -135,7 +169,7 @@ export default function DashboardPage() {
         <div className="flex flex-wrap gap-3">
           <Button
             onClick={() => navigateWithLoading("/dashboard/complaints/new")}
-            className="h-12 rounded-xl bg-[#00A27F] px-6 text-white font-semibold shadow-md transition-all hover:bg-[#008568] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+            className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
             disabled={isPending}
           >
             <Plus className="mr-2 h-5 w-5" />
@@ -257,7 +291,7 @@ export default function DashboardPage() {
               {stats.recentComplaints.map((complaint) => (
                 <div
                   key={complaint.id}
-                  className="flex cursor-pointer flex-col gap-4 rounded-2xl border border-[#E3E8E5] bg-[#FCFCFC] p-5 transition-colors hover:bg-[#F8FAF9] md:flex-row md:items-center md:justify-between"
+                  className="flex cursor-pointer flex-col gap-4 rounded-2xl border border-[#E3E8E5] bg-[#FCFCFC] p-5 transition-all hover:-translate-y-0.5 hover:bg-[#F8FAF9] hover:shadow-md md:flex-row md:items-center md:justify-between"
                   onClick={() =>
                     navigateWithLoading(
                       `/dashboard/complaints/${complaint.id}/view`,
@@ -267,18 +301,18 @@ export default function DashboardPage() {
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-sm text-[#6B7280]">
                       <span className="font-semibold text-[#373737]">
-                        {complaint.complaint_number}
+                        {complaint.complaint_number ?? "-"}
                       </span>
                       <span>•</span>
                       <span>{formatDate(complaint.complaint_date)}</span>
                     </div>
 
                     <div className="mt-2 text-base font-medium text-[#373737]">
-                      {complaint.complainant_name}
+                      {complaint.complainant_name || "Sin nombre"}
                     </div>
 
                     <div className="mt-1 text-sm text-[#6B7280]">
-                      {complaint.service.name} - {complaint.cause.name}
+                      {getComplaintSubtitle(complaint)}
                     </div>
                   </div>
 

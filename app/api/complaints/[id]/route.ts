@@ -24,9 +24,19 @@ const validSinceWhenValues = [
   "1 año",
 ];
 
+const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
+const validContactMethods = [
+  "Presencial",
+  "Telefono",
+  "Email",
+  "WhatsApp",
+];
+const validArboladoLevels = ["Urgente", "Importante", "Orden de llegada"];
+
 const normalizeValue = (value: unknown): string | null => {
   if (value === undefined || value === null) return null;
   if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 };
 
@@ -135,7 +145,8 @@ export async function PATCH(
 
     if (
       currentUser.role !== "Admin" &&
-      currentUser.role !== "Reclamos"
+      currentUser.role !== "Reclamos" &&
+      currentUser.role !== "ReclamosArbolado"
     ) {
       return NextResponse.json(
         { error: "No tenés permisos para guardar cambios" },
@@ -145,29 +156,22 @@ export async function PATCH(
 
     const body = await request.json();
 
-    if (body.status !== undefined) {
-      const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
-      if (!validStatuses.includes(body.status)) {
-        return NextResponse.json(
-          { error: "Estado inválido" },
-          { status: 400 },
-        );
-      }
+    if (body.status !== undefined && !validStatuses.includes(body.status)) {
+      return NextResponse.json(
+        { error: "Estado inválido" },
+        { status: 400 },
+      );
     }
 
-    if (body.contact_method !== undefined) {
-      const validContactMethods = [
-        "Presencial",
-        "Telefono",
-        "Email",
-        "WhatsApp",
-      ];
-      if (!validContactMethods.includes(body.contact_method)) {
-        return NextResponse.json(
-          { error: "Método de contacto inválido" },
-          { status: 400 },
-        );
-      }
+    if (
+      body.contact_method !== undefined &&
+      body.contact_method &&
+      !validContactMethods.includes(body.contact_method)
+    ) {
+      return NextResponse.json(
+        { error: "Método de contacto inválido" },
+        { status: 400 },
+      );
     }
 
     if (
@@ -177,6 +181,17 @@ export async function PATCH(
     ) {
       return NextResponse.json(
         { error: "Valor inválido para 'Desde Cuándo'" },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.level !== undefined &&
+      body.level &&
+      !validArboladoLevels.includes(body.level)
+    ) {
+      return NextResponse.json(
+        { error: "Nivel inválido para Arbolado" },
         { status: 400 },
       );
     }
@@ -215,77 +230,171 @@ export async function PATCH(
       );
     }
 
+    const formVariant = body.form_variant || currentComplaint.form_variant || "general";
     const updateData: ComplaintUpdate = {};
 
     if (body.complainant_name !== undefined) {
-      updateData.complainant_name = body.complainant_name.trim();
+      updateData.complainant_name = body.complainant_name
+        ? body.complainant_name.trim()
+        : null;
     }
+
     if (body.address !== undefined) {
-      updateData.address = body.address.trim();
+      updateData.address = body.address ? body.address.trim() : null;
     }
+
     if (body.street_number !== undefined) {
-      updateData.street_number = body.street_number.trim();
+      updateData.street_number = body.street_number
+        ? body.street_number.trim()
+        : null;
     }
+
     if (body.dni !== undefined) {
       updateData.dni = body.dni ? body.dni.trim() : null;
     }
+
     if (body.phone_number !== undefined) {
       updateData.phone_number = body.phone_number
         ? body.phone_number.trim()
         : null;
     }
+
     if (body.email !== undefined) {
       updateData.email = body.email ? body.email.trim() : null;
     }
-    if (body.service_id !== undefined) {
-      updateData.service_id = parseInt(body.service_id);
-    }
-    if (body.cause_id !== undefined) {
-      updateData.cause_id = parseInt(body.cause_id);
-    }
-    if (body.zone !== undefined) {
-      updateData.zone = body.zone.trim();
-    }
-    if (body.since_when !== undefined) {
-      updateData.since_when = body.since_when;
-    }
-    if (body.contact_method !== undefined) {
-      updateData.contact_method = body.contact_method;
-    }
-    if (body.details !== undefined) {
-      updateData.details = body.details.trim();
-    }
+
     if (body.status !== undefined) {
       updateData.status = body.status;
     }
+
     if (body.referred !== undefined) {
       updateData.referred = body.referred;
     }
+
     if (body.complaint_date !== undefined) {
       updateData.complaint_date = body.complaint_date;
     }
 
+    if (body.form_variant !== undefined) {
+      updateData.form_variant = body.form_variant;
+    }
+
+    if (formVariant === "general") {
+      if (body.service_id !== undefined) {
+        updateData.service_id = body.service_id ? parseInt(body.service_id) : null;
+      }
+
+      if (body.cause_id !== undefined) {
+        updateData.cause_id = body.cause_id ? parseInt(body.cause_id) : null;
+      }
+
+      if (body.zone !== undefined) {
+        updateData.zone = body.zone ? body.zone.trim() : null;
+      }
+
+      if (body.since_when !== undefined) {
+        updateData.since_when = body.since_when || null;
+      }
+
+      if (body.contact_method !== undefined) {
+        updateData.contact_method = body.contact_method || null;
+      }
+
+      if (body.details !== undefined) {
+        updateData.details = body.details ? body.details.trim() : null;
+      }
+    }
+
+    if (formVariant === "arbolado") {
+      if (body.contact_method !== undefined) {
+        updateData.contact_method = body.contact_method
+          ? body.contact_method.trim()
+          : null;
+      }
+
+      if (body.description_type !== undefined) {
+        updateData.details = body.description_type
+          ? body.description_type.trim()
+          : null;
+      }
+
+      const currentExtraData =
+        currentComplaint.extra_data &&
+        typeof currentComplaint.extra_data === "object"
+          ? currentComplaint.extra_data
+          : {};
+
+      const nextExtraData = {
+        ...currentExtraData,
+      } as Record<string, unknown>;
+
+      if (body.department !== undefined) {
+        nextExtraData.department = body.department ? body.department.trim() : null;
+      }
+
+      if (body.level !== undefined) {
+        nextExtraData.level = body.level ? body.level.trim() : null;
+      }
+
+      if (body.description_type !== undefined) {
+        nextExtraData.description_type = body.description_type
+          ? body.description_type.trim()
+          : null;
+      }
+
+      if (body.observations !== undefined) {
+        nextExtraData.observations = body.observations
+          ? body.observations.trim()
+          : null;
+      }
+
+      if (body.solution !== undefined) {
+        nextExtraData.solution = body.solution ? body.solution.trim() : null;
+      }
+
+      if (body.resolution_date !== undefined) {
+        nextExtraData.resolution_date = body.resolution_date || null;
+      }
+
+      if (body.agent !== undefined) {
+        nextExtraData.agent = body.agent ? body.agent.trim() : null;
+      }
+
+      if (body.resolution_responsible !== undefined) {
+        nextExtraData.resolution_responsible = body.resolution_responsible
+          ? body.resolution_responsible.trim()
+          : null;
+      }
+
+      updateData.extra_data = nextExtraData;
+    }
+
     const addressChanged =
       body.address !== undefined &&
-      body.address.trim() !== (currentComplaint.address ?? "").trim();
+      (body.address ? body.address.trim() : "") !==
+        (currentComplaint.address ?? "").trim();
 
     const streetNumberChanged =
       body.street_number !== undefined &&
-      body.street_number.trim() !==
-      (currentComplaint.street_number ?? "").trim();
+      (body.street_number ? body.street_number.trim() : "") !==
+        (currentComplaint.street_number ?? "").trim();
+
+    const nextAddress =
+      body.address !== undefined
+        ? body.address?.trim() || null
+        : currentComplaint.address;
+
+    const nextStreetNumber =
+      body.street_number !== undefined
+        ? body.street_number?.trim() || null
+        : currentComplaint.street_number;
 
     if (addressChanged || streetNumberChanged) {
-      const newAddress =
-        body.address !== undefined
-          ? body.address.trim()
-          : currentComplaint.address;
-
-      const newStreetNumber =
-        body.street_number !== undefined
-          ? body.street_number.trim()
-          : currentComplaint.street_number;
-
-      updateData.latlon = await obtenerLatLon(newAddress, newStreetNumber);
+      if (nextAddress && nextStreetNumber) {
+        updateData.latlon = await obtenerLatLon(nextAddress, nextStreetNumber);
+      } else {
+        updateData.latlon = null;
+      }
     }
 
     const updateKeys = Object.keys(updateData) as (keyof ComplaintUpdate)[];
@@ -429,12 +538,14 @@ export async function DELETE(
 
     if (
       !currentUser ||
-      (currentUser.role !== "Admin" && currentUser.role !== "Reclamos")
+      (currentUser.role !== "Admin" &&
+        currentUser.role !== "Reclamos" &&
+        currentUser.role !== "ReclamosArbolado")
     ) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Solo usuarios Admin o Reclamos pueden eliminar reclamos",
+            "No autorizado. Solo usuarios Admin, Reclamos o ReclamosArbolado pueden eliminar reclamos",
         },
         { status: 403 },
       );

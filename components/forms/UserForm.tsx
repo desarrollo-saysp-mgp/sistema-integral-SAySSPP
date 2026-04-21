@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { User, UserFormData } from "@/types";
+import type { User, UserFormData, UserRole } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,7 @@ interface UserFormProps {
 type FormState = {
   full_name: string;
   email: string;
-  role: "Admin" | "Reclamos" | "AdminLectura";
+  role: UserRole;
   password: string;
   confirmPassword: string;
 };
@@ -63,7 +63,7 @@ export function UserForm({
       setFormData({
         full_name: user.full_name || "",
         email: user.email || "",
-        role: user.role || "Reclamos",
+        role: (user.role as UserRole) || "Reclamos",
         password: "",
         confirmPassword: "",
       });
@@ -81,7 +81,7 @@ export function UserForm({
   }, [user, open]);
 
   const handleChange = (field: keyof FormState, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value as never }));
 
     if (errors[field]) {
       setErrors((prev) => {
@@ -207,12 +207,7 @@ export function UserForm({
             <Label htmlFor="role">Rol *</Label>
             <Select
               value={formData.role}
-              onValueChange={(value) =>
-                handleChange(
-                  "role",
-                  value as "Admin" | "Reclamos" | "AdminLectura",
-                )
-              }
+              onValueChange={(value) => handleChange("role", value)}
             >
               <SelectTrigger id="role">
                 <SelectValue placeholder="Seleccione un rol" />
@@ -220,7 +215,12 @@ export function UserForm({
               <SelectContent>
                 <SelectItem value="Admin">Admin</SelectItem>
                 <SelectItem value="Reclamos">Reclamos</SelectItem>
+                <SelectItem value="ReclamosArbolado">
+                  Reclamos Arbolado
+                </SelectItem>
                 <SelectItem value="AdminLectura">Admin Lectura</SelectItem>
+                <SelectItem value="FC_RRHH">FC + RRHH</SelectItem>
+                <SelectItem value="FC_SECTOR">FC Sector</SelectItem>
               </SelectContent>
             </Select>
             {errors.role && (

@@ -55,8 +55,8 @@ const formatLocalDate = (dateStr: string): string => {
 };
 
 type ComplaintWithDetails = Complaint & {
-  service: Service;
-  cause: Cause;
+  service: Service | null;
+  cause: Cause | null;
   loaded_by_user: User;
 };
 
@@ -70,6 +70,99 @@ type PdfStatusColors = {
   textColor: [number, number, number];
 };
 
+type ComplaintExtraData = {
+  department?: unknown;
+  description_type?: unknown;
+  level?: unknown;
+  observations?: unknown;
+  solution?: unknown;
+  resolution_date?: unknown;
+  agent?: unknown;
+  resolution_responsible?: unknown;
+};
+
+const getExtraData = (complaint: Complaint): ComplaintExtraData => {
+  if (
+    complaint.extra_data &&
+    typeof complaint.extra_data === "object" &&
+    !Array.isArray(complaint.extra_data)
+  ) {
+    return complaint.extra_data as ComplaintExtraData;
+  }
+
+  return {};
+};
+
+const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
+  const extra = getExtraData(complaint);
+  const isArbolado = complaint.form_variant === "arbolado";
+
+  const serviceLabel =
+    complaint.service?.name ??
+    (typeof extra.department === "string" ? extra.department : null) ??
+    (isArbolado ? "Arbolado" : "-");
+
+  const causeLabel =
+    complaint.cause?.name ??
+    (typeof extra.description_type === "string"
+      ? extra.description_type
+      : null) ??
+    complaint.details ??
+    "-";
+
+  const zoneLabel = complaint.zone ?? "-";
+
+  const sinceWhenLabel =
+    complaint.since_when ??
+    (typeof extra.level === "string" ? extra.level : null) ??
+    "-";
+
+  const detailLabel =
+    complaint.details ??
+    (typeof extra.observations === "string" ? extra.observations : null) ??
+    (typeof extra.description_type === "string" ? extra.description_type : null) ??
+    "-";
+
+  const addressLabel = `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
+
+  const resolutionDateLabel =
+    typeof extra.resolution_date === "string" && extra.resolution_date
+      ? formatLocalDate(extra.resolution_date)
+      : "-";
+
+  const agentLabel =
+    typeof extra.agent === "string" && extra.agent ? extra.agent : "-";
+
+  const departmentLabel =
+    typeof extra.department === "string" && extra.department
+      ? extra.department
+      : "Arbolado";
+
+  const levelLabel =
+    typeof extra.level === "string" && extra.level ? extra.level : "-";
+
+  const descriptionLabel =
+    typeof extra.description_type === "string" && extra.description_type
+      ? extra.description_type
+      : complaint.details || "-";
+
+  return {
+    isArbolado,
+    extra,
+    serviceLabel,
+    causeLabel,
+    zoneLabel,
+    sinceWhenLabel,
+    detailLabel,
+    addressLabel,
+    resolutionDateLabel,
+    agentLabel,
+    departmentLabel,
+    levelLabel,
+    descriptionLabel,
+  };
+};
+
 export function ComplaintsTable({
   complaints,
   onStatusChange,
@@ -77,6 +170,7 @@ export function ComplaintsTable({
   const router = useRouter();
   const { profile } = useUser();
   const isReadOnly = profile?.role === "AdminLectura";
+  const isArboladoUser = profile?.role === "ReclamosArbolado";
   const canSendWhatsApp =
     profile?.role === "Admin" || profile?.role === "Reclamos";
 
@@ -109,6 +203,12 @@ export function ComplaintsTable({
       selectedComplaintIds.includes(complaint.id),
     );
   }, [complaints, selectedComplaintIds]);
+
+  const exportComplaints = useMemo(() => {
+    return selectedComplaints.length > 0 ? selectedComplaints : complaints;
+  }, [selectedComplaints, complaints]);
+
+  const hasSelectedComplaints = selectedComplaints.length > 0;
 
   const allVisibleSelected =
     paginatedComplaints.length > 0 &&
@@ -279,13 +379,14 @@ export function ComplaintsTable({
     const partes: string[] = ["*Lista de reclamos:*", ""];
 
     items.forEach((item, index) => {
-      const direccion = `${item.address || "-"} ${item.street_number || ""}`.trim();
+      const display = getComplaintDisplayData(item);
+      const direccion = display.addressLabel;
       const telefono = item.phone_number || "-";
-      const servicio = item.service?.name || "-";
-      const causa = item.cause?.name || "-";
-      const zona = item.zone || "-";
-      const desde = item.since_when || "-";
-      const detalle = item.details || "-";
+      const servicio = display.serviceLabel || "-";
+      const causa = display.causeLabel || "-";
+      const zona = display.zoneLabel || "-";
+      const desde = display.sinceWhenLabel || "-";
+      const detalle = display.detailLabel || "-";
       const fecha = item.complaint_date ? formatDate(item.complaint_date) : "-";
       const cargadoPor = item.loaded_by_user?.full_name || "-";
 
@@ -300,7 +401,6 @@ export function ComplaintsTable({
       partes.push(`Zona/Sector: *${zona}*`);
       partes.push(`Desde: *${desde}*`);
       partes.push(`Detalle: *${detalle}*`);
-      partes.push(`Cargado por: *${cargadoPor}*`);
       partes.push("");
     });
 
@@ -326,17 +426,37 @@ export function ComplaintsTable({
 
   const exportToExcel = () => {
     try {
-      const formattedData = complaints.map((item) => ({
-        Número: item.complaint_number,
-        Fecha: formatDate(item.complaint_date),
-        Nombre: item.complainant_name,
-        Servicio: item.service?.name ?? "",
-        Causa: item.cause?.name ?? "",
-        Zona: item.zone,
-        "Desde Cuándo": item.since_when,
-        Estado: item.status,
-        "Cargado por": item.loaded_by_user?.full_name ?? "",
-      }));
+      const formattedData = exportComplaints.map((item) => {
+        const display = getComplaintDisplayData(item);
+
+        if (isArboladoUser) {
+          return {
+            Número: item.complaint_number,
+            Fecha: formatDate(item.complaint_date),
+            Nombre: item.complainant_name,
+            Dirección: display.addressLabel,
+            Depto: display.departmentLabel,
+            Nivel: display.levelLabel,
+            Descripción: display.descriptionLabel,
+            "Fecha resolución": display.resolutionDateLabel,
+            Agente: display.agentLabel,
+            Estado: item.status,
+            "Cargado por": item.loaded_by_user?.full_name ?? "",
+          };
+        }
+
+        return {
+          Número: item.complaint_number,
+          Fecha: formatDate(item.complaint_date),
+          Nombre: item.complainant_name,
+          Servicio: display.serviceLabel,
+          Causa: display.causeLabel,
+          Zona: display.zoneLabel,
+          "Desde Cuándo": display.sinceWhenLabel,
+          Estado: item.status,
+          "Cargado por": item.loaded_by_user?.full_name ?? "",
+        };
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(formattedData);
       const workbook = XLSX.utils.book_new();
@@ -352,8 +472,18 @@ export function ComplaintsTable({
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
       });
 
-      saveAs(blob, "reclamos_filtrados.xlsx");
-      toast.success("Excel exportado correctamente");
+      saveAs(
+        blob,
+        hasSelectedComplaints
+          ? "reclamos_seleccionados.xlsx"
+          : "reclamos_filtrados.xlsx",
+      );
+
+      toast.success(
+        hasSelectedComplaints
+          ? "Excel de reclamos seleccionados exportado correctamente"
+          : "Excel de reclamos filtrados exportado correctamente",
+      );
     } catch (error) {
       console.error("Error exporting Excel:", error);
       toast.error("Error al exportar Excel");
@@ -389,38 +519,76 @@ export function ComplaintsTable({
       doc.setFontSize(10);
       doc.setTextColor(71, 85, 105);
       doc.text("Atención Ciudadana - General Pico", 52, 21);
-      doc.text(`Cantidad de reclamos exportados: ${complaints.length}`, 14, 31);
+      doc.text(
+        `Cantidad de reclamos exportados: ${exportComplaints.length}`,
+        14,
+        31,
+      );
       doc.text(
         `Fecha de exportación: ${new Date().toLocaleString("es-AR")}`,
         14,
         37,
       );
 
-      const tableData = complaints.map((item) => [
-        item.complaint_number,
-        formatDate(item.complaint_date),
-        item.complainant_name,
-        item.service?.name ?? "",
-        item.cause?.name ?? "",
-        item.zone,
-        item.since_when,
-        item.status,
-        item.loaded_by_user?.full_name ?? "",
-      ]);
+      const arboladoHead = [[
+        "N°",
+        "Fecha",
+        "Nombre",
+        "Dirección",
+        "Depto",
+        "Nivel",
+        "Descripción",
+        "Fecha resolución",
+        "Agente",
+        "Estado",
+      ]];
+
+      const generalHead = [[
+        "N°",
+        "Fecha",
+        "Nombre",
+        "Servicio",
+        "Causa",
+        "Zona",
+        "Desde Cuándo",
+        "Estado",
+        "Cargado por",
+      ]];
+
+      const tableData = exportComplaints.map((item) => {
+        const display = getComplaintDisplayData(item);
+
+        if (isArboladoUser) {
+          return [
+            item.complaint_number,
+            formatDate(item.complaint_date),
+            item.complainant_name,
+            display.addressLabel,
+            display.departmentLabel,
+            display.levelLabel,
+            display.descriptionLabel,
+            display.resolutionDateLabel,
+            display.agentLabel,
+            item.status,
+          ];
+        }
+
+        return [
+          item.complaint_number,
+          formatDate(item.complaint_date),
+          item.complainant_name,
+          display.serviceLabel,
+          display.causeLabel,
+          display.zoneLabel,
+          display.sinceWhenLabel,
+          item.status,
+          item.loaded_by_user?.full_name ?? "",
+        ];
+      });
 
       autoTable(doc, {
         startY: 44,
-        head: [[
-          "N°",
-          "Fecha",
-          "Nombre",
-          "Servicio",
-          "Causa",
-          "Zona",
-          "Desde Cuándo",
-          "Estado",
-          "Cargado por",
-        ]],
+        head: isArboladoUser ? arboladoHead : generalHead,
         body: tableData,
         theme: "grid",
         styles: {
@@ -439,19 +607,10 @@ export function ComplaintsTable({
         alternateRowStyles: {
           fillColor: [248, 250, 252],
         },
-        columnStyles: {
-          0: { cellWidth: 12, halign: "center" },
-          1: { cellWidth: 22 },
-          2: { cellWidth: 38 },
-          3: { cellWidth: 28 },
-          4: { cellWidth: 34 },
-          5: { cellWidth: 14, halign: "center" },
-          6: { cellWidth: 24 },
-          7: { cellWidth: 28, halign: "center" },
-          8: { cellWidth: 34 },
-        },
         didParseCell: (data: CellHookData) => {
-          if (data.section === "body" && data.column.index === 7) {
+          const statusColumnIndex = isArboladoUser ? 9 : 7;
+
+          if (data.section === "body" && data.column.index === statusColumnIndex) {
             const status = String(data.cell.raw ?? "");
             const colors = getPdfStatusColors(status);
 
@@ -474,8 +633,17 @@ export function ComplaintsTable({
         },
       });
 
-      doc.save("reclamos_filtrados.pdf");
-      toast.success("PDF exportado correctamente");
+      doc.save(
+        hasSelectedComplaints
+          ? "reclamos_seleccionados.pdf"
+          : "reclamos_filtrados.pdf",
+      );
+
+      toast.success(
+        hasSelectedComplaints
+          ? "PDF de reclamos seleccionados exportado correctamente"
+          : "PDF de reclamos filtrados exportado correctamente",
+      );
     } catch (error) {
       console.error("Error exporting PDF:", error);
       toast.error("Error al exportar PDF");
@@ -498,16 +666,18 @@ export function ComplaintsTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleSendWhatsApp}
-          className="gap-2"
-          disabled={selectedComplaints.length === 0}
-        >
-          <MessageCircle className="h-4 w-4" />
-          Enviar WhatsApp
-        </Button>
+        {!isArboladoUser && canSendWhatsApp && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSendWhatsApp}
+            className="gap-2"
+            disabled={selectedComplaints.length === 0}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Enviar WhatsApp
+          </Button>
+        )}
 
         <Button
           type="button"
@@ -516,7 +686,9 @@ export function ComplaintsTable({
           className="gap-2"
         >
           <FileSpreadsheet className="h-4 w-4" />
-          Exportar Excel
+          {hasSelectedComplaints
+            ? `Exportar Excel ${selectedComplaints.length} seleccionados`
+            : "Exportar Excel"}
         </Button>
 
         <Button
@@ -526,13 +698,16 @@ export function ComplaintsTable({
           className="gap-2"
         >
           <FileText className="h-4 w-4" />
-          Exportar PDF
+          {hasSelectedComplaints
+            ? `Exportar PDF ${selectedComplaints.length} seleccionados`
+            : "Exportar PDF"}
         </Button>
       </div>
 
       {selectedComplaints.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          {selectedComplaints.length} reclamo(s) seleccionado(s)
+          {selectedComplaints.length} reclamo(s) seleccionado(s). Al exportar se
+          usarán solo esos reclamos.
         </p>
       )}
 
@@ -557,16 +732,35 @@ export function ComplaintsTable({
                   />
                 </div>
               </TableHead>
-              <TableHead>Número</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Servicio</TableHead>
-              <TableHead>Causa</TableHead>
-              <TableHead>Zona</TableHead>
-              <TableHead>Desde Cuándo</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Cargado por</TableHead>
-              <TableHead className="text-center">Acciones</TableHead>
+
+              {isArboladoUser ? (
+                <>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Dirección</TableHead>
+                  <TableHead>Depto</TableHead>
+                  <TableHead>Nivel</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Fecha resolución</TableHead>
+                  <TableHead>Agente</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Servicio</TableHead>
+                  <TableHead>Causa</TableHead>
+                  <TableHead>Zona</TableHead>
+                  <TableHead>Desde Cuándo</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Cargado por</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
 
@@ -575,6 +769,7 @@ export function ComplaintsTable({
               const isEvenRow = index % 2 === 0;
               const isUpdating = updatingStatus === complaint.id;
               const isSelected = selectedComplaintIds.includes(complaint.id);
+              const display = getComplaintDisplayData(complaint);
 
               return (
                 <TableRow
@@ -600,83 +795,165 @@ export function ComplaintsTable({
                     </div>
                   </TableCell>
 
-                  <TableCell className="font-medium">
-                    {complaint.complaint_number}
-                  </TableCell>
-                  <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
-                  <TableCell>{complaint.complainant_name}</TableCell>
-                  <TableCell>{complaint.service.name}</TableCell>
-                  <TableCell>{complaint.cause.name}</TableCell>
-                  <TableCell>{complaint.zone}</TableCell>
-                  <TableCell>{complaint.since_when}</TableCell>
-                  <TableCell>
-                    <div>
-                      {onStatusChange && !isReadOnly ? (
-                        <Select
-                          value={complaint.status}
-                          onValueChange={(value) =>
-                            handleStatusChange(complaint.id, value)
-                          }
-                          disabled={isUpdating}
-                        >
-                          <SelectTrigger
-                            className={`w-[150px] ${getStatusColor(
-                              complaint.status,
-                            )} ${isUpdating ? "opacity-80" : ""}`}
+                  {isArboladoUser ? (
+                    <>
+                      <TableCell className="font-medium">
+                        {complaint.complaint_number}
+                      </TableCell>
+                      <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
+                      <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
+                      <TableCell>{display.addressLabel}</TableCell>
+                      <TableCell>{display.departmentLabel}</TableCell>
+                      <TableCell>{display.levelLabel}</TableCell>
+                      <TableCell>{display.descriptionLabel}</TableCell>
+                      <TableCell>{display.resolutionDateLabel}</TableCell>
+                      <TableCell>{display.agentLabel}</TableCell>
+                      <TableCell>
+                        <div>
+                          {onStatusChange && !isReadOnly ? (
+                            <Select
+                              value={complaint.status}
+                              onValueChange={(value) =>
+                                handleStatusChange(complaint.id, value)
+                              }
+                              disabled={isUpdating}
+                            >
+                              <SelectTrigger
+                                className={`w-[150px] ${getStatusColor(
+                                  complaint.status,
+                                )} ${isUpdating ? "opacity-80" : ""}`}
+                              >
+                                {isUpdating ? (
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span>Guardando...</span>
+                                  </div>
+                                ) : (
+                                  <SelectValue />
+                                )}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="En proceso">
+                                  En proceso
+                                </SelectItem>
+                                <SelectItem value="Resuelto">Resuelto</SelectItem>
+                                <SelectItem value="No resuelto">
+                                  No resuelto
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge className={getStatusColor(complaint.status)}>
+                              {complaint.status}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleView(complaint.id)}
+                            title="Ver reclamo"
+                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
                           >
-                            {isUpdating ? (
-                              <div className="flex items-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Guardando...</span>
-                              </div>
-                            ) : (
-                              <SelectValue />
-                            )}
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="En proceso">
-                              En proceso
-                            </SelectItem>
-                            <SelectItem value="Resuelto">Resuelto</SelectItem>
-                            <SelectItem value="No resuelto">
-                              No resuelto
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge className={getStatusColor(complaint.status)}>
-                          {complaint.status}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {complaint.loaded_by_user?.full_name ??
-                      "Usuario no disponible"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleView(complaint.id)}
-                        title="Ver reclamo"
-                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                            <Eye className="h-4 w-4" />
+                          </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(complaint.id)}
-                        title="Editar reclamo"
-                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(complaint.id)}
+                            title="Editar reclamo"
+                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell className="font-medium">
+                        {complaint.complaint_number}
+                      </TableCell>
+                      <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
+                      <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
+                      <TableCell>{display.serviceLabel}</TableCell>
+                      <TableCell>{display.causeLabel}</TableCell>
+                      <TableCell>{display.zoneLabel}</TableCell>
+                      <TableCell>{display.sinceWhenLabel}</TableCell>
+                      <TableCell>
+                        <div>
+                          {onStatusChange && !isReadOnly ? (
+                            <Select
+                              value={complaint.status}
+                              onValueChange={(value) =>
+                                handleStatusChange(complaint.id, value)
+                              }
+                              disabled={isUpdating}
+                            >
+                              <SelectTrigger
+                                className={`w-[150px] ${getStatusColor(
+                                  complaint.status,
+                                )} ${isUpdating ? "opacity-80" : ""}`}
+                              >
+                                {isUpdating ? (
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span>Guardando...</span>
+                                  </div>
+                                ) : (
+                                  <SelectValue />
+                                )}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="En proceso">
+                                  En proceso
+                                </SelectItem>
+                                <SelectItem value="Resuelto">Resuelto</SelectItem>
+                                <SelectItem value="No resuelto">
+                                  No resuelto
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge className={getStatusColor(complaint.status)}>
+                              {complaint.status}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {complaint.loaded_by_user?.full_name ??
+                          "Usuario no disponible"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleView(complaint.id)}
+                            title="Ver reclamo"
+                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(complaint.id)}
+                            title="Editar reclamo"
+                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               );
             })}

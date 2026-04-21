@@ -71,21 +71,23 @@ export function ComplaintForm({
   ): ComplaintFormData => {
     if (complaintData) {
       return {
-        complaint_date: complaintData.complaint_date,
-        complainant_name: complaintData.complainant_name,
-        address: complaintData.address,
-        street_number: complaintData.street_number,
+        complaint_date: complaintData.complaint_date || today,
+        complainant_name: complaintData.complainant_name || "",
+        address: complaintData.address || "",
+        street_number: complaintData.street_number || "",
         dni: complaintData.dni || "",
         phone_number: complaintData.phone_number || "",
         email: complaintData.email || "",
-        service_id: complaintData.service_id.toString(),
-        cause_id: complaintData.cause_id.toString(),
-        zone: complaintData.zone,
-        since_when: complaintData.since_when as SinceWhenPeriod,
-        contact_method: complaintData.contact_method,
-        details: complaintData.details,
+        service_id: complaintData.service_id
+          ? complaintData.service_id.toString()
+          : "",
+        cause_id: complaintData.cause_id ? complaintData.cause_id.toString() : "",
+        zone: complaintData.zone || "",
+        since_when: ((complaintData.since_when as SinceWhenPeriod) || ""),
+        contact_method: complaintData.contact_method || "",
+        details: complaintData.details || "",
         status: complaintData.status,
-        referred: complaintData.referred,
+        referred: complaintData.referred ?? false,
       };
     }
 
@@ -200,7 +202,7 @@ export function ComplaintForm({
       if (
         complaintWithDetails.cause &&
         complaintWithDetails.cause.service_id === parseInt(formData.service_id) &&
-        !filtered.some((c) => c.id === complaintWithDetails.cause.id)
+        !filtered.some((c) => c.id === complaintWithDetails.cause?.id)
       ) {
         filtered = [...filtered, complaintWithDetails.cause];
       }

@@ -19,30 +19,57 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const [
-      totalResult,
-      inProgressResult,
-      resolvedResult,
-      unresolvedResult,
-      recentResult,
-    ] = await Promise.all([
-      supabase.from("complaints").select("*", { count: "exact", head: true }),
+    const { data: currentUser, error: userError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
+    if (userError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo validar el usuario" },
+        { status: 500 },
+      );
+    }
+
+    const applyRoleFilter = <T>(query: T): T => {
+      if (currentUser.role === "ReclamosArbolado") {
+        return (query as any).eq("form_variant", "arbolado");
+      }
+
+      if (currentUser.role === "Reclamos") {
+        return (query as any).or("form_variant.eq.general,form_variant.is.null");
+      }
+
+      return query;
+    };
+
+    const totalQuery = applyRoleFilter(
+      supabase.from("complaints").select("*", { count: "exact", head: true }),
+    );
+
+    const inProgressQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select("*", { count: "exact", head: true })
         .eq("status", "En proceso"),
+    );
 
+    const resolvedQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select("*", { count: "exact", head: true })
         .eq("status", "Resuelto"),
+    );
 
+    const unresolvedQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select("*", { count: "exact", head: true })
         .eq("status", "No resuelto"),
+    );
 
+    const recentQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select(
@@ -52,12 +79,29 @@ export async function GET() {
           complaint_date,
           complainant_name,
           status,
+          details,
+          form_variant,
+          extra_data,
           service:services(id, name),
           cause:causes(id, name)
         `,
         )
-        .order("created_at", { ascending: false })
+        .order("complaint_number", { ascending: false })
         .limit(5),
+    );
+
+    const [
+      totalResult,
+      inProgressResult,
+      resolvedResult,
+      unresolvedResult,
+      recentResult,
+    ] = await Promise.all([
+      totalQuery,
+      inProgressQuery,
+      resolvedQuery,
+      unresolvedQuery,
+      recentQuery,
     ]);
 
     if (totalResult.error) {

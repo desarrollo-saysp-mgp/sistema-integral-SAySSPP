@@ -2,6 +2,119 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { UserUpdate } from "@/types";
 
+type SupportedRole =
+  | "Admin"
+  | "Reclamos"
+  | "ReclamosArbolado"
+  | "AdminLectura"
+  | "FC_RRHH"
+  | "FC_SECTOR";
+
+function getRoleConfig(role: SupportedRole, email?: string) {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+
+  switch (role) {
+    case "Admin":
+      return {
+        modules: [
+          "complaints",
+          "purchase_requests",
+          "rrhh",
+          "fleet",
+          "work_orders",
+          "fuel",
+          "kilometers",
+          "tires",
+          "apu",
+          "zv",
+          "girsu",
+          "public_services",
+        ],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "AdminLectura":
+      return {
+        modules: [
+          "complaints",
+          "purchase_requests",
+          "rrhh",
+          "fleet",
+          "work_orders",
+          "fuel",
+          "kilometers",
+          "tires",
+          "apu",
+          "zv",
+          "girsu",
+          "public_services",
+        ],
+        is_readonly: true,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "Reclamos":
+      return {
+        modules: ["complaints"],
+        is_readonly: false,
+        default_module: "complaints",
+        fc_sectors: [],
+      };
+
+    case "ReclamosArbolado":
+      return {
+        modules: ["complaints"],
+        is_readonly: false,
+        default_module: "complaints",
+        fc_sectors: [],
+      };
+
+    case "FC_RRHH":
+      return {
+        modules: ["purchase_requests", "rrhh"],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "FC_SECTOR": {
+      const sectorMap: Record<string, string[]> = {
+        "arqbelliardolucas@gmail.com": ["arbolado"],
+        "yonafigueroa2016@gmail.com": ["arbolado"],
+        "dir.arboladoyparquesurbanos@gmail.com": ["arbolado"],
+        "reservanaturaldelfinperez@gmail.com": ["arbolado"],
+
+        "suministros.mgp@gmail.com": ["suministros"],
+        "suministroscorralon@gmail.com": ["suministros"],
+        "comprasyactivos.gp@gmail.com": ["suministros"],
+
+        "direcciondezoonosismgp@gmail.com": ["zv"],
+
+        "adm.serviciospublicos.mgp@gmail.com": ["sp"],
+        "direccionspgralpico@gmail.com": ["sp"],
+      };
+
+      return {
+        modules: ["purchase_requests"],
+        is_readonly: false,
+        default_module: "purchase_requests",
+        fc_sectors: sectorMap[normalizedEmail] ?? [],
+      };
+    }
+
+    default:
+      return {
+        modules: [],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: [],
+      };
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -93,18 +206,26 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { full_name, email, role, password } = body;
+    const { full_name, email, role, password } = body as {
+      full_name?: string;
+      email?: string;
+      role?: SupportedRole;
+      password?: string;
+    };
 
     if (
       role &&
       role !== "Admin" &&
       role !== "Reclamos" &&
-      role !== "AdminLectura"
+      role !== "ReclamosArbolado" &&
+      role !== "AdminLectura" &&
+      role !== "FC_RRHH" &&
+      role !== "FC_SECTOR"
     ) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos" o "AdminLectura"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "AdminLectura", "FC_RRHH" o "FC_SECTOR"',
         },
         { status: 400 },
       );
@@ -141,7 +262,15 @@ export async function PATCH(
     const userUpdate: UserUpdate = {};
     if (full_name) userUpdate.full_name = full_name;
     if (email) userUpdate.email = email;
-    if (role) userUpdate.role = role;
+
+    if (role) {
+      userUpdate.role = role;
+      const config = getRoleConfig(role, email);
+      userUpdate.modules = config.modules;
+      userUpdate.is_readonly = config.is_readonly;
+      userUpdate.default_module = config.default_module;
+      userUpdate.fc_sectors = config.fc_sectors;
+    }
 
     const { data: updatedUser, error: dbError } = await supabase
       .from("users")

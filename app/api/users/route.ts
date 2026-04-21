@@ -1,6 +1,119 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+type SupportedRole =
+  | "Admin"
+  | "Reclamos"
+  | "ReclamosArbolado"
+  | "AdminLectura"
+  | "FC_RRHH"
+  | "FC_SECTOR";
+
+function getRoleConfig(role: SupportedRole, email?: string) {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+
+  switch (role) {
+    case "Admin":
+      return {
+        modules: [
+          "complaints",
+          "purchase_requests",
+          "rrhh",
+          "fleet",
+          "work_orders",
+          "fuel",
+          "kilometers",
+          "tires",
+          "apu",
+          "zv",
+          "girsu",
+          "public_services",
+        ],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "AdminLectura":
+      return {
+        modules: [
+          "complaints",
+          "purchase_requests",
+          "rrhh",
+          "fleet",
+          "work_orders",
+          "fuel",
+          "kilometers",
+          "tires",
+          "apu",
+          "zv",
+          "girsu",
+          "public_services",
+        ],
+        is_readonly: true,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "Reclamos":
+      return {
+        modules: ["complaints"],
+        is_readonly: false,
+        default_module: "complaints",
+        fc_sectors: [],
+      };
+
+    case "ReclamosArbolado":
+      return {
+        modules: ["complaints"],
+        is_readonly: false,
+        default_module: "complaints",
+        fc_sectors: [],
+      };
+
+    case "FC_RRHH":
+      return {
+        modules: ["purchase_requests", "rrhh"],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: ["all"],
+      };
+
+    case "FC_SECTOR": {
+      const sectorMap: Record<string, string[]> = {
+        "arqbelliardolucas@gmail.com": ["arbolado"],
+        "yonafigueroa2016@gmail.com": ["arbolado"],
+        "dir.arboladoyparquesurbanos@gmail.com": ["arbolado"],
+        "reservanaturaldelfinperez@gmail.com": ["arbolado"],
+
+        "suministros.mgp@gmail.com": ["suministros"],
+        "suministroscorralon@gmail.com": ["suministros"],
+        "comprasyactivos.gp@gmail.com": ["suministros"],
+
+        "direcciondezoonosismgp@gmail.com": ["zv"],
+
+        "adm.serviciospublicos.mgp@gmail.com": ["sp"],
+        "direccionspgralpico@gmail.com": ["sp"],
+      };
+
+      return {
+        modules: ["purchase_requests"],
+        is_readonly: false,
+        default_module: "purchase_requests",
+        fc_sectors: sectorMap[normalizedEmail] ?? [],
+      };
+    }
+
+    default:
+      return {
+        modules: [],
+        is_readonly: false,
+        default_module: null,
+        fc_sectors: [],
+      };
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -36,11 +149,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
-    const role = searchParams.get("role") as
-      | "Admin"
-      | "Reclamos"
-      | "AdminLectura"
-      | null;
+    const role = searchParams.get("role") as SupportedRole | null;
 
     let query = supabase
       .from("users")
@@ -102,7 +211,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { full_name, email, role, password } = body;
+    const { full_name, email, role, password } = body as {
+      full_name?: string;
+      email?: string;
+      role?: SupportedRole;
+      password?: string;
+    };
 
     if (!full_name || !email || !role || !password) {
       return NextResponse.json(
@@ -117,12 +231,15 @@ export async function POST(request: NextRequest) {
     if (
       role !== "Admin" &&
       role !== "Reclamos" &&
-      role !== "AdminLectura"
+      role !== "ReclamosArbolado" &&
+      role !== "AdminLectura" &&
+      role !== "FC_RRHH" &&
+      role !== "FC_SECTOR"
     ) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos" o "AdminLectura"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "AdminLectura", "FC_RRHH" o "FC_SECTOR"',
         },
         { status: 400 },
       );
@@ -144,7 +261,6 @@ export async function POST(request: NextRequest) {
         email_confirm: true,
         user_metadata: {
           full_name,
-          role,
         },
       });
 
@@ -160,16 +276,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // El trigger crea la fila en public.users.
-    // Re-leemos el usuario para devolverlo al frontend.
+    const roleConfig = getRoleConfig(role, email);
+
     const { data: newUser, error: dbError } = await supabase
       .from("users")
-      .select("*")
+      .update({
+        full_name,
+        email,
+        role,
+        modules: roleConfig.modules,
+        is_readonly: roleConfig.is_readonly,
+        default_module: roleConfig.default_module,
+        fc_sectors: roleConfig.fc_sectors,
+      })
       .eq("id", newAuthUser.user.id)
+      .select("*")
       .single();
 
     if (dbError || !newUser) {
-      console.error("Error fetching created user from database:", dbError);
+      console.error("Error updating created user in database:", dbError);
 
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
 

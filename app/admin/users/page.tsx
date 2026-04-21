@@ -105,7 +105,12 @@ export default function UsersPage() {
 
   const handleRoleFilter = (role: string | undefined) => {
     setFilters({
-      role: role as "Admin" | "Reclamos" | "AdminLectura" | undefined,
+      role: role as
+        | "Admin"
+        | "Reclamos"
+        | "AdminLectura"
+        | "FC_RRHH"
+        | undefined,
     });
   };
 
