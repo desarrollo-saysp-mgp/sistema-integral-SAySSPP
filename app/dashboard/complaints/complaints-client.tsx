@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 
 const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
+const ZONE_OPTIONS = Array.from({ length: 16 }, (_, i) => String(i + 1));
 
 type ComplaintWithDetails = Complaint & {
   service: Service | null;
@@ -69,6 +70,7 @@ export default function ComplaintsClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [zoneFilter, setZoneFilter] = useState("all");
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
 
@@ -96,7 +98,14 @@ export default function ComplaintsClient() {
 
   useEffect(() => {
     fetchComplaints();
-  }, [statusFilter, serviceFilter, dateFromFilter, dateToFilter, isArboladoUser]);
+  }, [
+    statusFilter,
+    serviceFilter,
+    zoneFilter,
+    dateFromFilter,
+    dateToFilter,
+    isArboladoUser,
+  ]);
 
   const fetchServices = async () => {
     try {
@@ -123,6 +132,10 @@ export default function ComplaintsClient() {
 
       if (!isArboladoUser && serviceFilter && serviceFilter !== "all") {
         params.append("service_id", serviceFilter);
+      }
+
+      if (!isArboladoUser && zoneFilter && zoneFilter !== "all") {
+        params.append("zone", zoneFilter);
       }
 
       if (dateFromFilter) params.append("date_from", dateFromFilter);
@@ -265,6 +278,7 @@ export default function ComplaintsClient() {
     setSearchTerm("");
     setStatusFilter("all");
     setServiceFilter("all");
+    setZoneFilter("all");
     setDateFromFilter("");
     setDateToFilter("");
     setDepartmentFilter("all");
@@ -287,6 +301,7 @@ export default function ComplaintsClient() {
         searchTerm ||
         statusFilter !== "all" ||
         serviceFilter !== "all" ||
+        zoneFilter !== "all" ||
         dateFromFilter ||
         dateToFilter
       );
@@ -318,7 +333,7 @@ export default function ComplaintsClient() {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 items-end gap-4 xl:grid-cols-12">
+          <div className="grid grid-cols-1 items-end gap-4 xl:grid-cols-14">
             <div className="flex flex-col gap-1.5 xl:col-span-4">
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
@@ -353,22 +368,41 @@ export default function ComplaintsClient() {
             </div>
 
             {!isArboladoUser && (
-              <div className="flex flex-col gap-1.5 xl:col-span-2">
-                <Label htmlFor="service-filter">Servicio</Label>
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger id="service-filter" className="h-11 w-full">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id.toString()}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <Label htmlFor="service-filter">Servicio</Label>
+                  <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                    <SelectTrigger id="service-filter" className="h-11 w-full">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {services.map((service) => (
+                        <SelectItem key={service.id} value={service.id.toString()}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <Label htmlFor="zone-filter">Zona</Label>
+                  <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                    <SelectTrigger id="zone-filter" className="h-11 w-full">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {ZONE_OPTIONS.map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          Zona {zone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
 
             {isArboladoUser && (

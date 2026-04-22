@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const status = searchParams.get("status");
     const service_id = searchParams.get("service_id");
+    const zone = searchParams.get("zone");
     const date_from = searchParams.get("date_from");
     const date_to = searchParams.get("date_to");
     const form_variant = searchParams.get("form_variant");
@@ -86,7 +87,9 @@ export async function GET(request: NextRequest) {
       }
 
       if (currentUser.role === "Reclamos") {
-        query = query.or("form_variant.eq.general,form_variant.is.null");
+        query = query.or(
+          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+        );
       }
 
       // Filtros manuales
@@ -100,6 +103,10 @@ export async function GET(request: NextRequest) {
 
       if (service_id && service_id !== "all") {
         query = query.eq("service_id", parseInt(service_id));
+      }
+
+      if (zone && zone !== "all") {
+        query = query.eq("zone", zone);
       }
 
       if (date_from) {
