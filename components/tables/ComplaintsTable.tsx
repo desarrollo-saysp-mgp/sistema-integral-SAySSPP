@@ -123,7 +123,8 @@ const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
     (typeof extra.description_type === "string" ? extra.description_type : null) ??
     "-";
 
-  const addressLabel = `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
+  const addressLabel =
+    `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
 
   const resolutionDateLabel =
     typeof extra.resolution_date === "string" && extra.resolution_date
@@ -161,12 +162,6 @@ const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
     levelLabel,
     descriptionLabel,
   };
-};
-
-const getComplaintNumber = (complaint: ComplaintWithDetails) => {
-  return complaint.form_variant === "arbolado"
-    ? complaint.arbolado_number ?? "-"
-    : complaint.complaint_number ?? "-";
 };
 
 export function ComplaintsTable({
@@ -397,7 +392,7 @@ export function ComplaintsTable({
       const cargadoPor = item.loaded_by_user?.full_name || "-";
 
       partes.push(`*Reclamo ${index + 1}*`);
-      partes.push(`Número: *${getComplaintNumber(item)}*`);
+      partes.push(`Número: *${item.complaint_number || "-"}*`);
       partes.push(`Fecha: *${fecha}*`);
       partes.push(`Nombre: *${item.complainant_name || "-"}*`);
       partes.push(`Dirección: *${direccion || "-"}*`);
@@ -407,6 +402,7 @@ export function ComplaintsTable({
       partes.push(`Zona/Sector: *${zona}*`);
       partes.push(`Desde: *${desde}*`);
       partes.push(`Detalle: *${detalle}*`);
+      partes.push(`Cargado por: *${cargadoPor}*`);
       partes.push("");
     });
 
@@ -437,7 +433,7 @@ export function ComplaintsTable({
 
         if (isArboladoUser) {
           return {
-            Número: getComplaintNumber(item),
+            Número: item.complaint_number,
             Fecha: formatDate(item.complaint_date),
             Nombre: item.complainant_name,
             Dirección: display.addressLabel,
@@ -452,15 +448,14 @@ export function ComplaintsTable({
         }
 
         return {
-          Número: getComplaintNumber(item),
+          Número: item.complaint_number,
           Fecha: formatDate(item.complaint_date),
           Nombre: item.complainant_name,
+          Dirección: display.addressLabel,
           Servicio: display.serviceLabel,
           Causa: display.causeLabel,
-          Zona: display.zoneLabel,
           "Desde Cuándo": display.sinceWhenLabel,
           Estado: item.status,
-          "Cargado por": item.loaded_by_user?.full_name ?? "",
         };
       });
 
@@ -553,12 +548,11 @@ export function ComplaintsTable({
         "N°",
         "Fecha",
         "Nombre",
+        "Dirección",
         "Servicio",
         "Causa",
-        "Zona",
         "Desde Cuándo",
         "Estado",
-        "Cargado por",
       ]];
 
       const tableData = exportComplaints.map((item) => {
@@ -566,7 +560,7 @@ export function ComplaintsTable({
 
         if (isArboladoUser) {
           return [
-            getComplaintNumber(item),
+            item.complaint_number,
             formatDate(item.complaint_date),
             item.complainant_name,
             display.addressLabel,
@@ -580,15 +574,14 @@ export function ComplaintsTable({
         }
 
         return [
-          getComplaintNumber(item),
+          item.complaint_number,
           formatDate(item.complaint_date),
           item.complainant_name,
+          display.addressLabel,
           display.serviceLabel,
           display.causeLabel,
-          display.zoneLabel,
           display.sinceWhenLabel,
           item.status,
-          item.loaded_by_user?.full_name ?? "",
         ];
       });
 
@@ -745,8 +738,8 @@ export function ComplaintsTable({
                   <TableHead>Fecha</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Dirección</TableHead>
-                  {!isArboladoUser && <TableHead>Depto</TableHead>}
-                  {!isArboladoUser && <TableHead>Nivel</TableHead>}
+                  <TableHead>Depto</TableHead>
+                  <TableHead>Nivel</TableHead>
                   <TableHead>Descripción</TableHead>
                   <TableHead>Fecha resolución</TableHead>
                   <TableHead>Agente</TableHead>
@@ -796,7 +789,7 @@ export function ComplaintsTable({
                             checked === true,
                           )
                         }
-                        aria-label={`Seleccionar reclamo ${getComplaintNumber(complaint)}`}
+                        aria-label={`Seleccionar reclamo ${complaint.complaint_number}`}
                       />
                     </div>
                   </TableCell>
@@ -804,17 +797,13 @@ export function ComplaintsTable({
                   {isArboladoUser ? (
                     <>
                       <TableCell className="font-medium">
-                        {getComplaintNumber(complaint)}
+                        {complaint.complaint_number}
                       </TableCell>
                       <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
                       <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
                       <TableCell>{display.addressLabel}</TableCell>
-                      {!isArboladoUser && (
-                        <TableCell>{display.departmentLabel}</TableCell>
-                      )}
-                      {!isArboladoUser && (
-                        <TableCell>{display.levelLabel}</TableCell>
-                      )}
+                      <TableCell>{display.departmentLabel}</TableCell>
+                      <TableCell>{display.levelLabel}</TableCell>
                       <TableCell>{display.descriptionLabel}</TableCell>
                       <TableCell>{display.resolutionDateLabel}</TableCell>
                       <TableCell>{display.agentLabel}</TableCell>
@@ -886,7 +875,7 @@ export function ComplaintsTable({
                   ) : (
                     <>
                       <TableCell className="font-medium">
-                        {getComplaintNumber(complaint)}
+                        {complaint.complaint_number}
                       </TableCell>
                       <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
                       <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
