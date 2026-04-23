@@ -62,6 +62,7 @@ export interface Database {
         Row: {
           id: number;
           complaint_number: string | null;
+          arbolado_number: number | null;
           complaint_date: string;
           complainant_name: string | null;
           address: string | null;
@@ -92,6 +93,7 @@ export interface Database {
         Insert: {
           id?: number;
           complaint_number?: string | null;
+          arbolado_number?: number | null;
           complaint_date?: string;
           complainant_name?: string | null;
           address?: string | null;
@@ -122,6 +124,7 @@ export interface Database {
         Update: {
           id?: number;
           complaint_number?: string | null;
+          arbolado_number?: number | null;
           complaint_date?: string;
           complainant_name?: string | null;
           address?: string | null;

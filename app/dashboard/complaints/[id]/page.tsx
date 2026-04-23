@@ -191,6 +191,11 @@ export default function ComplaintDetailPage() {
 
   const isArbolado = complaint.form_variant === "arbolado";
 
+  const displayComplaintNumber =
+    complaint.form_variant === "arbolado"
+      ? complaint.arbolado_number ?? "-"
+      : complaint.complaint_number ?? "-";
+
   return (
     <div className="container mx-auto space-y-6 p-6">
       <div className="flex items-start justify-between">
@@ -206,7 +211,7 @@ export default function ComplaintDetailPage() {
             </Button>
           </div>
           <h1 className="text-3xl font-bold">
-            Reclamo {complaint.complaint_number}
+            Reclamo {displayComplaintNumber}
           </h1>
           <p className="text-muted-foreground">
             {profile?.role === "AdminLectura"
@@ -218,14 +223,14 @@ export default function ComplaintDetailPage() {
         {(profile?.role === "Admin" ||
           profile?.role === "Reclamos" ||
           profile?.role === "ReclamosArbolado") && (
-          <Button
-            variant="destructive"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Eliminar Reclamo
-          </Button>
-        )}
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Eliminar Reclamo
+            </Button>
+          )}
       </div>
 
       {isArbolado ? (
@@ -249,7 +254,7 @@ export default function ComplaintDetailPage() {
             <AlertDialogDescription>
               Esta acción no se puede deshacer. El reclamo{" "}
               <span className="font-semibold">
-                {complaint.complaint_number}
+                {displayComplaintNumber}
               </span>{" "}
               será eliminado permanentemente.
             </AlertDialogDescription>

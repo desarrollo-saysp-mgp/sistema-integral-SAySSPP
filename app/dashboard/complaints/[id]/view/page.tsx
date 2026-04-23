@@ -205,6 +205,11 @@ export default function ComplaintViewPage() {
   const isArbolado = complaint.form_variant === "arbolado";
   const extra = getExtraData(complaint);
 
+  const displayComplaintNumber =
+  complaint.form_variant === "arbolado"
+    ? complaint.arbolado_number ?? "-"
+    : complaint.complaint_number ?? "-";
+
   return (
     <div className="container mx-auto max-w-4xl space-y-6 p-6">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
@@ -220,7 +225,7 @@ export default function ComplaintViewPage() {
           </Button>
 
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{complaint.complaint_number}</h1>
+            <h1 className="text-2xl font-bold">{displayComplaintNumber}</h1>
             <Badge
               className={`${getStatusColor(complaint.status)} border px-3 py-1 text-sm`}
             >

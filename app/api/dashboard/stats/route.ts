@@ -69,13 +69,14 @@ export async function GET() {
         .eq("status", "No resuelto"),
     );
 
-    const recentQuery = applyRoleFilter(
+    let recentQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select(
           `
           id,
           complaint_number,
+          arbolado_number,
           complaint_date,
           complainant_name,
           status,
@@ -86,9 +87,18 @@ export async function GET() {
           cause:causes(id, name)
         `,
         )
-        .order("complaint_number", { ascending: false })
         .limit(5),
     );
+
+    if (currentUser.role === "ReclamosArbolado") {
+      recentQuery = (recentQuery as any).order("arbolado_number", {
+        ascending: false,
+      });
+    } else {
+      recentQuery = (recentQuery as any).order("complaint_number", {
+        ascending: false,
+      });
+    }
 
     const [
       totalResult,

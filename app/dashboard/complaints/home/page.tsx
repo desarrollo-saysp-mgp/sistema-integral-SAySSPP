@@ -17,6 +17,7 @@ import { toast } from "sonner";
 type RecentComplaint = {
   id: number;
   complaint_number: string | null;
+  arbolado_number?: number | null;
   complaint_date: string;
   complainant_name: string | null;
   status: "En proceso" | "Resuelto" | "No resuelto";
@@ -62,8 +63,8 @@ const getStatusBadge = (status: string) => {
 const getComplaintSubtitle = (complaint: RecentComplaint) => {
   const extra =
     complaint.extra_data &&
-    typeof complaint.extra_data === "object" &&
-    !Array.isArray(complaint.extra_data)
+      typeof complaint.extra_data === "object" &&
+      !Array.isArray(complaint.extra_data)
       ? complaint.extra_data
       : null;
 
@@ -82,6 +83,12 @@ const getComplaintSubtitle = (complaint: RecentComplaint) => {
   }
 
   return `${complaint.service?.name ?? "-"} - ${complaint.cause?.name ?? "-"}`;
+};
+
+const getDisplayComplaintNumber = (complaint: RecentComplaint) => {
+  return complaint.form_variant === "arbolado"
+    ? complaint.arbolado_number ?? "-"
+    : complaint.complaint_number ?? "-";
 };
 
 export default function DashboardPage() {
@@ -301,7 +308,7 @@ export default function DashboardPage() {
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-sm text-[#6B7280]">
                       <span className="font-semibold text-[#373737]">
-                        {complaint.complaint_number ?? "-"}
+                        {getDisplayComplaintNumber(complaint)}
                       </span>
                       <span>•</span>
                       <span>{formatDate(complaint.complaint_date)}</span>

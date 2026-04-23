@@ -78,10 +78,9 @@ export async function GET(request: NextRequest) {
           cause:causes(id, name),
           loaded_by_user:users!loaded_by(id, full_name)
         `,
-        )
-        .order("complaint_number", { ascending: false });
+        );
 
-      // 🔒 Restricción automática por rol
+      // Restricción automática por rol
       if (currentUser.role === "ReclamosArbolado") {
         query = query.eq("form_variant", "arbolado");
       }
@@ -90,6 +89,13 @@ export async function GET(request: NextRequest) {
         query = query.or(
           "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
         );
+      }
+
+      // Orden según módulo
+      if (currentUser.role === "ReclamosArbolado") {
+        query = query.order("arbolado_number", { ascending: false });
+      } else {
+        query = query.order("complaint_number", { ascending: false });
       }
 
       // Filtros manuales
@@ -117,7 +123,7 @@ export async function GET(request: NextRequest) {
         query = query.lte("complaint_date", date_to);
       }
 
-      // Solo para admin / admin lectura permitimos sobreescribir por query
+      // Solo admin/admin lectura pueden sobreescribir por query param
       if (
         form_variant &&
         form_variant !== "all" &&
@@ -149,7 +155,22 @@ export async function GET(request: NextRequest) {
       from += pageSize;
     }
 
-    return NextResponse.json({ data: allComplaints });
+    // Blindaje extra por si alguna query futura cambia
+    const safeComplaints =
+      currentUser.role === "ReclamosArbolado"
+        ? allComplaints.filter(
+            (complaint) => complaint.form_variant === "arbolado",
+          )
+        : currentUser.role === "Reclamos"
+          ? allComplaints.filter(
+              (complaint) =>
+                complaint.form_variant === "general" ||
+                complaint.form_variant === "import_excel" ||
+                complaint.form_variant == null,
+            )
+          : allComplaints;
+
+    return NextResponse.json({ data: safeComplaints });
   } catch (error) {
     console.error("Unexpected error in GET /api/complaints:", error);
     return NextResponse.json(

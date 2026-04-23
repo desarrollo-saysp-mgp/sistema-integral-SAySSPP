@@ -177,54 +177,58 @@ export default function ComplaintsClient() {
   };
 
   const filteredComplaints = useMemo(() => {
-    if (!isArboladoUser) {
-      return complaints.filter((complaint) => {
-        if (!searchTerm.trim()) return true;
-        const query = searchTerm.toLowerCase().trim();
-        return (complaint.complainant_name || "").toLowerCase().includes(query);
-      });
-    }
+  const sourceComplaints = isArboladoUser
+    ? complaints.filter((complaint) => complaint.form_variant === "arbolado")
+    : complaints;
 
-    return complaints.filter((complaint) => {
-      const extra = getExtraData(complaint);
+  if (!isArboladoUser) {
+    return sourceComplaints.filter((complaint) => {
+      if (!searchTerm.trim()) return true;
       const query = searchTerm.toLowerCase().trim();
-
-      const matchesSearch =
-        !query ||
-        (complaint.complainant_name || "").toLowerCase().includes(query) ||
-        (typeof extra.description_type === "string" &&
-          extra.description_type.toLowerCase().includes(query)) ||
-        (complaint.details || "").toLowerCase().includes(query);
-
-      const matchesDepartment =
-        departmentFilter === "all" ||
-        (typeof extra.department === "string" &&
-          extra.department === departmentFilter);
-
-      const matchesLevel =
-        levelFilter === "all" ||
-        (typeof extra.level === "string" && extra.level === levelFilter);
-
-      const matchesDescription =
-        descriptionFilter === "all" ||
-        (typeof extra.description_type === "string" &&
-          extra.description_type === descriptionFilter);
-
-      return (
-        matchesSearch &&
-        matchesDepartment &&
-        matchesLevel &&
-        matchesDescription
-      );
+      return (complaint.complainant_name || "").toLowerCase().includes(query);
     });
-  }, [
-    complaints,
-    isArboladoUser,
-    searchTerm,
-    departmentFilter,
-    levelFilter,
-    descriptionFilter,
-  ]);
+  }
+
+  return sourceComplaints.filter((complaint) => {
+    const extra = getExtraData(complaint);
+    const query = searchTerm.toLowerCase().trim();
+
+    const matchesSearch =
+      !query ||
+      (complaint.complainant_name || "").toLowerCase().includes(query) ||
+      (typeof extra.description_type === "string" &&
+        extra.description_type.toLowerCase().includes(query)) ||
+      (complaint.details || "").toLowerCase().includes(query);
+
+    const matchesDepartment =
+      departmentFilter === "all" ||
+      (typeof extra.department === "string" &&
+        extra.department === departmentFilter);
+
+    const matchesLevel =
+      levelFilter === "all" ||
+      (typeof extra.level === "string" && extra.level === levelFilter);
+
+    const matchesDescription =
+      descriptionFilter === "all" ||
+      (typeof extra.description_type === "string" &&
+        extra.description_type === descriptionFilter);
+
+    return (
+      matchesSearch &&
+      matchesDepartment &&
+      matchesLevel &&
+      matchesDescription
+    );
+  });
+}, [
+  complaints,
+  isArboladoUser,
+  searchTerm,
+  departmentFilter,
+  levelFilter,
+  descriptionFilter,
+]);
 
   const arboladoDepartments = useMemo(() => {
     const values = complaints
