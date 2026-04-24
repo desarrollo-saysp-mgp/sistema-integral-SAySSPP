@@ -194,7 +194,10 @@ export function ComplaintsTable({
   const router = useRouter();
   const { profile } = useUser();
   const isReadOnly = profile?.role === "AdminLectura";
-  const isArboladoUser = profile?.role === "ReclamosArbolado";
+  const isArboladoUser =
+    profile?.role === "ReclamosArbolado" ||
+    (complaints.length > 0 &&
+      complaints[0].form_variant === "arbolado");
   const canSendWhatsApp =
     profile?.role === "Admin" || profile?.role === "Reclamos";
 
@@ -609,6 +612,7 @@ export function ComplaintsTable({
             Nombre: item.complainant_name,
             Dirección: display.addressLabel,
             Depto: display.departmentLabel,
+            Nivel: display.levelLabel,
             Descripción: display.descriptionLabel,
             "Fecha resolución": display.resolutionDateLabel,
             Agente: display.agentLabel,
@@ -618,7 +622,7 @@ export function ComplaintsTable({
         }
 
         return {
-          Número: item.complaint_number,
+          Número: item.complaint_number ?? "-",
           Fecha: formatDate(item.complaint_date),
           Nombre: item.complainant_name,
           Dirección: display.addressLabel,
@@ -739,9 +743,10 @@ export function ComplaintsTable({
           return [
             item.arbolado_number ?? "-",
             formatDate(item.complaint_date),
-            item.complainant_name,
+            item.complainant_name ?? "-",
             display.addressLabel,
             display.departmentLabel,
+            display.levelLabel,
             display.descriptionLabel,
             display.resolutionDateLabel,
             display.agentLabel,
@@ -750,9 +755,9 @@ export function ComplaintsTable({
         }
 
         return [
-          item.complaint_number,
+          item.complaint_number ?? "-",
           formatDate(item.complaint_date),
-          item.complainant_name,
+          item.complainant_name ?? "-",
           display.addressLabel,
           display.serviceLabel,
           display.causeLabel,
@@ -767,9 +772,14 @@ export function ComplaintsTable({
         head: isArboladoUser ? arboladoHead : generalHead,
         body: tableData,
         theme: "grid",
+        showHead: "everyPage",
+        pageBreak: "auto",
+        rowPageBreak: "avoid",
+        margin: { top: 44, right: 10, bottom: 14, left: 10 },
         styles: {
-          fontSize: 8,
-          cellPadding: 2.5,
+          fontSize: isArboladoUser ? 6.2 : 7.5,
+          cellPadding: isArboladoUser ? 1.3 : 2,
+          overflow: "linebreak",
           textColor: [51, 65, 85],
           lineColor: [226, 232, 240],
           lineWidth: 0.15,
@@ -783,8 +793,32 @@ export function ComplaintsTable({
         alternateRowStyles: {
           fillColor: [248, 250, 252],
         },
+        columnStyles: isArboladoUser
+          ? {
+            0: { cellWidth: 9 },
+            1: { cellWidth: 18 },
+            2: { cellWidth: 26 },
+            3: { cellWidth: 65 },
+            4: { cellWidth: 25 },
+            5: { cellWidth: 18 },
+            6: { cellWidth: 34 },
+            7: { cellWidth: 20 },
+            8: { cellWidth: 28 },
+            9: { cellWidth: 18 },
+          }
+          : {
+            0: { cellWidth: 12 },
+            1: { cellWidth: 20 },
+            2: { cellWidth: 35 },
+            3: { cellWidth: 55 },
+            4: { cellWidth: 35 },
+            5: { cellWidth: 38 },
+            6: { cellWidth: 26 },
+            7: { cellWidth: 24 },
+            8: { cellWidth: 22 },
+          },
         didParseCell: (data: CellHookData) => {
-          const statusColumnIndex = isArboladoUser ? 8 : 8;
+          const statusColumnIndex = isArboladoUser ? 9 : 8;
 
           if (data.section === "body" && data.column.index === statusColumnIndex) {
             const status = String(data.cell.raw ?? "");
@@ -1143,11 +1177,10 @@ export function ComplaintsTable({
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <CalendarCheck
-                                className={`h-4 w-4 ${
-                                  hasResolutionDate
-                                    ? "text-emerald-600"
-                                    : "text-muted-foreground"
-                                }`}
+                                className={`h-4 w-4 ${hasResolutionDate
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground"
+                                  }`}
                               />
                             )}
                           </Button>

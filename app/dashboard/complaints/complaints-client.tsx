@@ -34,6 +34,8 @@ type ComplaintExtraData = {
   level?: unknown;
 };
 
+type VariantFilter = "general" | "arbolado";
+
 const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   if (
     complaint.extra_data &&
@@ -53,6 +55,15 @@ export default function ComplaintsClient() {
   const { profile } = useUser();
 
   const isArboladoUser = profile?.role === "ReclamosArbolado";
+  const isAdminUser =
+    profile?.role === "Admin" || profile?.role === "AdminLectura";
+
+  const [variantFilter, setVariantFilter] =
+    useState<VariantFilter>("general");
+
+  const isArboladoView =
+    isArboladoUser || (isAdminUser && variantFilter === "arbolado");
+
 
   const statusFromUrl = searchParams.get("status");
   const initialStatus =
@@ -97,6 +108,14 @@ export default function ComplaintsClient() {
   }, [statusFromUrl]);
 
   useEffect(() => {
+    setServiceFilter("all");
+    setZoneFilter("all");
+    setDepartmentFilter("all");
+    setLevelFilter("all");
+    setDescriptionFilter("all");
+  }, [variantFilter]);
+
+  useEffect(() => {
     fetchComplaints();
   }, [
     statusFilter,
@@ -105,6 +124,7 @@ export default function ComplaintsClient() {
     dateFromFilter,
     dateToFilter,
     isArboladoUser,
+    variantFilter,
   ]);
 
   const fetchServices = async () => {
@@ -130,11 +150,11 @@ export default function ComplaintsClient() {
         params.append("status", statusFilter);
       }
 
-      if (!isArboladoUser && serviceFilter && serviceFilter !== "all") {
+      if (!isArboladoView && serviceFilter !== "all") {
         params.append("service_id", serviceFilter);
       }
 
-      if (!isArboladoUser && zoneFilter && zoneFilter !== "all") {
+      if (!isArboladoView && zoneFilter !== "all") {
         params.append("zone", zoneFilter);
       }
 
@@ -143,8 +163,10 @@ export default function ComplaintsClient() {
 
       if (isArboladoUser) {
         params.append("form_variant", "arbolado");
-      } else if (searchTerm) {
-        params.append("search", searchTerm);
+      } else if (isAdminUser) {
+        params.append("form_variant", variantFilter);
+      } else {
+        params.append("form_variant", "general");
       }
 
       const response = await fetch(`/api/complaints?${params.toString()}`, {
@@ -177,61 +199,72 @@ export default function ComplaintsClient() {
   };
 
   const filteredComplaints = useMemo(() => {
-  const sourceComplaints = isArboladoUser
-    ? complaints.filter((complaint) => complaint.form_variant === "arbolado")
-    : complaints;
+    let sourceComplaints = complaints;
 
-  if (!isArboladoUser) {
+    if (isArboladoView) {
+      sourceComplaints = complaints.filter(
+        (complaint) => complaint.form_variant === "arbolado",
+      );
+    }
+
+    if (!isArboladoView) {
+      sourceComplaints = complaints.filter(
+        (complaint) =>
+          complaint.form_variant === "general" ||
+          complaint.form_variant === "import_excel" ||
+          complaint.form_variant == null,
+      );
+    }
+
     return sourceComplaints.filter((complaint) => {
-      if (!searchTerm.trim()) return true;
+      const extra = getExtraData(complaint);
       const query = searchTerm.toLowerCase().trim();
-      return (complaint.complainant_name || "").toLowerCase().includes(query);
+
+      const matchesSearch =
+        !query ||
+        (complaint.complainant_name || "").toLowerCase().includes(query) ||
+        (isArboladoView &&
+          typeof extra.description_type === "string" &&
+          extra.description_type.toLowerCase().includes(query)) ||
+        (isArboladoView &&
+          (complaint.details || "").toLowerCase().includes(query));
+
+      const matchesDepartment =
+        !isArboladoView ||
+        departmentFilter === "all" ||
+        (typeof extra.department === "string" &&
+          extra.department === departmentFilter);
+
+      const matchesLevel =
+        !isArboladoView ||
+        levelFilter === "all" ||
+        (typeof extra.level === "string" && extra.level === levelFilter);
+
+      const matchesDescription =
+        !isArboladoView ||
+        descriptionFilter === "all" ||
+        (typeof extra.description_type === "string" &&
+          extra.description_type === descriptionFilter);
+
+      return (
+        matchesSearch &&
+        matchesDepartment &&
+        matchesLevel &&
+        matchesDescription
+      );
     });
-  }
-
-  return sourceComplaints.filter((complaint) => {
-    const extra = getExtraData(complaint);
-    const query = searchTerm.toLowerCase().trim();
-
-    const matchesSearch =
-      !query ||
-      (complaint.complainant_name || "").toLowerCase().includes(query) ||
-      (typeof extra.description_type === "string" &&
-        extra.description_type.toLowerCase().includes(query)) ||
-      (complaint.details || "").toLowerCase().includes(query);
-
-    const matchesDepartment =
-      departmentFilter === "all" ||
-      (typeof extra.department === "string" &&
-        extra.department === departmentFilter);
-
-    const matchesLevel =
-      levelFilter === "all" ||
-      (typeof extra.level === "string" && extra.level === levelFilter);
-
-    const matchesDescription =
-      descriptionFilter === "all" ||
-      (typeof extra.description_type === "string" &&
-        extra.description_type === descriptionFilter);
-
-    return (
-      matchesSearch &&
-      matchesDepartment &&
-      matchesLevel &&
-      matchesDescription
-    );
-  });
-}, [
-  complaints,
-  isArboladoUser,
-  searchTerm,
-  departmentFilter,
-  levelFilter,
-  descriptionFilter,
-]);
+  }, [
+    complaints,
+    isArboladoView,
+    searchTerm,
+    departmentFilter,
+    levelFilter,
+    descriptionFilter,
+  ]);
 
   const arboladoDepartments = useMemo(() => {
     const values = complaints
+      .filter((complaint) => complaint.form_variant === "arbolado")
       .map((complaint) => getExtraData(complaint).department)
       .filter((value): value is string => typeof value === "string" && !!value);
 
@@ -240,6 +273,7 @@ export default function ComplaintsClient() {
 
   const arboladoLevels = useMemo(() => {
     const values = complaints
+      .filter((complaint) => complaint.form_variant === "arbolado")
       .map((complaint) => getExtraData(complaint).level)
       .filter((value): value is string => typeof value === "string" && !!value);
 
@@ -248,6 +282,7 @@ export default function ComplaintsClient() {
 
   const arboladoDescriptions = useMemo(() => {
     const values = complaints
+      .filter((complaint) => complaint.form_variant === "arbolado")
       .map((complaint) => getExtraData(complaint).description_type)
       .filter((value): value is string => typeof value === "string" && !!value);
 
@@ -291,7 +326,7 @@ export default function ComplaintsClient() {
     router.push("/dashboard/complaints");
   };
 
-  const hasActiveFilters = isArboladoUser
+  const hasActiveFilters = isArboladoView
     ? !!(
         searchTerm ||
         statusFilter !== "all" ||
@@ -338,14 +373,38 @@ export default function ComplaintsClient() {
           </div>
 
           <div className="grid grid-cols-1 items-end gap-4 xl:grid-cols-14">
-            <div className="flex flex-col gap-1.5 xl:col-span-4">
+            {isAdminUser && (
+              <div className="flex flex-col gap-1.5 xl:col-span-2">
+                <Label htmlFor="variant-filter">Tipo</Label>
+                <Select
+                  value={variantFilter}
+                  onValueChange={(value) =>
+                    setVariantFilter(value as VariantFilter)
+                  }
+                >
+                  <SelectTrigger id="variant-filter" className="h-11 w-full">
+                    <SelectValue placeholder="Reclamos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">Reclamos</SelectItem>
+                    <SelectItem value="arbolado">Reclamos Arbolado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div
+              className={`flex flex-col gap-1.5 ${
+                isAdminUser ? "xl:col-span-3" : "xl:col-span-4"
+              }`}
+            >
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="search"
                   placeholder={
-                    isArboladoUser
+                    isArboladoView
                       ? "Buscar por nombre o descripción..."
                       : "Buscar por nombre..."
                   }
@@ -371,7 +430,7 @@ export default function ComplaintsClient() {
               </Select>
             </div>
 
-            {!isArboladoUser && (
+            {!isArboladoView && (
               <>
                 <div className="flex flex-col gap-1.5 xl:col-span-2">
                   <Label htmlFor="service-filter">Servicio</Label>
@@ -409,7 +468,7 @@ export default function ComplaintsClient() {
               </>
             )}
 
-            {isArboladoUser && (
+            {isArboladoView && (
               <>
                 <div className="flex flex-col gap-1.5 xl:col-span-2">
                   <Label htmlFor="department-filter">Depto</Label>

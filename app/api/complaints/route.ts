@@ -92,7 +92,10 @@ export async function GET(request: NextRequest) {
       }
 
       // Orden según módulo
-      if (currentUser.role === "ReclamosArbolado") {
+      if (
+        currentUser.role === "ReclamosArbolado" ||
+        form_variant === "arbolado"
+      ) {
         query = query.order("arbolado_number", { ascending: false });
       } else {
         query = query.order("complaint_number", { ascending: false });
@@ -159,15 +162,15 @@ export async function GET(request: NextRequest) {
     const safeComplaints =
       currentUser.role === "ReclamosArbolado"
         ? allComplaints.filter(
-            (complaint) => complaint.form_variant === "arbolado",
-          )
+          (complaint) => complaint.form_variant === "arbolado",
+        )
         : currentUser.role === "Reclamos"
           ? allComplaints.filter(
-              (complaint) =>
-                complaint.form_variant === "general" ||
-                complaint.form_variant === "import_excel" ||
-                complaint.form_variant == null,
-            )
+            (complaint) =>
+              complaint.form_variant === "general" ||
+              complaint.form_variant === "import_excel" ||
+              complaint.form_variant == null,
+          )
           : allComplaints;
 
     return NextResponse.json({ data: safeComplaints });
@@ -337,6 +340,7 @@ export async function POST(request: NextRequest) {
       loaded_by: authUser.id,
       complaint_date:
         body.complaint_date || new Date().toISOString().split("T")[0],
+      resolution_date: body.resolution_date || null,
       latlon,
       form_variant: formVariant,
       extra_data: null,
