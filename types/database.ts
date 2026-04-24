@@ -7,12 +7,12 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR";
           modules: string[] | null;
           is_readonly: boolean | null;
           default_module: string | null;
@@ -25,12 +25,12 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -43,12 +43,12 @@ export interface Database {
           full_name?: string;
           email?: string;
           role?:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -76,11 +76,11 @@ export interface Database {
           zone: string | null;
           since_when: string | null;
           contact_method:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details: string | null;
           status: "En proceso" | "Resuelto" | "No resuelto";
           referred: boolean;
@@ -96,7 +96,7 @@ export interface Database {
           complaint_number?: string | null;
           arbolado_number?: number | null;
           complaint_date?: string;
-          resolution_date: string | null;
+          resolution_date?: string | null;
           complainant_name?: string | null;
           address?: string | null;
           street_number?: string | null;
@@ -108,11 +108,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
@@ -128,7 +128,7 @@ export interface Database {
           complaint_number?: string | null;
           arbolado_number?: number | null;
           complaint_date?: string;
-          resolution_date: string | null;
+          resolution_date?: string | null;
           complainant_name?: string | null;
           address?: string | null;
           street_number?: string | null;
@@ -140,11 +140,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
