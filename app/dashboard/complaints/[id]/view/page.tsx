@@ -45,6 +45,7 @@ type ComplaintExtraData = {
 
 const FIELD_LABELS: Record<string, string> = {
   complaint_date: "Fecha de reclamo",
+  resolution_date: "Fecha de resolución",
   complainant_name: "Nombre y apellido",
   address: "Calle",
   street_number: "Número",
@@ -167,6 +168,17 @@ export default function ComplaintViewPage() {
 
   const formatDateOnly = (dateString?: string | null) => {
     if (!dateString) return "-";
+
+    const [year, month, day] = dateString.split("-").map(Number);
+
+    if (year && month && day) {
+      return new Date(year, month - 1, day).toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    }
+
     const date = new Date(dateString);
     return date.toLocaleDateString("es-AR", {
       day: "2-digit",
@@ -206,9 +218,9 @@ export default function ComplaintViewPage() {
   const extra = getExtraData(complaint);
 
   const displayComplaintNumber =
-  complaint.form_variant === "arbolado"
-    ? complaint.arbolado_number ?? "-"
-    : complaint.complaint_number ?? "-";
+    complaint.form_variant === "arbolado"
+      ? complaint.arbolado_number ?? "-"
+      : complaint.complaint_number ?? "-";
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6 p-6">
@@ -353,6 +365,10 @@ export default function ComplaintViewPage() {
                   label="Desde Cuándo"
                   value={complaint.since_when || "-"}
                   icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
+                />
+                <InfoField
+                  label="Fecha de Resolución"
+                  value={formatDateOnly(complaint.resolution_date)}
                 />
               </div>
 

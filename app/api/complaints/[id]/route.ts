@@ -40,6 +40,9 @@ const normalizeValue = (value: unknown): string | null => {
   return String(value);
 };
 
+const hasOwn = (object: Record<string, unknown>, key: string) =>
+  Object.prototype.hasOwnProperty.call(object, key);
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -230,8 +233,16 @@ export async function PATCH(
       );
     }
 
-    const formVariant = body.form_variant || currentComplaint.form_variant || "general";
+    const formVariant =
+      body.form_variant || currentComplaint.form_variant || "general";
     const updateData: ComplaintUpdate = {};
+
+    const hasResolutionDate =
+      hasOwn(body, "resolution_date") || hasOwn(body, "resolutionDate");
+
+    const rawResolutionDate = hasOwn(body, "resolution_date")
+      ? body.resolution_date
+      : body.resolutionDate;
 
     if (body.complainant_name !== undefined) {
       updateData.complainant_name = body.complainant_name
@@ -275,13 +286,22 @@ export async function PATCH(
       updateData.complaint_date = body.complaint_date;
     }
 
+    if (hasResolutionDate) {
+      updateData.resolution_date =
+        rawResolutionDate && String(rawResolutionDate).trim()
+          ? String(rawResolutionDate).trim()
+          : null;
+    }
+
     if (body.form_variant !== undefined) {
       updateData.form_variant = body.form_variant;
     }
 
     if (formVariant === "general") {
       if (body.service_id !== undefined) {
-        updateData.service_id = body.service_id ? parseInt(body.service_id) : null;
+        updateData.service_id = body.service_id
+          ? parseInt(body.service_id)
+          : null;
       }
 
       if (body.cause_id !== undefined) {
@@ -329,7 +349,9 @@ export async function PATCH(
       } as Record<string, unknown>;
 
       if (body.department !== undefined) {
-        nextExtraData.department = body.department ? body.department.trim() : null;
+        nextExtraData.department = body.department
+          ? body.department.trim()
+          : null;
       }
 
       if (body.level !== undefined) {
@@ -352,8 +374,11 @@ export async function PATCH(
         nextExtraData.solution = body.solution ? body.solution.trim() : null;
       }
 
-      if (body.resolution_date !== undefined) {
-        nextExtraData.resolution_date = body.resolution_date || null;
+      if (hasResolutionDate) {
+        nextExtraData.resolution_date =
+          rawResolutionDate && String(rawResolutionDate).trim()
+            ? String(rawResolutionDate).trim()
+            : null;
       }
 
       if (body.agent !== undefined) {

@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -31,6 +32,8 @@ import {
   FileText,
   Loader2,
   MessageCircle,
+  CalendarCheck,
+  X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -52,6 +55,14 @@ const formatLocalDate = (dateStr: string): string => {
     month: "2-digit",
     year: "numeric",
   });
+};
+
+const getTodayLocalDate = (): string => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 type ComplaintWithDetails = Complaint & {
@@ -93,7 +104,10 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   return {};
 };
 
-const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
+const getComplaintDisplayData = (
+  complaint: ComplaintWithDetails,
+  resolutionDateOverride?: string | null,
+) => {
   const extra = getExtraData(complaint);
   const isArbolado = complaint.form_variant === "arbolado";
 
@@ -126,10 +140,18 @@ const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
   const addressLabel =
     `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
 
-  const resolutionDateLabel =
-    typeof extra.resolution_date === "string" && extra.resolution_date
-      ? formatLocalDate(extra.resolution_date)
-      : "-";
+  const rawResolutionDate =
+    resolutionDateOverride !== undefined
+      ? resolutionDateOverride
+      : complaint.resolution_date
+        ? complaint.resolution_date
+        : typeof extra.resolution_date === "string" && extra.resolution_date
+          ? extra.resolution_date
+          : null;
+
+  const resolutionDateLabel = rawResolutionDate
+    ? formatLocalDate(rawResolutionDate)
+    : "-";
 
   const agentLabel =
     typeof extra.agent === "string" && extra.agent ? extra.agent : "-";
@@ -157,6 +179,7 @@ const getComplaintDisplayData = (complaint: ComplaintWithDetails) => {
     detailLabel,
     addressLabel,
     resolutionDateLabel,
+    rawResolutionDate,
     agentLabel,
     departmentLabel,
     levelLabel,
@@ -176,6 +199,15 @@ export function ComplaintsTable({
     profile?.role === "Admin" || profile?.role === "Reclamos";
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
+  const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
+    number | null
+  >(null);
+  const [resolutionDateOverrides, setResolutionDateOverrides] = useState<
+    Record<number, string | null>
+  >({});
+  const [resolutionModalComplaint, setResolutionModalComplaint] =
+    useState<ComplaintWithDetails | null>(null);
+  const [resolutionModalDate, setResolutionModalDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>([]);
 
@@ -222,6 +254,20 @@ export function ComplaintsTable({
       selectedComplaintIds.includes(complaint.id),
     ) && !allVisibleSelected;
 
+  const getResolutionDateValue = (complaint: ComplaintWithDetails) => {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        resolutionDateOverrides,
+        complaint.id,
+      )
+    ) {
+      return resolutionDateOverrides[complaint.id];
+    }
+
+    const display = getComplaintDisplayData(complaint);
+    return display.rawResolutionDate;
+  };
+
   const handleStatusChange = async (
     complaintId: number,
     newStatus: string,
@@ -243,6 +289,119 @@ export function ComplaintsTable({
       });
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  const openResolutionDateModal = (complaint: ComplaintWithDetails) => {
+    const currentDate = getResolutionDateValue(complaint);
+    setResolutionModalComplaint(complaint);
+    setResolutionModalDate(currentDate || getTodayLocalDate());
+  };
+
+  const closeResolutionDateModal = () => {
+    setResolutionModalComplaint(null);
+    setResolutionModalDate("");
+  };
+
+  const saveResolutionDate = async () => {
+    if (!resolutionModalComplaint || isReadOnly) return;
+
+    setUpdatingResolutionDate(resolutionModalComplaint.id);
+    const toastId = toast.loading("Guardando fecha de resolución...");
+
+    try {
+      const response = await fetch(
+        `/api/complaints/${resolutionModalComplaint.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            resolution_date: resolutionModalDate || null,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo guardar la fecha");
+      }
+
+      setResolutionDateOverrides((prev) => ({
+        ...prev,
+        [resolutionModalComplaint.id]: resolutionModalDate || null,
+      }));
+
+      toast.success("Fecha de resolución guardada correctamente", {
+        id: toastId,
+      });
+
+      closeResolutionDateModal();
+    } catch (error) {
+      console.error("Error saving resolution date:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la fecha de resolución",
+        {
+          id: toastId,
+        },
+      );
+    } finally {
+      setUpdatingResolutionDate(null);
+    }
+  };
+
+  const clearResolutionDate = async () => {
+    if (!resolutionModalComplaint || isReadOnly) return;
+
+    setUpdatingResolutionDate(resolutionModalComplaint.id);
+    const toastId = toast.loading("Quitando fecha de resolución...");
+
+    try {
+      const response = await fetch(
+        `/api/complaints/${resolutionModalComplaint.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            resolution_date: null,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo quitar la fecha");
+      }
+
+      setResolutionDateOverrides((prev) => ({
+        ...prev,
+        [resolutionModalComplaint.id]: null,
+      }));
+
+      toast.success("Fecha de resolución quitada correctamente", {
+        id: toastId,
+      });
+
+      closeResolutionDateModal();
+    } catch (error) {
+      console.error("Error clearing resolution date:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo quitar la fecha de resolución",
+        {
+          id: toastId,
+        },
+      );
+    } finally {
+      setUpdatingResolutionDate(null);
     }
   };
 
@@ -380,7 +539,12 @@ export function ComplaintsTable({
     const partes: string[] = ["*Lista de reclamos:*", ""];
 
     items.forEach((item, index) => {
-      const display = getComplaintDisplayData(item);
+      const display = getComplaintDisplayData(
+        item,
+        Object.prototype.hasOwnProperty.call(resolutionDateOverrides, item.id)
+          ? resolutionDateOverrides[item.id]
+          : undefined,
+      );
       const direccion = display.addressLabel;
       const telefono = item.phone_number || "-";
       const servicio = display.serviceLabel || "-";
@@ -389,6 +553,7 @@ export function ComplaintsTable({
       const desde = display.sinceWhenLabel || "-";
       const detalle = display.detailLabel || "-";
       const fecha = item.complaint_date ? formatDate(item.complaint_date) : "-";
+      const fechaResolucion = display.resolutionDateLabel || "-";
       const cargadoPor = item.loaded_by_user?.full_name || "-";
 
       partes.push(`*Reclamo ${index + 1}*`);
@@ -401,6 +566,7 @@ export function ComplaintsTable({
       partes.push(`Causa: *${causa}*`);
       partes.push(`Zona/Sector: *${zona}*`);
       partes.push(`Desde: *${desde}*`);
+      partes.push(`Fecha resolución: *${fechaResolucion}*`);
       partes.push(`Detalle: *${detalle}*`);
       partes.push(`Cargado por: *${cargadoPor}*`);
       partes.push("");
@@ -429,16 +595,20 @@ export function ComplaintsTable({
   const exportToExcel = () => {
     try {
       const formattedData = exportComplaints.map((item) => {
-        const display = getComplaintDisplayData(item);
+        const display = getComplaintDisplayData(
+          item,
+          Object.prototype.hasOwnProperty.call(resolutionDateOverrides, item.id)
+            ? resolutionDateOverrides[item.id]
+            : undefined,
+        );
 
         if (isArboladoUser) {
           return {
-            Número: item.complaint_number,
+            Número: item.arbolado_number ?? "-",
             Fecha: formatDate(item.complaint_date),
             Nombre: item.complainant_name,
             Dirección: display.addressLabel,
             Depto: display.departmentLabel,
-            Nivel: display.levelLabel,
             Descripción: display.descriptionLabel,
             "Fecha resolución": display.resolutionDateLabel,
             Agente: display.agentLabel,
@@ -455,6 +625,7 @@ export function ComplaintsTable({
           Servicio: display.serviceLabel,
           Causa: display.causeLabel,
           "Desde Cuándo": display.sinceWhenLabel,
+          "Fecha resolución": display.resolutionDateLabel,
           Estado: item.status,
         };
       });
@@ -552,20 +723,25 @@ export function ComplaintsTable({
         "Servicio",
         "Causa",
         "Desde Cuándo",
+        "Fecha resolución",
         "Estado",
       ]];
 
       const tableData = exportComplaints.map((item) => {
-        const display = getComplaintDisplayData(item);
+        const display = getComplaintDisplayData(
+          item,
+          Object.prototype.hasOwnProperty.call(resolutionDateOverrides, item.id)
+            ? resolutionDateOverrides[item.id]
+            : undefined,
+        );
 
         if (isArboladoUser) {
           return [
-            item.complaint_number,
+            item.arbolado_number ?? "-",
             formatDate(item.complaint_date),
             item.complainant_name,
             display.addressLabel,
             display.departmentLabel,
-            display.levelLabel,
             display.descriptionLabel,
             display.resolutionDateLabel,
             display.agentLabel,
@@ -581,6 +757,7 @@ export function ComplaintsTable({
           display.serviceLabel,
           display.causeLabel,
           display.sinceWhenLabel,
+          display.resolutionDateLabel,
           item.status,
         ];
       });
@@ -607,7 +784,7 @@ export function ComplaintsTable({
           fillColor: [248, 250, 252],
         },
         didParseCell: (data: CellHookData) => {
-          const statusColumnIndex = isArboladoUser ? 9 : 7;
+          const statusColumnIndex = isArboladoUser ? 8 : 8;
 
           if (data.section === "body" && data.column.index === statusColumnIndex) {
             const status = String(data.cell.raw ?? "");
@@ -738,8 +915,6 @@ export function ComplaintsTable({
                   <TableHead>Fecha</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Dirección</TableHead>
-                  <TableHead>Depto</TableHead>
-                  <TableHead>Nivel</TableHead>
                   <TableHead>Descripción</TableHead>
                   <TableHead>Fecha resolución</TableHead>
                   <TableHead>Agente</TableHead>
@@ -755,6 +930,7 @@ export function ComplaintsTable({
                   <TableHead>Causa</TableHead>
                   <TableHead>Zona</TableHead>
                   <TableHead>Desde Cuándo</TableHead>
+                  <TableHead>Fecha resolución</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Cargado por</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
@@ -768,7 +944,19 @@ export function ComplaintsTable({
               const isEvenRow = index % 2 === 0;
               const isUpdating = updatingStatus === complaint.id;
               const isSelected = selectedComplaintIds.includes(complaint.id);
-              const display = getComplaintDisplayData(complaint);
+              const resolutionDateOverride = Object.prototype.hasOwnProperty.call(
+                resolutionDateOverrides,
+                complaint.id,
+              )
+                ? resolutionDateOverrides[complaint.id]
+                : undefined;
+              const display = getComplaintDisplayData(
+                complaint,
+                resolutionDateOverride,
+              );
+              const hasResolutionDate = display.resolutionDateLabel !== "-";
+              const isUpdatingResolution =
+                updatingResolutionDate === complaint.id;
 
               return (
                 <TableRow
@@ -797,13 +985,11 @@ export function ComplaintsTable({
                   {isArboladoUser ? (
                     <>
                       <TableCell className="font-medium">
-                        {complaint.complaint_number}
+                        {complaint.arbolado_number ?? "-"}
                       </TableCell>
                       <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
                       <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
                       <TableCell>{display.addressLabel}</TableCell>
-                      <TableCell>{display.departmentLabel}</TableCell>
-                      <TableCell>{display.levelLabel}</TableCell>
                       <TableCell>{display.descriptionLabel}</TableCell>
                       <TableCell>{display.resolutionDateLabel}</TableCell>
                       <TableCell>{display.agentLabel}</TableCell>
@@ -883,6 +1069,7 @@ export function ComplaintsTable({
                       <TableCell>{display.causeLabel}</TableCell>
                       <TableCell>{display.zoneLabel}</TableCell>
                       <TableCell>{display.sinceWhenLabel}</TableCell>
+                      <TableCell>{display.resolutionDateLabel}</TableCell>
                       <TableCell>
                         <div>
                           {onStatusChange && !isReadOnly ? (
@@ -938,6 +1125,31 @@ export function ComplaintsTable({
                             className="transition-all hover:bg-accent hover:text-primary active:scale-95"
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openResolutionDateModal(complaint)}
+                            title={
+                              hasResolutionDate
+                                ? "Editar fecha de resolución"
+                                : "Cargar fecha de resolución"
+                            }
+                            disabled={isReadOnly || isUpdatingResolution}
+                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          >
+                            {isUpdatingResolution ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <CalendarCheck
+                                className={`h-4 w-4 ${
+                                  hasResolutionDate
+                                    ? "text-emerald-600"
+                                    : "text-muted-foreground"
+                                }`}
+                              />
+                            )}
                           </Button>
 
                           <Button
@@ -1045,6 +1257,82 @@ export function ComplaintsTable({
           </Button>
         </div>
       </div>
+
+      {resolutionModalComplaint && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">
+                  Fecha de resolución
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Reclamo {resolutionModalComplaint.complaint_number}
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={closeResolutionDateModal}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Seleccionar fecha</label>
+              <Input
+                type="date"
+                value={resolutionModalDate}
+                onChange={(e) => setResolutionModalDate(e.target.value)}
+              />
+            </div>
+
+            <div className="mt-5 flex justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearResolutionDate}
+                disabled={
+                  updatingResolutionDate === resolutionModalComplaint.id
+                }
+              >
+                Quitar
+              </Button>
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={closeResolutionDateModal}
+                >
+                  Cancelar
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={saveResolutionDate}
+                  disabled={
+                    updatingResolutionDate === resolutionModalComplaint.id
+                  }
+                >
+                  {updatingResolutionDate === resolutionModalComplaint.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    "Guardar"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

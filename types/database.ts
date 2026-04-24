@@ -64,6 +64,7 @@ export interface Database {
           complaint_number: string | null;
           arbolado_number: number | null;
           complaint_date: string;
+          resolution_date: string | null;
           complainant_name: string | null;
           address: string | null;
           street_number: string | null;
@@ -95,6 +96,7 @@ export interface Database {
           complaint_number?: string | null;
           arbolado_number?: number | null;
           complaint_date?: string;
+          resolution_date: string | null;
           complainant_name?: string | null;
           address?: string | null;
           street_number?: string | null;
@@ -126,6 +128,7 @@ export interface Database {
           complaint_number?: string | null;
           arbolado_number?: number | null;
           complaint_date?: string;
+          resolution_date: string | null;
           complainant_name?: string | null;
           address?: string | null;
           street_number?: string | null;
