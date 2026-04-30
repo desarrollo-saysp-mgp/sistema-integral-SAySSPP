@@ -32,17 +32,6 @@ type ComplaintWithDetails = Complaint & {
   loaded_by_user: UserType;
 };
 
-type ComplaintExtraData = {
-  department?: unknown;
-  description_type?: unknown;
-  level?: unknown;
-  observations?: unknown;
-  solution?: unknown;
-  resolution_date?: unknown;
-  agent?: unknown;
-  resolution_responsible?: unknown;
-};
-
 const FIELD_LABELS: Record<string, string> = {
   complaint_date: "Fecha de reclamo",
   resolution_date: "Fecha de resolución",
@@ -54,7 +43,7 @@ const FIELD_LABELS: Record<string, string> = {
   email: "Email",
   service_id: "Servicio",
   cause_id: "Causa",
-  zone: "Zona",
+  zone: "Tipo de domicilio",
   since_when: "Desde cuándo",
   contact_method: "Medio de contacto",
   details: "Detalle",
@@ -62,18 +51,6 @@ const FIELD_LABELS: Record<string, string> = {
   referred: "Derivado",
   latlon: "Lat/Lon",
   extra_data: "Datos adicionales",
-};
-
-const getExtraData = (complaint: Complaint): ComplaintExtraData => {
-  if (
-    complaint.extra_data &&
-    typeof complaint.extra_data === "object" &&
-    !Array.isArray(complaint.extra_data)
-  ) {
-    return complaint.extra_data as ComplaintExtraData;
-  }
-
-  return {};
 };
 
 export default function ComplaintViewPage() {
@@ -88,16 +65,11 @@ export default function ComplaintViewPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      fetchComplaint();
-    }
+    if (id) fetchComplaint();
   }, [id]);
 
   useEffect(() => {
-    if (
-      id &&
-      (profile?.role === "Admin" || profile?.role === "AdminLectura")
-    ) {
+    if (id && (profile?.role === "Admin" || profile?.role === "AdminLectura")) {
       fetchHistory();
     }
   }, [id, profile?.role]);
@@ -179,8 +151,7 @@ export default function ComplaintViewPage() {
       });
     }
 
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-AR", {
+    return new Date(dateString).toLocaleDateString("es-AR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -214,8 +185,11 @@ export default function ComplaintViewPage() {
     );
   }
 
-  const isArbolado = complaint.form_variant === "arbolado";
-  const extra = getExtraData(complaint);
+  const serviceName = complaint.service?.name || "";
+  const isZyV =
+    complaint.form_variant === "zyv" ||
+    serviceName === "Zoonosis" ||
+    serviceName === "Vectores";
 
   const displayComplaintNumber =
     complaint.form_variant === "arbolado"
@@ -230,7 +204,7 @@ export default function ComplaintViewPage() {
             variant="ghost"
             size="sm"
             onClick={() => router.push("/dashboard/complaints")}
-            className="-ml-2 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95 active:bg-gray-200"
+            className="-ml-2"
           >
             <ArrowLeft className="mr-1 h-4 w-4" />
             Volver
@@ -265,24 +239,19 @@ export default function ComplaintViewPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-            <InfoField
-              label="Nombre y Apellido"
-              value={complaint.complainant_name || "-"}
-            />
+            <InfoField label="Nombre y Apellido" value={complaint.complainant_name || "-"} />
             <InfoField
               label="Dirección"
               value={`${complaint.address || "-"} ${complaint.street_number || ""}`.trim()}
               icon={<MapPin className="h-4 w-4 text-muted-foreground" />}
             />
-            <InfoField
-              label="Medio de Contacto"
-              value={complaint.contact_method || "-"}
-            />
+            <InfoField label="DNI" value={complaint.dni || "-"} />
             <InfoField
               label="Teléfono"
               value={complaint.phone_number || "-"}
               icon={<Phone className="h-4 w-4 text-muted-foreground" />}
             />
+            <InfoField label="Medio de Contacto" value={complaint.contact_method || "-"} />
           </div>
         </CardContent>
       </Card>
@@ -291,97 +260,36 @@ export default function ComplaintViewPage() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5 text-[#5CADEB]" />
-            Detalles del Reclamo
+            {isZyV ? "Detalle ZyV" : "Detalles del Reclamo"}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isArbolado ? (
-            <>
-              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-                <InfoField
-                  label="Depto"
-                  value={
-                    typeof extra.department === "string"
-                      ? extra.department
-                      : "Arbolado"
-                  }
-                />
-                <InfoField
-                  label="Nivel"
-                  value={typeof extra.level === "string" ? extra.level : "-"}
-                />
-                <InfoField
-                  label="Descripción"
-                  value={
-                    typeof extra.description_type === "string"
-                      ? extra.description_type
-                      : complaint.details || "-"
-                  }
-                />
-                <InfoField
-                  label="Solución"
-                  value={typeof extra.solution === "string" ? extra.solution : "-"}
-                />
-                <InfoField
-                  label="Agente"
-                  value={typeof extra.agent === "string" ? extra.agent : "-"}
-                />
-                <InfoField
-                  label="Responsable de Resolución"
-                  value={
-                    typeof extra.resolution_responsible === "string"
-                      ? extra.resolution_responsible
-                      : "-"
-                  }
-                />
-                <InfoField
-                  label="Fecha de Resolución"
-                  value={formatDateOnly(
-                    typeof extra.resolution_date === "string"
-                      ? extra.resolution_date
-                      : null,
-                  )}
-                />
-              </div>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+            <InfoField label="Servicio" value={complaint.service?.name || "-"} />
+            <InfoField label="Causa" value={complaint.cause?.name || "-"} />
+            <InfoField
+              label={isZyV ? "Tipo de domicilio" : "Zona"}
+              value={complaint.zone || "-"}
+            />
+            <InfoField
+              label="Desde Cuándo"
+              value={complaint.since_when || "-"}
+              icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
+            />
+            <InfoField
+              label="Fecha de Resolución"
+              value={formatDateOnly(complaint.resolution_date)}
+            />
+          </div>
 
-              <div className="mt-4">
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Observaciones
-                </p>
-                <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
-                  {typeof extra.observations === "string"
-                    ? extra.observations
-                    : "-"}
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-                <InfoField label="Servicio" value={complaint.service?.name || "-"} />
-                <InfoField label="Causa" value={complaint.cause?.name || "-"} />
-                <InfoField label="Zona" value={complaint.zone || "-"} />
-                <InfoField
-                  label="Desde Cuándo"
-                  value={complaint.since_when || "-"}
-                  icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
-                />
-                <InfoField
-                  label="Fecha de Resolución"
-                  value={formatDateOnly(complaint.resolution_date)}
-                />
-              </div>
-
-              <div className="mt-4">
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Detalle
-                </p>
-                <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
-                  {complaint.details || "-"}
-                </p>
-              </div>
-            </>
-          )}
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium text-muted-foreground">
+              Detalle
+            </p>
+            <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
+              {complaint.details || "-"}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -434,42 +342,33 @@ export default function ComplaintViewPage() {
           </CardHeader>
           <CardContent>
             {historyLoading ? (
-              <p className="text-sm text-muted-foreground">
-                Cargando historial...
-              </p>
+              <p className="text-sm text-muted-foreground">Cargando historial...</p>
             ) : history.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No hay cambios registrados.
-              </p>
+              <p className="text-sm text-muted-foreground">No hay cambios registrados.</p>
             ) : (
               <div className="space-y-4">
                 {history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-md border bg-muted/20 p-4"
-                  >
-                    <div className="flex flex-col gap-1">
-                      <p className="text-sm">
-                        <span className="font-semibold">
-                          {item.user?.full_name || "Usuario desconocido"}
-                        </span>{" "}
-                        modificó{" "}
-                        <span className="font-semibold">
-                          {FIELD_LABELS[item.field_name] || item.field_name}
-                        </span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Antes:</span>{" "}
-                        {formatHistoryValue(item.old_value)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Después:</span>{" "}
-                        {formatHistoryValue(item.new_value)}
-                      </p>
-                      <p className="pt-1 text-xs text-muted-foreground">
-                        {formatDateTime(item.changed_at)}
-                      </p>
-                    </div>
+                  <div key={item.id} className="rounded-md border bg-muted/20 p-4">
+                    <p className="text-sm">
+                      <span className="font-semibold">
+                        {item.user?.full_name || "Usuario desconocido"}
+                      </span>{" "}
+                      modificó{" "}
+                      <span className="font-semibold">
+                        {FIELD_LABELS[item.field_name] || item.field_name}
+                      </span>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">Antes:</span>{" "}
+                      {formatHistoryValue(item.old_value)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">Después:</span>{" "}
+                      {formatHistoryValue(item.new_value)}
+                    </p>
+                    <p className="pt-1 text-xs text-muted-foreground">
+                      {formatDateTime(item.changed_at)}
+                    </p>
                   </div>
                 ))}
               </div>

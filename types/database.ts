@@ -10,6 +10,7 @@ export interface Database {
           | "Admin"
           | "Reclamos"
           | "ReclamosArbolado"
+          | "ReclamosZyV"
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR";
@@ -28,6 +29,7 @@ export interface Database {
           | "Admin"
           | "Reclamos"
           | "ReclamosArbolado"
+          | "ReclamosZyV"
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR";
@@ -46,6 +48,7 @@ export interface Database {
           | "Admin"
           | "Reclamos"
           | "ReclamosArbolado"
+          | "ReclamosZyV"
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR";
@@ -298,6 +301,7 @@ export type UserRole =
   | "Admin"
   | "Reclamos"
   | "ReclamosArbolado"
+  | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR";

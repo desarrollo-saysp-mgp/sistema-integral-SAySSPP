@@ -218,6 +218,9 @@ export function UserForm({
                 <SelectItem value="ReclamosArbolado">
                   Reclamos Arbolado
                 </SelectItem>
+                <SelectItem value="ReclamosZyV">
+                  Reclamos ZyV
+                </SelectItem>
                 <SelectItem value="AdminLectura">Admin Lectura</SelectItem>
                 <SelectItem value="FC_RRHH">FC + RRHH</SelectItem>
                 <SelectItem value="FC_SECTOR">FC Sector</SelectItem>

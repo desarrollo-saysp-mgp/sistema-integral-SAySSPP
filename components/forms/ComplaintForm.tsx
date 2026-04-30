@@ -155,7 +155,7 @@ export function ComplaintForm({
 
   useEffect(() => {
     fetchServicesAndCauses();
-  }, []);
+  }, [profile?.role]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -221,19 +221,67 @@ export function ComplaintForm({
 
   const fetchServicesAndCauses = async () => {
     setIsLoadingServices(true);
+
     try {
       const servicesRes = await fetch("/api/services");
       const servicesData = await servicesRes.json();
 
+      let activeServices: Service[] = [];
+
       if (servicesData.data) {
-        setServices(servicesData.data.filter((s: Service) => s.active));
+        activeServices = servicesData.data.filter((s: Service) => s.active);
+
+        if (profile?.role === "ReclamosZyV") {
+          activeServices = activeServices.filter((service: Service) => {
+            const name = service.name
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "");
+
+            return name.includes("zoonosis") || name.includes("vectores");
+          });
+        }
+
+        if (profile?.role === "ReclamosArbolado") {
+          activeServices = activeServices.filter((service: Service) => {
+            const name = service.name
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "");
+
+            return name.includes("arbolado");
+          });
+        }
+
+        setServices(activeServices);
+
+        if (!isEditing && activeServices.length === 1) {
+          setFormData((prev) => ({
+            ...prev,
+            service_id: String(activeServices[0].id),
+            cause_id: "",
+          }));
+        }
       }
 
       const causesRes = await fetch("/api/causes");
       const causesData = await causesRes.json();
 
       if (causesData.data) {
-        setCauses(causesData.data.filter((c: Cause) => c.active));
+        const activeServiceIds = activeServices.map((service) => service.id);
+
+        let activeCauses = causesData.data.filter((c: Cause) => c.active);
+
+        if (
+          profile?.role === "ReclamosZyV" ||
+          profile?.role === "ReclamosArbolado"
+        ) {
+          activeCauses = activeCauses.filter((cause: Cause) =>
+            activeServiceIds.includes(cause.service_id),
+          );
+        }
+
+        setCauses(activeCauses);
       }
     } catch (error) {
       console.error("Error loading services and causes:", error);

@@ -5,6 +5,7 @@ type SupportedRole =
   | "Admin"
   | "Reclamos"
   | "ReclamosArbolado"
+  | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR";
@@ -64,6 +65,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
       };
 
     case "ReclamosArbolado":
+      return {
+        modules: ["complaints"],
+        is_readonly: false,
+        default_module: "complaints",
+        fc_sectors: [],
+      };
+
+    case "ReclamosZyV":
       return {
         modules: ["complaints"],
         is_readonly: false,
@@ -232,6 +241,7 @@ export async function POST(request: NextRequest) {
       role !== "Admin" &&
       role !== "Reclamos" &&
       role !== "ReclamosArbolado" &&
+      role !== "ReclamosZyV" &&
       role !== "AdminLectura" &&
       role !== "FC_RRHH" &&
       role !== "FC_SECTOR"

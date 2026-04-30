@@ -24,6 +24,7 @@ import {
   Menu,
   X,
   LayoutGrid,
+  BarChart3,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
@@ -109,9 +110,9 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                   isActive("/dashboard") &&
-                    !pathname?.includes("/dashboard/complaints") &&
-                    !pathname?.includes("/dashboard/accesos") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                  !pathname?.includes("/dashboard/complaints") &&
+                  !pathname?.includes("/dashboard/accesos") &&
+                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                 )}
               >
                 <Home className="mr-2 h-4 w-4" />
@@ -127,7 +128,7 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                   isActive("/dashboard/accesos") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                 )}
               >
                 <LayoutGrid className="mr-2 h-4 w-4" />
@@ -144,7 +145,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes(currentModuleConfig.basePath) &&
-                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                   )}
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -207,6 +208,23 @@ export function Navbar() {
                     </div>
                   </Link>
                 </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard/complaints/stats"
+                    className="cursor-pointer rounded-xl"
+                  >
+                    <div className="flex flex-col gap-1 py-1">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-[#00A27F]" />
+                        <span className="font-medium">Estadísticas</span>
+                      </div>
+                      <p className="ml-6 text-xs text-muted-foreground">
+                        Análisis y gráficos de reclamos
+                      </p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -219,7 +237,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes("admin") &&
-                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                   )}
                 >
                   <FolderKanban className="mr-2 h-4 w-4" />
@@ -425,6 +443,20 @@ export function Navbar() {
                 >
                   <FileText className="h-5 w-5" />
                   <span>Ver Todos</span>
+                </Link>
+
+                <Link
+                  href="/dashboard/complaints/stats"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                    pathname === "/dashboard/complaints/stats"
+                      ? "bg-[#00A27F]/12 text-[#00A27F]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                  )}
+                >
+                  <BarChart3 className="h-5 w-5" />
+                  <span>Estadísticas</span>
                 </Link>
               </div>
             )}

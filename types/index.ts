@@ -24,6 +24,7 @@ export type UserRole =
   | "Admin"
   | "Reclamos"
   | "ReclamosArbolado"
+  | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR";

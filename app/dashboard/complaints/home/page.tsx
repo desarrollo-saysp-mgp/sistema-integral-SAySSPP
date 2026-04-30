@@ -11,7 +11,9 @@ import {
   XCircle,
   Plus,
   List,
+  BarChart3,
 } from "lucide-react";
+import { PageLoader } from "@/components/ui/page-loader";
 import { toast } from "sonner";
 
 type RecentComplaint = {
@@ -140,13 +142,7 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="p-2">
-        <div className="flex items-center justify-center py-20">
-          <div className="text-[#6B7280]">Cargando estadísticas...</div>
-        </div>
-      </div>
-    );
+    return <PageLoader show={true} />;
   }
 
   return (
@@ -191,6 +187,16 @@ export default function DashboardPage() {
           >
             <List className="mr-2 h-4 w-4" />
             Ver Todos
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => navigateWithLoading("/dashboard/complaints/stats")}
+            className="h-11 rounded-xl border-[#D8E3DE] bg-white px-5 text-[#373737] hover:bg-[#F8FAF9]"
+            disabled={isPending}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Estadísticas
           </Button>
         </div>
       </div>

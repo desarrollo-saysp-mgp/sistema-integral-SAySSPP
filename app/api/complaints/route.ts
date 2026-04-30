@@ -3,17 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintInsert } from "@/types";
 import { obtenerLatLon } from "@/lib/geocoding";
 
-// Validation helper functions
 const validatePhone = (phone: string): boolean => {
   if (!phone || !phone.trim()) return true;
-  const digitsOnly = /^\d+$/;
-  return digitsOnly.test(phone.trim()) && phone.trim().length <= 50;
+  return /^\d+$/.test(phone.trim()) && phone.trim().length <= 50;
 };
 
 const validateEmail = (email: string): boolean => {
   if (!email || !email.trim()) return true;
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailPattern.test(email.trim()) && email.trim().length <= 100;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.trim().length <= 100;
 };
 
 const validSinceWhenValues = [
@@ -28,6 +25,37 @@ const validSinceWhenValues = [
 const validContactMethods = ["Presencial", "Telefono", "Email", "WhatsApp"];
 const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
 const validArboladoLevels = ["Urgente", "Importante", "Orden de llegada"];
+
+const normalizeName = (value?: string | null) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const getRoleServiceIds = async (supabase: Awaited<ReturnType<typeof createClient>>) => {
+  const { data } = await supabase
+    .from("services")
+    .select("id, name")
+    .or("name.ilike.%Arbolado%,name.ilike.%Zoonosis%,name.ilike.%Vectores%");
+
+  const services = data || [];
+
+  const arboladoServiceIds = services
+    .filter((service) => normalizeName(service.name).includes("arbolado"))
+    .map((service) => service.id);
+
+  const zyvServiceIds = services
+    .filter((service) => {
+      const name = normalizeName(service.name);
+      return name.includes("zoonosis") || name.includes("vectores");
+    })
+    .map((service) => service.id);
+
+  return { arboladoServiceIds, zyvServiceIds };
+};
+
+const buildRoleOrFilter = (items: Array<string | null>) =>
+  items.filter(Boolean).join(",");
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,25 +92,41 @@ export async function GET(request: NextRequest) {
     const date_to = searchParams.get("date_to");
     const form_variant = searchParams.get("form_variant");
 
+    const { arboladoServiceIds, zyvServiceIds } =
+      await getRoleServiceIds(supabase);
+
     const pageSize = 1000;
     let from = 0;
     let allComplaints: any[] = [];
 
     while (true) {
-      let query = supabase
-        .from("complaints")
-        .select(
-          `
-          *,
-          service:services(id, name),
-          cause:causes(id, name),
-          loaded_by_user:users!loaded_by(id, full_name)
-        `,
-        );
+      let query = supabase.from("complaints").select(`
+        *,
+        service:services(id, name),
+        cause:causes(id, name),
+        loaded_by_user:users!loaded_by(id, full_name)
+      `);
 
-      // Restricción automática por rol
       if (currentUser.role === "ReclamosArbolado") {
-        query = query.eq("form_variant", "arbolado");
+        query = query.or(
+          buildRoleOrFilter([
+            "form_variant.eq.arbolado",
+            arboladoServiceIds.length
+              ? `service_id.in.(${arboladoServiceIds.join(",")})`
+              : null,
+          ]),
+        );
+      }
+
+      if (currentUser.role === "ReclamosZyV") {
+        query = query.or(
+          buildRoleOrFilter([
+            "form_variant.eq.zyv",
+            zyvServiceIds.length
+              ? `service_id.in.(${zyvServiceIds.join(",")})`
+              : null,
+          ]),
+        );
       }
 
       if (currentUser.role === "Reclamos") {
@@ -91,42 +135,23 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Orden según módulo
-      if (
-        currentUser.role === "ReclamosArbolado" ||
-        form_variant === "arbolado"
-      ) {
+      if (currentUser.role === "ReclamosArbolado" || form_variant === "arbolado") {
         query = query.order("arbolado_number", { ascending: false });
       } else {
-        query = query.order("complaint_number", { ascending: false });
+        query = query.order("created_at", { ascending: false }).order("id", {
+          ascending: false,
+        });
       }
 
-      // Filtros manuales
-      if (search) {
-        query = query.ilike("complainant_name", `%${search}%`);
-      }
-
-      if (status && status !== "all") {
-        query = query.eq("status", status);
-      }
-
+      if (search) query = query.ilike("complainant_name", `%${search}%`);
+      if (status && status !== "all") query = query.eq("status", status);
       if (service_id && service_id !== "all") {
         query = query.eq("service_id", parseInt(service_id));
       }
+      if (zone && zone !== "all") query = query.eq("zone", zone);
+      if (date_from) query = query.gte("complaint_date", date_from);
+      if (date_to) query = query.lte("complaint_date", date_to);
 
-      if (zone && zone !== "all") {
-        query = query.eq("zone", zone);
-      }
-
-      if (date_from) {
-        query = query.gte("complaint_date", date_from);
-      }
-
-      if (date_to) {
-        query = query.lte("complaint_date", date_to);
-      }
-
-      // Solo admin/admin lectura pueden sobreescribir por query param
       if (
         form_variant &&
         form_variant !== "all" &&
@@ -145,33 +170,35 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      if (!data || data.length === 0) {
-        break;
-      }
+      if (!data || data.length === 0) break;
 
       allComplaints = [...allComplaints, ...data];
 
-      if (data.length < pageSize) {
-        break;
-      }
-
+      if (data.length < pageSize) break;
       from += pageSize;
     }
 
-    // Blindaje extra por si alguna query futura cambia
     const safeComplaints =
       currentUser.role === "ReclamosArbolado"
         ? allComplaints.filter(
-          (complaint) => complaint.form_variant === "arbolado",
-        )
-        : currentUser.role === "Reclamos"
-          ? allComplaints.filter(
-            (complaint) =>
-              complaint.form_variant === "general" ||
-              complaint.form_variant === "import_excel" ||
-              complaint.form_variant == null,
+            (c) =>
+              c.form_variant === "arbolado" ||
+              arboladoServiceIds.includes(c.service_id),
           )
-          : allComplaints;
+        : currentUser.role === "ReclamosZyV"
+          ? allComplaints.filter(
+              (c) =>
+                c.form_variant === "zyv" ||
+                zyvServiceIds.includes(c.service_id),
+            )
+          : currentUser.role === "Reclamos"
+            ? allComplaints.filter(
+                (c) =>
+                  c.form_variant === "general" ||
+                  c.form_variant === "import_excel" ||
+                  c.form_variant == null,
+              )
+            : allComplaints;
 
     return NextResponse.json({ data: safeComplaints });
   } catch (error) {
@@ -219,10 +246,37 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const formVariant = body.form_variant || "general";
 
-    if (!["general", "arbolado"].includes(formVariant)) {
+    if (!["general", "arbolado", "zyv"].includes(formVariant)) {
       return NextResponse.json(
         { error: "Variante de formulario inválida" },
         { status: 400 },
+      );
+    }
+
+    const { arboladoServiceIds, zyvServiceIds } =
+      await getRoleServiceIds(supabase);
+
+    const requestedServiceId = Number(body.service_id);
+
+    if (
+      currentUser.role === "ReclamosZyV" &&
+      formVariant !== "zyv" &&
+      !zyvServiceIds.includes(requestedServiceId)
+    ) {
+      return NextResponse.json(
+        { error: "Solo podés cargar reclamos de Zoonosis y Vectores" },
+        { status: 403 },
+      );
+    }
+
+    if (
+      currentUser.role === "ReclamosArbolado" &&
+      formVariant !== "arbolado" &&
+      !arboladoServiceIds.includes(requestedServiceId)
+    ) {
+      return NextResponse.json(
+        { error: "Solo podés cargar reclamos de Arbolado" },
+        { status: 403 },
       );
     }
 
@@ -287,23 +341,33 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
+    }
 
-      if (
-        body.contact_method &&
-        !validContactMethods.includes(body.contact_method)
-      ) {
-        return NextResponse.json(
-          { error: "Método de contacto inválido" },
-          { status: 400 },
-        );
+    if (formVariant === "zyv") {
+      const requiredFields = ["complaint_date", "department", "status"];
+
+      for (const field of requiredFields) {
+        if (!body[field] || !String(body[field]).trim()) {
+          return NextResponse.json(
+            { error: `El campo ${field} es requerido` },
+            { status: 400 },
+          );
+        }
       }
     }
 
-    if (body.status && !validStatuses.includes(body.status)) {
+    if (
+      body.contact_method &&
+      !validContactMethods.includes(body.contact_method)
+    ) {
       return NextResponse.json(
-        { error: "Estado inválido" },
+        { error: "Método de contacto inválido" },
         { status: 400 },
       );
+    }
+
+    if (body.status && !validStatuses.includes(body.status)) {
+      return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
     }
 
     if (body.phone_number && !validatePhone(body.phone_number)) {
@@ -377,17 +441,33 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    if (formVariant === "zyv") {
+      complaintData = {
+        ...complaintData,
+        details: body.description_type?.trim() || body.details?.trim() || null,
+        contact_method: body.contact_method?.trim() || null,
+        extra_data: {
+          department: body.department?.trim() || "Zoonosis y Vectores",
+          description_type: body.description_type?.trim() || null,
+          observations: body.observations?.trim() || null,
+          solution: body.solution?.trim() || null,
+          resolution_date: body.resolution_date || null,
+          agent: body.agent?.trim() || null,
+          resolution_responsible:
+            body.resolution_responsible?.trim() || null,
+        },
+      };
+    }
+
     const { data: complaint, error } = await supabase
       .from("complaints")
       .insert(complaintData)
-      .select(
-        `
+      .select(`
         *,
         service:services(id, name),
         cause:causes(id, name),
         loaded_by_user:users!loaded_by(id, full_name)
-      `,
-      )
+      `)
       .single();
 
     if (error) {

@@ -1,11 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-/**
- * GET /api/dashboard/stats
- * Get dashboard statistics
- * Requires: Authenticated user
- */
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -32,13 +27,48 @@ export async function GET() {
       );
     }
 
+
+    const { data: serviceRoles } = await supabase
+      .from("services")
+      .select("id, name")
+      .or("name.ilike.%Arbolado%,name.ilike.%Zoonosis%,name.ilike.%Vectores%");
+
+    const arboladoServiceIds =
+      serviceRoles
+        ?.filter((s) => s.name.toLowerCase().includes("arbolado"))
+        .map((s) => s.id) ?? [];
+
+    const zyvServiceIds =
+      serviceRoles
+        ?.filter((s) => {
+          const name = s.name.toLowerCase();
+          return name.includes("zoonosis") || name.includes("vectores");
+        })
+        .map((s) => s.id) ?? [];
+
+
     const applyRoleFilter = <T>(query: T): T => {
       if (currentUser.role === "ReclamosArbolado") {
         return (query as any).eq("form_variant", "arbolado");
       }
 
       if (currentUser.role === "Reclamos") {
-        return (query as any).or("form_variant.eq.general,form_variant.is.null");
+        return (query as any).or(
+          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+        );
+      }
+
+      if (currentUser.role === "ReclamosZyV") {
+        return (query as any).or(
+          [
+            "form_variant.eq.zyv",
+            zyvServiceIds.length
+              ? `service_id.in.(${zyvServiceIds.join(",")})`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(","),
+        );
       }
 
       return query;
@@ -69,7 +99,7 @@ export async function GET() {
         .eq("status", "No resuelto"),
     );
 
-    let recentQuery = applyRoleFilter(
+    const recentQuery = applyRoleFilter(
       supabase
         .from("complaints")
         .select(
@@ -83,22 +113,15 @@ export async function GET() {
           details,
           form_variant,
           extra_data,
+          created_at,
           service:services(id, name),
           cause:causes(id, name)
         `,
         )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(5),
     );
-
-    if (currentUser.role === "ReclamosArbolado") {
-      recentQuery = (recentQuery as any).order("arbolado_number", {
-        ascending: false,
-      });
-    } else {
-      recentQuery = (recentQuery as any).order("complaint_number", {
-        ascending: false,
-      });
-    }
 
     const [
       totalResult,
@@ -123,10 +146,7 @@ export async function GET() {
     }
 
     if (inProgressResult.error) {
-      console.error(
-        "Error fetching in progress count:",
-        inProgressResult.error,
-      );
+      console.error("Error fetching in progress count:", inProgressResult.error);
       return NextResponse.json(
         { error: "Error al cargar estadísticas" },
         { status: 500 },

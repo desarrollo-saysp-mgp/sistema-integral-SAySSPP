@@ -8,7 +8,11 @@ import {
 import {
   ArboladoComplaintForm,
   type ArboladoComplaintFormData,
-} from "../../../../components/forms/ArboladoComplaintForm";
+} from "@/components/forms/ArboladoComplaintForm";
+import {
+  ZyvComplaintForm,
+  type ZyvComplaintFormData,
+} from "@/components/forms/ZyvComplaintForm";
 import { useUser } from "@/hooks/useUser";
 import { toast } from "sonner";
 
@@ -17,8 +21,11 @@ export default function NewComplaintPage() {
   const { profile } = useUser();
 
   const isArboladoUser = profile?.role === "ReclamosArbolado";
+  const isZyvUser = profile?.role === "ReclamosZyV";
 
-  const handleGeneralSubmit = async (formData: ComplaintFormData) => {
+  const handleGeneralSubmit = async (
+    formData: ComplaintFormData | ZyvComplaintFormData,
+  ) => {
     try {
       const response = await fetch("/api/complaints", {
         method: "POST",
@@ -82,22 +89,33 @@ export default function NewComplaintPage() {
     router.push("/dashboard/complaints");
   };
 
+  const title = isArboladoUser
+    ? "Nuevo Reclamo de Arbolado"
+    : isZyvUser
+      ? "Nuevo Reclamo ZyV"
+      : "Nuevo Reclamo";
+
+  const description = isArboladoUser
+    ? "Complete el formulario para registrar un nuevo reclamo de Arbolado"
+    : isZyvUser
+      ? "Complete el formulario para registrar un nuevo reclamo de Zoonosis y Vectores"
+      : "Complete el formulario para registrar un nuevo reclamo";
+
   return (
     <div className="container mx-auto max-w-4xl p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">
-          {isArboladoUser ? "Nuevo Reclamo de Arbolado" : "Nuevo Reclamo"}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          {isArboladoUser
-            ? "Complete el formulario para registrar un nuevo reclamo de Arbolado"
-            : "Complete el formulario para registrar un nuevo reclamo"}
-        </p>
+        <h1 className="text-3xl font-bold">{title}</h1>
+        <p className="mt-2 text-muted-foreground">{description}</p>
       </div>
 
       {isArboladoUser ? (
         <ArboladoComplaintForm
           onSubmit={handleArboladoSubmit}
+          onCancel={handleCancel}
+        />
+      ) : isZyvUser ? (
+        <ZyvComplaintForm
+          onSubmit={handleGeneralSubmit}
           onCancel={handleCancel}
         />
       ) : (
