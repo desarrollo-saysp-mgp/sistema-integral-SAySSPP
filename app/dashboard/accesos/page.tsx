@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type ModuleKey = "complaints" | "purchase_requests" | "rrhh";
+type ModuleKey = "complaints" | "purchase_requests" | "general_dashboard";
 
 type AccessItem = {
   key: ModuleKey;
@@ -29,12 +29,12 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/solicitud-compra",
     available: true,
   },
-  rrhh: {
-    key: "rrhh",
-    title: "RRHH",
-    description: "Gestión de recursos humanos.",
-    href: "/dashboard/rrhh",
-    available: false,
+  general_dashboard: {
+    key: "general_dashboard",
+    title: "Tablero General",
+    description: "Visualización tablero Power BI.",
+    href: "/dashboard/tablero-general",
+    available: true,
   },
 };
 
@@ -59,11 +59,24 @@ export default async function AccesosPage() {
     redirect("/login");
   }
 
-  const modules: string[] = Array.isArray(profile.modules) ? profile.modules : [];
+  const allowedRoles = ["admin", "adminlectura"];
+
+  const userRole = String(profile.role || "").toLowerCase();
+
+  const modules: string[] = Array.isArray(profile.modules)
+    ? profile.modules
+    : [];
 
   const accesses = modules
     .map((moduleKey) => MODULE_CONFIG[moduleKey as ModuleKey])
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((item) => {
+      if (item.key === "general_dashboard") {
+        return allowedRoles.includes(userRole);
+      }
+
+      return true;
+    });
 
   return (
     <div className="container mx-auto space-y-8 p-6">
@@ -106,15 +119,9 @@ export default async function AccesosPage() {
                   {item.description}
                 </p>
 
-                {item.available ? (
-                  <Button asChild className="w-full">
-                    <Link href={item.href}>Ingresar</Link>
-                  </Button>
-                ) : (
-                  <Button disabled className="w-full">
-                    Próximamente
-                  </Button>
-                )}
+                <Button asChild className="w-full">
+                  <Link href={item.href}>Ingresar</Link>
+                </Button>
               </CardContent>
             </Card>
           ))}
