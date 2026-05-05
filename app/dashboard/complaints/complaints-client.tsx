@@ -65,7 +65,6 @@ export default function ComplaintsClient() {
   const isArboladoView =
     isArboladoUser || (isAdminUser && variantFilter === "arbolado");
 
-
   const statusFromUrl = searchParams.get("status");
   const initialStatus =
     statusFromUrl &&
@@ -80,6 +79,8 @@ export default function ComplaintsClient() {
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [addressFilter, setAddressFilter] = useState("");
+  const [streetNumberFilter, setStreetNumberFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [serviceFilter, setServiceFilter] = useState("all");
   const [zoneFilter, setZoneFilter] = useState("all");
@@ -248,6 +249,8 @@ export default function ComplaintsClient() {
     return sourceComplaints.filter((complaint) => {
       const extra = getExtraData(complaint);
       const query = searchTerm.toLowerCase().trim();
+      const addressQuery = addressFilter.toLowerCase().trim();
+      const streetNumberQuery = streetNumberFilter.toLowerCase().trim();
 
       const matchesSearch =
         !query ||
@@ -257,6 +260,16 @@ export default function ComplaintsClient() {
           extra.description_type.toLowerCase().includes(query)) ||
         (isArboladoView &&
           (complaint.details || "").toLowerCase().includes(query));
+
+      const matchesAddress =
+        !addressQuery ||
+        (complaint.address || "").toLowerCase().includes(addressQuery);
+
+      const matchesStreetNumber =
+        !streetNumberQuery ||
+        (complaint.street_number || "")
+          .toLowerCase()
+          .includes(streetNumberQuery);
 
       const matchesDepartment =
         !isArboladoView ||
@@ -277,6 +290,8 @@ export default function ComplaintsClient() {
 
       return (
         matchesSearch &&
+        matchesAddress &&
+        matchesStreetNumber &&
         matchesDepartment &&
         matchesLevel &&
         matchesDescription
@@ -286,6 +301,8 @@ export default function ComplaintsClient() {
     complaints,
     isArboladoView,
     searchTerm,
+    addressFilter,
+    streetNumberFilter,
     departmentFilter,
     levelFilter,
     descriptionFilter,
@@ -344,6 +361,8 @@ export default function ComplaintsClient() {
 
   const clearFilters = () => {
     setSearchTerm("");
+    setAddressFilter("");
+    setStreetNumberFilter("");
     setStatusFilter("all");
     setServiceFilter("all");
     setZoneFilter("all");
@@ -358,6 +377,8 @@ export default function ComplaintsClient() {
   const hasActiveFilters = isArboladoView
     ? !!(
       searchTerm ||
+      addressFilter ||
+      streetNumberFilter ||
       statusFilter !== "all" ||
       dateFromFilter ||
       dateToFilter ||
@@ -367,6 +388,8 @@ export default function ComplaintsClient() {
     )
     : !!(
       searchTerm ||
+      addressFilter ||
+      streetNumberFilter ||
       statusFilter !== "all" ||
       serviceFilter !== "all" ||
       zoneFilter !== "all" ||
@@ -405,9 +428,9 @@ export default function ComplaintsClient() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 items-end gap-4 xl:grid-cols-14">
+            <div className="flex flex-wrap items-end gap-3 xl:flex-nowrap">
               {isAdminUser && (
-                <div className="flex flex-col gap-1.5 xl:col-span-2">
+                <div className="flex w-full flex-col gap-1.5 sm:w-[150px] xl:w-[135px]">
                   <Label htmlFor="variant-filter">Tipo</Label>
                   <Select
                     value={variantFilter}
@@ -415,7 +438,7 @@ export default function ComplaintsClient() {
                       setVariantFilter(value as VariantFilter)
                     }
                   >
-                    <SelectTrigger id="variant-filter" className="h-11 w-full">
+                    <SelectTrigger id="variant-filter" className="h-10 w-full">
                       <SelectValue placeholder="Reclamos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -426,10 +449,7 @@ export default function ComplaintsClient() {
                 </div>
               )}
 
-              <div
-                className={`flex flex-col gap-1.5 ${isAdminUser ? "xl:col-span-3" : "xl:col-span-4"
-                  }`}
-              >
+              <div className="flex w-full flex-col gap-1.5 sm:w-[320px] xl:w-[300px]">
                 <Label htmlFor="search">Buscar</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -442,15 +462,37 @@ export default function ComplaintsClient() {
                     }
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="h-11 pl-10"
+                    className="h-10 pl-10"
                   />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 xl:col-span-2">
+              <div className="flex w-full flex-col gap-1.5 sm:w-[190px] xl:w-[165px]">
+                <Label htmlFor="address-filter">Calle</Label>
+                <Input
+                  id="address-filter"
+                  placeholder="Buscar por calle..."
+                  value={addressFilter}
+                  onChange={(e) => setAddressFilter(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+
+              <div className="flex w-full flex-col gap-1.5 sm:w-[100px] xl:w-[80px]">
+                <Label htmlFor="street-number-filter">Número</Label>
+                <Input
+                  id="street-number-filter"
+                  placeholder="Nro."
+                  value={streetNumberFilter}
+                  onChange={(e) => setStreetNumberFilter(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+
+              <div className="flex w-full flex-col gap-1.5 sm:w-[160px] xl:w-[125px]">
                 <Label htmlFor="status-filter">Estado</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger id="status-filter" className="h-11 w-full">
+                  <SelectTrigger id="status-filter" className="h-10 w-full">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -464,10 +506,10 @@ export default function ComplaintsClient() {
 
               {!isArboladoView && (
                 <>
-                  <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <div className="flex w-full flex-col gap-1.5 sm:w-[170px] xl:w-[145px]">
                     <Label htmlFor="service-filter">Servicio</Label>
                     <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                      <SelectTrigger id="service-filter" className="h-11 w-full">
+                      <SelectTrigger id="service-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -481,10 +523,10 @@ export default function ComplaintsClient() {
                     </Select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <div className="flex w-full flex-col gap-1.5 sm:w-[150px] xl:w-[115px]">
                     <Label htmlFor="zone-filter">Zona</Label>
                     <Select value={zoneFilter} onValueChange={setZoneFilter}>
-                      <SelectTrigger id="zone-filter" className="h-11 w-full">
+                      <SelectTrigger id="zone-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todas" />
                       </SelectTrigger>
                       <SelectContent>
@@ -502,13 +544,13 @@ export default function ComplaintsClient() {
 
               {isArboladoView && (
                 <>
-                  <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <div className="flex w-full flex-col gap-1.5 sm:w-[160px] xl:w-[135px]">
                     <Label htmlFor="department-filter">Depto</Label>
                     <Select
                       value={departmentFilter}
                       onValueChange={setDepartmentFilter}
                     >
-                      <SelectTrigger id="department-filter" className="h-11 w-full">
+                      <SelectTrigger id="department-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -522,10 +564,10 @@ export default function ComplaintsClient() {
                     </Select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  <div className="flex w-full flex-col gap-1.5 sm:w-[140px] xl:w-[120px]">
                     <Label htmlFor="level-filter">Nivel</Label>
                     <Select value={levelFilter} onValueChange={setLevelFilter}>
-                      <SelectTrigger id="level-filter" className="h-11 w-full">
+                      <SelectTrigger id="level-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -539,13 +581,13 @@ export default function ComplaintsClient() {
                     </Select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 xl:col-span-4">
+                  <div className="flex w-full flex-col gap-1.5 sm:w-[220px] xl:w-[190px]">
                     <Label htmlFor="description-filter">Descripción</Label>
                     <Select
                       value={descriptionFilter}
                       onValueChange={setDescriptionFilter}
                     >
-                      <SelectTrigger id="description-filter" className="h-11 w-full">
+                      <SelectTrigger id="description-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todas" />
                       </SelectTrigger>
                       <SelectContent>
@@ -561,25 +603,25 @@ export default function ComplaintsClient() {
                 </>
               )}
 
-              <div className="flex flex-col gap-1.5 xl:col-span-2">
+              <div className="flex w-full flex-col gap-1.5 sm:w-[150px] xl:w-[130px]">
                 <Label htmlFor="date-from">Desde</Label>
                 <Input
                   id="date-from"
                   type="date"
                   value={dateFromFilter}
                   onChange={(e) => setDateFromFilter(e.target.value)}
-                  className="h-11"
+                  className="h-10"
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5 xl:col-span-2">
+              <div className="flex w-full flex-col gap-1.5 sm:w-[150px] xl:w-[130px]">
                 <Label htmlFor="date-to">Hasta</Label>
                 <Input
                   id="date-to"
                   type="date"
                   value={dateToFilter}
                   onChange={(e) => setDateToFilter(e.target.value)}
-                  className="h-11"
+                  className="h-10"
                 />
               </div>
             </div>
