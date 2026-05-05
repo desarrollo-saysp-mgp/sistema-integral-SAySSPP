@@ -90,9 +90,11 @@ export default function ComplaintDetailPage() {
   // FLAGS
   // =========================
 
-  const serviceName = (complaint as any)?.service?.name;
+  const serviceName = (complaint as any)?.service?.name?.toLowerCase();
 
-  const isArbolado = complaint.form_variant === "arbolado";
+  const isArbolado =
+    complaint.form_variant === "arbolado" ||
+    serviceName?.includes("arbolado");
 
   const isZyV =
     complaint.form_variant === "zyv" ||
@@ -244,14 +246,14 @@ export default function ComplaintDetailPage() {
             profile?.role === "Reclamos" ||
             profile?.role === "ReclamosArbolado" ||
             profile?.role === "ReclamosZyV") && (
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Eliminar
-            </Button>
-          )}
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar
+              </Button>
+            )}
         </div>
 
         {isArbolado ? (

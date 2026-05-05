@@ -32,7 +32,9 @@ const normalizeName = (value?: string | null) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const getRoleServiceIds = async (supabase: Awaited<ReturnType<typeof createClient>>) => {
+const getRoleServiceIds = async (
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) => {
   const { data } = await supabase
     .from("services")
     .select("id, name")
@@ -135,19 +137,17 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      if (currentUser.role === "ReclamosArbolado" || form_variant === "arbolado") {
-        query = query.order("arbolado_number", { ascending: false });
-      } else {
-        query = query.order("created_at", { ascending: false }).order("id", {
-          ascending: false,
-        });
-      }
+      query = query.order("created_at", { ascending: false }).order("id", {
+        ascending: false,
+      });
 
       if (search) query = query.ilike("complainant_name", `%${search}%`);
       if (status && status !== "all") query = query.eq("status", status);
+
       if (service_id && service_id !== "all") {
         query = query.eq("service_id", parseInt(service_id));
       }
+
       if (zone && zone !== "all") query = query.eq("zone", zone);
       if (date_from) query = query.gte("complaint_date", date_from);
       if (date_to) query = query.lte("complaint_date", date_to);
@@ -344,7 +344,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (formVariant === "zyv") {
-      const requiredFields = ["complaint_date", "department", "status"];
+      const requiredFields = [
+        "complaint_date",
+        "service_id",
+        "cause_id",
+        "status",
+      ];
 
       for (const field of requiredFields) {
         if (!body[field] || !String(body[field]).trim()) {
@@ -444,17 +449,14 @@ export async function POST(request: NextRequest) {
     if (formVariant === "zyv") {
       complaintData = {
         ...complaintData,
-        details: body.description_type?.trim() || body.details?.trim() || null,
-        contact_method: body.contact_method?.trim() || null,
+        service_id: parseInt(body.service_id),
+        cause_id: parseInt(body.cause_id),
+        zone: body.zone?.trim() || null,
+        since_when: body.since_when || null,
+        contact_method: body.contact_method || null,
+        details: body.details?.trim() || null,
         extra_data: {
-          department: body.department?.trim() || "Zoonosis y Vectores",
-          description_type: body.description_type?.trim() || null,
-          observations: body.observations?.trim() || null,
-          solution: body.solution?.trim() || null,
-          resolution_date: body.resolution_date || null,
-          agent: body.agent?.trim() || null,
-          resolution_responsible:
-            body.resolution_responsible?.trim() || null,
+          department: "Zoonosis y Vectores",
         },
       };
     }

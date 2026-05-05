@@ -1,6 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+const normalizeName = (value?: string | null) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const buildRoleOrFilter = (items: Array<string | null>) =>
+  items.filter(Boolean).join(",");
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -27,7 +36,6 @@ export async function GET() {
       );
     }
 
-
     const { data: serviceRoles } = await supabase
       .from("services")
       .select("id, name")
@@ -35,39 +43,43 @@ export async function GET() {
 
     const arboladoServiceIds =
       serviceRoles
-        ?.filter((s) => s.name.toLowerCase().includes("arbolado"))
-        .map((s) => s.id) ?? [];
+        ?.filter((service) => normalizeName(service.name).includes("arbolado"))
+        .map((service) => service.id) ?? [];
 
     const zyvServiceIds =
       serviceRoles
-        ?.filter((s) => {
-          const name = s.name.toLowerCase();
+        ?.filter((service) => {
+          const name = normalizeName(service.name);
           return name.includes("zoonosis") || name.includes("vectores");
         })
-        .map((s) => s.id) ?? [];
-
+        .map((service) => service.id) ?? [];
 
     const applyRoleFilter = <T>(query: T): T => {
       if (currentUser.role === "ReclamosArbolado") {
-        return (query as any).eq("form_variant", "arbolado");
-      }
-
-      if (currentUser.role === "Reclamos") {
         return (query as any).or(
-          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+          buildRoleOrFilter([
+            "form_variant.eq.arbolado",
+            arboladoServiceIds.length
+              ? `service_id.in.(${arboladoServiceIds.join(",")})`
+              : null,
+          ]),
         );
       }
 
       if (currentUser.role === "ReclamosZyV") {
         return (query as any).or(
-          [
+          buildRoleOrFilter([
             "form_variant.eq.zyv",
             zyvServiceIds.length
               ? `service_id.in.(${zyvServiceIds.join(",")})`
               : null,
-          ]
-            .filter(Boolean)
-            .join(","),
+          ]),
+        );
+      }
+
+      if (currentUser.role === "Reclamos") {
+        return (query as any).or(
+          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
         );
       }
 

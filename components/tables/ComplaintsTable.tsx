@@ -164,10 +164,13 @@ const getComplaintDisplayData = (
   const levelLabel =
     typeof extra.level === "string" && extra.level ? extra.level : "-";
 
-  const descriptionLabel =
-    typeof extra.description_type === "string" && extra.description_type
+  const isPureArbolado = complaint.form_variant === "arbolado";
+
+  const descriptionLabel = isPureArbolado
+    ? typeof extra.description_type === "string" && extra.description_type
       ? extra.description_type
-      : complaint.details || "-";
+      : complaint.details || "-"
+    : complaint.cause?.name || complaint.details || "-";
 
   return {
     isArbolado,

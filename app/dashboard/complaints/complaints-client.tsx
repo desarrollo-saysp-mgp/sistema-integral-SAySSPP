@@ -16,7 +16,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Plus, Filter } from "lucide-react";
-import type { Complaint, Service, Cause, User } from "@/types";
+import type { Complaint, Service, User } from "@/types";
 import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 
@@ -25,7 +25,7 @@ const ZONE_OPTIONS = Array.from({ length: 16 }, (_, i) => String(i + 1));
 
 type ComplaintWithDetails = Complaint & {
   service: Service | null;
-  cause: Cause | null;
+  cause: any | null;
   loaded_by_user: User;
 };
 
@@ -49,42 +49,33 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   return {};
 };
 
-const normalizeAddressText = (value: unknown) =>
+const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeAddressText = (value: unknown) =>
+  normalizeText(value).replace(/\s+/g, " ");
 
 const getStreetQuery = (value: string) => {
   const query = normalizeAddressText(value);
-
   if (!query) return "";
-
-  // Si el usuario escribe solo "33", lo interpretamos como "Calle 33"
-  if (/^\d+$/.test(query)) {
-    return `calle ${query}`;
-  }
-
+  if (/^\d+$/.test(query)) return `calle ${query}`;
   return query;
 };
 
 const matchesStreetAddress = (address: unknown, filter: string) => {
   const query = getStreetQuery(filter);
-
   if (!query) return true;
 
   const normalizedAddress = normalizeAddressText(address);
 
-  if (!normalizedAddress.startsWith(query)) {
-    return false;
-  }
+  if (!normalizedAddress.startsWith(query)) return false;
 
   const nextCharacter = normalizedAddress.charAt(query.length);
 
-  // Permite "Calle 33", "Calle 33 1065", "Calle 33 bis"
-  // Bloquea "Calle 331", "Calle 332", etc.
   return (
     !nextCharacter ||
     nextCharacter === " " ||
@@ -94,6 +85,16 @@ const matchesStreetAddress = (address: unknown, filter: string) => {
     nextCharacter === "/"
   );
 };
+
+const isArboladoComplaint = (complaint: ComplaintWithDetails) => {
+  const serviceName = normalizeText(complaint.service?.name);
+  return complaint.form_variant === "arbolado" || serviceName.includes("arbolado");
+};
+
+const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
+  complaint.form_variant === "general" ||
+  complaint.form_variant === "import_excel" ||
+  complaint.form_variant == null;
 
 export default function ComplaintsClient() {
   const router = useRouter();
@@ -114,9 +115,7 @@ export default function ComplaintsClient() {
   const statusFromUrl = searchParams.get("status");
   const initialStatus =
     statusFromUrl &&
-      VALID_STATUSES.includes(
-        statusFromUrl as (typeof VALID_STATUSES)[number],
-      )
+    VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
       ? statusFromUrl
       : "all";
 
@@ -144,9 +143,7 @@ export default function ComplaintsClient() {
   useEffect(() => {
     const nextStatus =
       statusFromUrl &&
-        VALID_STATUSES.includes(
-          statusFromUrl as (typeof VALID_STATUSES)[number],
-        )
+      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
         ? statusFromUrl
         : "all";
 
@@ -181,31 +178,17 @@ export default function ComplaintsClient() {
       if (data.data) {
         let activeServices = data.data.filter((s: Service) => s.active);
 
-        // 👉 SOLO Zoonosis y Vectores
         if (profile?.role === "ReclamosZyV") {
           activeServices = activeServices.filter((service: Service) => {
-            const name = service.name
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "");
-
-            return (
-              name.includes("zoonosis") ||
-              name.includes("vectores")
-            );
+            const name = normalizeText(service.name);
+            return name.includes("zoonosis") || name.includes("vectores");
           });
         }
 
-        // 👉 SOLO Arbolado
         if (profile?.role === "ReclamosArbolado") {
-          activeServices = activeServices.filter((service: Service) => {
-            const name = service.name
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "");
-
-            return name.includes("arbolado");
-          });
+          activeServices = activeServices.filter((service: Service) =>
+            normalizeText(service.name).includes("arbolado"),
+          );
         }
 
         setServices(activeServices);
@@ -237,12 +220,8 @@ export default function ComplaintsClient() {
       if (dateFromFilter) params.append("date_from", dateFromFilter);
       if (dateToFilter) params.append("date_to", dateToFilter);
 
-      if (isArboladoUser) {
-        params.append("form_variant", "arbolado");
-      } else if (isAdminUser) {
+      if (isAdminUser) {
         params.append("form_variant", variantFilter);
-      } else {
-        params.append("form_variant", "general");
       }
 
       const response = await fetch(`/api/complaints?${params.toString()}`, {
@@ -251,9 +230,7 @@ export default function ComplaintsClient() {
 
       const data = await response.json();
 
-      if (requestId !== latestRequestRef.current) {
-        return;
-      }
+      if (requestId !== latestRequestRef.current) return;
 
       if (response.ok && data.data) {
         setComplaints(data.data);
@@ -261,9 +238,7 @@ export default function ComplaintsClient() {
         toast.error(data.error || "Error al cargar reclamos");
       }
     } catch (error) {
-      if (requestId !== latestRequestRef.current) {
-        return;
-      }
+      if (requestId !== latestRequestRef.current) return;
 
       console.error("Error fetching complaints:", error);
       toast.error("Error al cargar reclamos");
@@ -278,24 +253,20 @@ export default function ComplaintsClient() {
     let sourceComplaints = complaints;
 
     if (isArboladoView) {
-      sourceComplaints = complaints.filter(
-        (complaint) => complaint.form_variant === "arbolado",
-      );
+      sourceComplaints = complaints.filter(isArboladoComplaint);
     }
 
-    if (!isArboladoView) {
-      sourceComplaints = complaints.filter(
-        (complaint) =>
-          complaint.form_variant === "general" ||
-          complaint.form_variant === "import_excel" ||
-          complaint.form_variant == null,
-      );
+    if (!isArboladoView && !isAdminUser) {
+      sourceComplaints = complaints;
+    }
+
+    if (!isArboladoView && isAdminUser && variantFilter === "general") {
+      sourceComplaints = complaints.filter(isGeneralComplaint);
     }
 
     return sourceComplaints.filter((complaint) => {
       const extra = getExtraData(complaint);
       const query = searchTerm.toLowerCase().trim();
-      const addressQuery = addressFilter.toLowerCase().trim();
       const streetNumberQuery = streetNumberFilter.toLowerCase().trim();
 
       const matchesSearch =
@@ -322,7 +293,8 @@ export default function ComplaintsClient() {
         !isArboladoView ||
         departmentFilter === "all" ||
         (typeof extra.department === "string" &&
-          extra.department === departmentFilter);
+          extra.department === departmentFilter) ||
+        isArboladoComplaint(complaint);
 
       const matchesLevel =
         !isArboladoView ||
@@ -333,7 +305,8 @@ export default function ComplaintsClient() {
         !isArboladoView ||
         descriptionFilter === "all" ||
         (typeof extra.description_type === "string" &&
-          extra.description_type === descriptionFilter);
+          extra.description_type === descriptionFilter) ||
+        (descriptionFilter === "all" && isArboladoComplaint(complaint));
 
       return (
         matchesSearch &&
@@ -347,6 +320,8 @@ export default function ComplaintsClient() {
   }, [
     complaints,
     isArboladoView,
+    isAdminUser,
+    variantFilter,
     searchTerm,
     addressFilter,
     streetNumberFilter,
@@ -423,31 +398,30 @@ export default function ComplaintsClient() {
 
   const hasActiveFilters = isArboladoView
     ? !!(
-      searchTerm ||
-      addressFilter ||
-      streetNumberFilter ||
-      statusFilter !== "all" ||
-      dateFromFilter ||
-      dateToFilter ||
-      departmentFilter !== "all" ||
-      levelFilter !== "all" ||
-      descriptionFilter !== "all"
-    )
+        searchTerm ||
+        addressFilter ||
+        streetNumberFilter ||
+        statusFilter !== "all" ||
+        dateFromFilter ||
+        dateToFilter ||
+        departmentFilter !== "all" ||
+        levelFilter !== "all" ||
+        descriptionFilter !== "all"
+      )
     : !!(
-      searchTerm ||
-      addressFilter ||
-      streetNumberFilter ||
-      statusFilter !== "all" ||
-      serviceFilter !== "all" ||
-      zoneFilter !== "all" ||
-      dateFromFilter ||
-      dateToFilter
-    );
+        searchTerm ||
+        addressFilter ||
+        streetNumberFilter ||
+        statusFilter !== "all" ||
+        serviceFilter !== "all" ||
+        zoneFilter !== "all" ||
+        dateFromFilter ||
+        dateToFilter
+      );
 
   return (
     <>
       <PageLoader show={loading} />
-
 
       <div className="container mx-auto space-y-6 p-6">
         <div className="flex items-center justify-between">
