@@ -49,6 +49,52 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   return {};
 };
 
+const normalizeAddressText = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+
+const getStreetQuery = (value: string) => {
+  const query = normalizeAddressText(value);
+
+  if (!query) return "";
+
+  // Si el usuario escribe solo "33", lo interpretamos como "Calle 33"
+  if (/^\d+$/.test(query)) {
+    return `calle ${query}`;
+  }
+
+  return query;
+};
+
+const matchesStreetAddress = (address: unknown, filter: string) => {
+  const query = getStreetQuery(filter);
+
+  if (!query) return true;
+
+  const normalizedAddress = normalizeAddressText(address);
+
+  if (!normalizedAddress.startsWith(query)) {
+    return false;
+  }
+
+  const nextCharacter = normalizedAddress.charAt(query.length);
+
+  // Permite "Calle 33", "Calle 33 1065", "Calle 33 bis"
+  // Bloquea "Calle 331", "Calle 332", etc.
+  return (
+    !nextCharacter ||
+    nextCharacter === " " ||
+    nextCharacter === "," ||
+    nextCharacter === "." ||
+    nextCharacter === "-" ||
+    nextCharacter === "/"
+  );
+};
+
 export default function ComplaintsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -261,9 +307,10 @@ export default function ComplaintsClient() {
         (isArboladoView &&
           (complaint.details || "").toLowerCase().includes(query));
 
-      const matchesAddress =
-        !addressQuery ||
-        (complaint.address || "").toLowerCase().includes(addressQuery);
+      const matchesAddress = matchesStreetAddress(
+        complaint.address,
+        addressFilter,
+      );
 
       const matchesStreetNumber =
         !streetNumberQuery ||
