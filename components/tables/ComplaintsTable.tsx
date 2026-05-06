@@ -104,6 +104,10 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   return {};
 };
 
+const getVisibleComplaintNumber = (complaint: ComplaintWithDetails) => {
+  return complaint.arbolado_number ?? complaint.complaint_number ?? "-";
+};
+
 const getComplaintDisplayData = (
   complaint: ComplaintWithDetails,
   resolutionDateOverride?: string | null,
@@ -121,7 +125,6 @@ const getComplaintDisplayData = (
     (typeof extra.description_type === "string"
       ? extra.description_type
       : null) ??
-    complaint.details ??
     "-";
 
   const zoneLabel = complaint.zone ?? "-";
@@ -134,7 +137,6 @@ const getComplaintDisplayData = (
   const detailLabel =
     complaint.details ??
     (typeof extra.observations === "string" ? extra.observations : null) ??
-    (typeof extra.description_type === "string" ? extra.description_type : null) ??
     "-";
 
   const addressLabel =
@@ -164,13 +166,10 @@ const getComplaintDisplayData = (
   const levelLabel =
     typeof extra.level === "string" && extra.level ? extra.level : "-";
 
-  const isPureArbolado = complaint.form_variant === "arbolado";
-
-  const descriptionLabel = isPureArbolado
-    ? typeof extra.description_type === "string" && extra.description_type
+  const descriptionLabel =
+    typeof extra.description_type === "string" && extra.description_type
       ? extra.description_type
-      : complaint.details || "-"
-    : complaint.cause?.name || complaint.details || "-";
+      : complaint.cause?.name || complaint.details || "-";
 
   return {
     isArbolado,
@@ -196,11 +195,11 @@ export function ComplaintsTable({
 }: ComplaintsTableProps) {
   const router = useRouter();
   const { profile } = useUser();
+
   const isReadOnly = profile?.role === "AdminLectura";
-  const isArboladoUser =
-    profile?.role === "ReclamosArbolado" ||
-    (complaints.length > 0 &&
-      complaints[0].form_variant === "arbolado");
+  const isArboladoUser = profile?.role === "ReclamosArbolado";
+  const isZyVUser = profile?.role === "ReclamosZyV";
+
   const canSendWhatsApp =
     profile?.role === "Admin" || profile?.role === "Reclamos";
 
@@ -208,11 +207,18 @@ export function ComplaintsTable({
   const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
     number | null
   >(null);
+
   const [resolutionDateOverrides, setResolutionDateOverrides] = useState<
     Record<number, string | null>
   >({});
+
+  const [statusOverrides, setStatusOverrides] = useState<Record<number, string>>(
+    {},
+  );
+
   const [resolutionModalComplaint, setResolutionModalComplaint] =
     useState<ComplaintWithDetails | null>(null);
+
   const [resolutionModalDate, setResolutionModalDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>([]);
@@ -274,6 +280,10 @@ export function ComplaintsTable({
     return display.rawResolutionDate;
   };
 
+  const getComplaintStatus = (complaint: ComplaintWithDetails) => {
+    return statusOverrides[complaint.id] ?? complaint.status;
+  };
+
   const handleStatusChange = async (
     complaintId: number,
     newStatus: string,
@@ -285,6 +295,12 @@ export function ComplaintsTable({
 
     try {
       await onStatusChange(complaintId, newStatus);
+
+      setStatusOverrides((prev) => ({
+        ...prev,
+        [complaintId]: newStatus,
+      }));
+
       toast.success("Estado actualizado correctamente", {
         id: toastId,
       });
@@ -316,6 +332,8 @@ export function ComplaintsTable({
     const toastId = toast.loading("Guardando fecha de resolución...");
 
     try {
+      const shouldMarkAsResolved = Boolean(resolutionModalDate);
+
       const response = await fetch(
         `/api/complaints/${resolutionModalComplaint.id}`,
         {
@@ -325,6 +343,7 @@ export function ComplaintsTable({
           },
           body: JSON.stringify({
             resolution_date: resolutionModalDate || null,
+            ...(shouldMarkAsResolved ? { status: "Resuelto" } : {}),
           }),
         },
       );
@@ -340,9 +359,21 @@ export function ComplaintsTable({
         [resolutionModalComplaint.id]: resolutionModalDate || null,
       }));
 
-      toast.success("Fecha de resolución guardada correctamente", {
-        id: toastId,
-      });
+      if (shouldMarkAsResolved) {
+        setStatusOverrides((prev) => ({
+          ...prev,
+          [resolutionModalComplaint.id]: "Resuelto",
+        }));
+      }
+
+      toast.success(
+        shouldMarkAsResolved
+          ? "Fecha guardada y reclamo marcado como resuelto"
+          : "Fecha de resolución guardada correctamente",
+        {
+          id: toastId,
+        },
+      );
 
       closeResolutionDateModal();
     } catch (error) {
@@ -551,30 +582,23 @@ export function ComplaintsTable({
           ? resolutionDateOverrides[item.id]
           : undefined,
       );
-      const direccion = display.addressLabel;
-      const telefono = item.phone_number || "-";
-      const servicio = display.serviceLabel || "-";
-      const causa = display.causeLabel || "-";
-      const zona = display.zoneLabel || "-";
-      const desde = display.sinceWhenLabel || "-";
-      const detalle = display.detailLabel || "-";
+
+      const numeroVisible = getVisibleComplaintNumber(item);
       const fecha = item.complaint_date ? formatDate(item.complaint_date) : "-";
-      const fechaResolucion = display.resolutionDateLabel || "-";
-      const cargadoPor = item.loaded_by_user?.full_name || "-";
 
       partes.push(`*Reclamo ${index + 1}*`);
-      partes.push(`Número: *${item.complaint_number || "-"}*`);
+      partes.push(`Número: *${numeroVisible}*`);
       partes.push(`Fecha: *${fecha}*`);
       partes.push(`Nombre: *${item.complainant_name || "-"}*`);
-      partes.push(`Dirección: *${direccion || "-"}*`);
-      partes.push(`Teléfono: *${telefono}*`);
-      partes.push(`Servicio: *${servicio}*`);
-      partes.push(`Causa: *${causa}*`);
-      partes.push(`Zona/Sector: *${zona}*`);
-      partes.push(`Desde: *${desde}*`);
-      partes.push(`Fecha resolución: *${fechaResolucion}*`);
-      partes.push(`Detalle: *${detalle}*`);
-      partes.push(`Cargado por: *${cargadoPor}*`);
+      partes.push(`Dirección: *${display.addressLabel || "-"}*`);
+      partes.push(`Teléfono: *${item.phone_number || "-"}*`);
+      partes.push(`Servicio: *${display.serviceLabel || "-"}*`);
+      partes.push(`Causa: *${display.causeLabel || "-"}*`);
+      partes.push(`Zona/Sector: *${display.zoneLabel || "-"}*`);
+      partes.push(`Desde: *${display.sinceWhenLabel || "-"}*`);
+      partes.push(`Fecha resolución: *${display.resolutionDateLabel || "-"}*`);
+      partes.push(`Detalle: *${display.detailLabel || "-"}*`);
+      partes.push(`Cargado por: *${item.loaded_by_user?.full_name || "-"}*`);
       partes.push("");
     });
 
@@ -610,7 +634,7 @@ export function ComplaintsTable({
 
         if (isArboladoUser) {
           return {
-            Número: item.arbolado_number ?? "-",
+            Número: getVisibleComplaintNumber(item),
             Fecha: formatDate(item.complaint_date),
             Nombre: item.complainant_name,
             Dirección: display.addressLabel,
@@ -621,6 +645,20 @@ export function ComplaintsTable({
             Agente: display.agentLabel,
             Estado: item.status,
             "Cargado por": item.loaded_by_user?.full_name ?? "",
+          };
+        }
+
+        if (isZyVUser) {
+          return {
+            Número: getVisibleComplaintNumber(item),
+            Fecha: formatDate(item.complaint_date),
+            Nombre: item.complainant_name,
+            Dirección: display.addressLabel,
+            Servicio: display.serviceLabel,
+            Causa: display.causeLabel,
+            Zona: display.zoneLabel,
+            "Desde Cuándo": display.sinceWhenLabel,
+            Estado: item.status,
           };
         }
 
@@ -722,6 +760,18 @@ export function ComplaintsTable({
         "Estado",
       ]];
 
+      const zyvHead = [[
+        "N°",
+        "Fecha",
+        "Nombre",
+        "Dirección",
+        "Servicio",
+        "Causa",
+        "Zona",
+        "Desde",
+        "Estado",
+      ]];
+
       const generalHead = [[
         "N°",
         "Fecha",
@@ -744,7 +794,7 @@ export function ComplaintsTable({
 
         if (isArboladoUser) {
           return [
-            item.arbolado_number ?? "-",
+            getVisibleComplaintNumber(item),
             formatDate(item.complaint_date),
             item.complainant_name ?? "-",
             display.addressLabel,
@@ -753,6 +803,20 @@ export function ComplaintsTable({
             display.descriptionLabel,
             display.resolutionDateLabel,
             display.agentLabel,
+            item.status,
+          ];
+        }
+
+        if (isZyVUser) {
+          return [
+            getVisibleComplaintNumber(item),
+            formatDate(item.complaint_date),
+            item.complainant_name ?? "-",
+            display.addressLabel,
+            display.serviceLabel,
+            display.causeLabel,
+            display.zoneLabel,
+            display.sinceWhenLabel,
             item.status,
           ];
         }
@@ -770,9 +834,11 @@ export function ComplaintsTable({
         ];
       });
 
+      const head = isArboladoUser ? arboladoHead : isZyVUser ? zyvHead : generalHead;
+
       autoTable(doc, {
         startY: 44,
-        head: isArboladoUser ? arboladoHead : generalHead,
+        head,
         body: tableData,
         theme: "grid",
         showHead: "everyPage",
@@ -780,8 +846,8 @@ export function ComplaintsTable({
         rowPageBreak: "avoid",
         margin: { top: 44, right: 10, bottom: 14, left: 10 },
         styles: {
-          fontSize: isArboladoUser ? 6.2 : 7.5,
-          cellPadding: isArboladoUser ? 1.3 : 2,
+          fontSize: isArboladoUser ? 6.2 : 7.2,
+          cellPadding: isArboladoUser ? 1.3 : 1.8,
           overflow: "linebreak",
           textColor: [51, 65, 85],
           lineColor: [226, 232, 240],
@@ -798,7 +864,7 @@ export function ComplaintsTable({
         },
         columnStyles: isArboladoUser
           ? {
-            0: { cellWidth: 9 },
+            0: { cellWidth: 12 },
             1: { cellWidth: 18 },
             2: { cellWidth: 26 },
             3: { cellWidth: 65 },
@@ -809,21 +875,36 @@ export function ComplaintsTable({
             8: { cellWidth: 28 },
             9: { cellWidth: 18 },
           }
-          : {
-            0: { cellWidth: 12 },
-            1: { cellWidth: 20 },
-            2: { cellWidth: 35 },
-            3: { cellWidth: 55 },
-            4: { cellWidth: 35 },
-            5: { cellWidth: 38 },
-            6: { cellWidth: 26 },
-            7: { cellWidth: 24 },
-            8: { cellWidth: 22 },
-          },
+          : isZyVUser
+            ? {
+              0: { cellWidth: 12 },
+              1: { cellWidth: 20 },
+              2: { cellWidth: 32 },
+              3: { cellWidth: 56 },
+              4: { cellWidth: 28 },
+              5: { cellWidth: 38 },
+              6: { cellWidth: 22 },
+              7: { cellWidth: 22 },
+              8: { cellWidth: 22 },
+            }
+            : {
+              0: { cellWidth: 12 },
+              1: { cellWidth: 20 },
+              2: { cellWidth: 35 },
+              3: { cellWidth: 55 },
+              4: { cellWidth: 35 },
+              5: { cellWidth: 38 },
+              6: { cellWidth: 26 },
+              7: { cellWidth: 24 },
+              8: { cellWidth: 22 },
+            },
         didParseCell: (data: CellHookData) => {
           const statusColumnIndex = isArboladoUser ? 9 : 8;
 
-          if (data.section === "body" && data.column.index === statusColumnIndex) {
+          if (
+            data.section === "body" &&
+            data.column.index === statusColumnIndex
+          ) {
             const status = String(data.cell.raw ?? "");
             const colors = getPdfStatusColors(status);
 
@@ -879,7 +960,7 @@ export function ComplaintsTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-        {!isArboladoUser && canSendWhatsApp && (
+        {!isArboladoUser && !isZyVUser && canSendWhatsApp && (
           <Button
             type="button"
             variant="outline"
@@ -958,6 +1039,19 @@ export function ComplaintsTable({
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </>
+              ) : isZyVUser ? (
+                <>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Dirección</TableHead>
+                  <TableHead>Servicio</TableHead>
+                  <TableHead>Causa</TableHead>
+                  <TableHead>Zona</TableHead>
+                  <TableHead>Desde</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </>
               ) : (
                 <>
                   <TableHead>Número</TableHead>
@@ -981,19 +1075,108 @@ export function ComplaintsTable({
               const isEvenRow = index % 2 === 0;
               const isUpdating = updatingStatus === complaint.id;
               const isSelected = selectedComplaintIds.includes(complaint.id);
-              const resolutionDateOverride = Object.prototype.hasOwnProperty.call(
-                resolutionDateOverrides,
-                complaint.id,
-              )
-                ? resolutionDateOverrides[complaint.id]
-                : undefined;
+              const complaintStatus = getComplaintStatus(complaint);
+
+              const resolutionDateOverride =
+                Object.prototype.hasOwnProperty.call(
+                  resolutionDateOverrides,
+                  complaint.id,
+                )
+                  ? resolutionDateOverrides[complaint.id]
+                  : undefined;
+
               const display = getComplaintDisplayData(
                 complaint,
                 resolutionDateOverride,
               );
+
               const hasResolutionDate = display.resolutionDateLabel !== "-";
               const isUpdatingResolution =
                 updatingResolutionDate === complaint.id;
+
+              const statusCell = onStatusChange && !isReadOnly ? (
+                <Select
+                  value={complaintStatus}
+                  onValueChange={(value) =>
+                    handleStatusChange(complaint.id, value)
+                  }
+                  disabled={isUpdating}
+                >
+                  <SelectTrigger
+                    className={`w-[150px] ${getStatusColor(
+                      complaintStatus,
+                    )} ${isUpdating ? "opacity-80" : ""}`}
+                  >
+                    {isUpdating ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Guardando...</span>
+                      </div>
+                    ) : (
+                      <SelectValue />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="En proceso">En proceso</SelectItem>
+                    <SelectItem value="Resuelto">Resuelto</SelectItem>
+                    <SelectItem value="No resuelto">No resuelto</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge className={getStatusColor(complaintStatus)}>
+                  {complaintStatus}
+                </Badge>
+              );
+
+              const actionsCell = (
+                <div className="flex justify-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleView(complaint.id)}
+                    title="Ver reclamo"
+                    className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+
+                  {!isArboladoUser && !isZyVUser && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openResolutionDateModal(complaint)}
+                      title={
+                        hasResolutionDate
+                          ? "Editar fecha de resolución"
+                          : "Cargar fecha de resolución"
+                      }
+                      disabled={isReadOnly || isUpdatingResolution}
+                      className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                    >
+                      {isUpdatingResolution ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CalendarCheck
+                          className={`h-4 w-4 ${hasResolutionDate
+                            ? "text-emerald-600"
+                            : "text-muted-foreground"
+                            }`}
+                        />
+                      )}
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEdit(complaint.id)}
+                    title="Editar reclamo"
+                    className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
 
               return (
                 <TableRow
@@ -1014,7 +1197,9 @@ export function ComplaintsTable({
                             checked === true,
                           )
                         }
-                        aria-label={`Seleccionar reclamo ${complaint.complaint_number}`}
+                        aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
+                          complaint,
+                        )}`}
                       />
                     </div>
                   </TableCell>
@@ -1022,183 +1207,62 @@ export function ComplaintsTable({
                   {isArboladoUser ? (
                     <>
                       <TableCell className="font-medium">
-                        {complaint.arbolado_number ?? "-"}
+                        {getVisibleComplaintNumber(complaint)}
                       </TableCell>
-                      <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
-                      <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
+                      <TableCell>
+                        {formatDate(complaint.complaint_date)}
+                      </TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal break-words">
+                        {complaint.complainant_name ?? "-"}
+                      </TableCell>
                       <TableCell>{display.addressLabel}</TableCell>
                       <TableCell>{display.descriptionLabel}</TableCell>
                       <TableCell>{display.resolutionDateLabel}</TableCell>
                       <TableCell>{display.agentLabel}</TableCell>
-                      <TableCell>
-                        <div>
-                          {onStatusChange && !isReadOnly ? (
-                            <Select
-                              value={complaint.status}
-                              onValueChange={(value) =>
-                                handleStatusChange(complaint.id, value)
-                              }
-                              disabled={isUpdating}
-                            >
-                              <SelectTrigger
-                                className={`w-[150px] ${getStatusColor(
-                                  complaint.status,
-                                )} ${isUpdating ? "opacity-80" : ""}`}
-                              >
-                                {isUpdating ? (
-                                  <div className="flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>Guardando...</span>
-                                  </div>
-                                ) : (
-                                  <SelectValue />
-                                )}
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="En proceso">
-                                  En proceso
-                                </SelectItem>
-                                <SelectItem value="Resuelto">Resuelto</SelectItem>
-                                <SelectItem value="No resuelto">
-                                  No resuelto
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge className={getStatusColor(complaint.status)}>
-                              {complaint.status}
-                            </Badge>
-                          )}
-                        </div>
+                      <TableCell>{statusCell}</TableCell>
+                      <TableCell>{actionsCell}</TableCell>
+                    </>
+                  ) : isZyVUser ? (
+                    <>
+                      <TableCell className="font-medium">
+                        {getVisibleComplaintNumber(complaint)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleView(complaint.id)}
-                            title="Ver reclamo"
-                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(complaint.id)}
-                            title="Editar reclamo"
-                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {formatDate(complaint.complaint_date)}
                       </TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal break-words">
+                        {complaint.complainant_name ?? "-"}
+                      </TableCell>
+                      <TableCell>{display.addressLabel}</TableCell>
+                      <TableCell>{display.serviceLabel}</TableCell>
+                      <TableCell>{display.causeLabel}</TableCell>
+                      <TableCell>{display.zoneLabel}</TableCell>
+                      <TableCell>{display.sinceWhenLabel}</TableCell>
+                      <TableCell>{statusCell}</TableCell>
+                      <TableCell>{actionsCell}</TableCell>
                     </>
                   ) : (
                     <>
                       <TableCell className="font-medium">
-                        {complaint.complaint_number}
+                        {complaint.complaint_number ?? "-"}
                       </TableCell>
-                      <TableCell>{formatDate(complaint.complaint_date)}</TableCell>
-                      <TableCell>{complaint.complainant_name ?? "-"}</TableCell>
+                      <TableCell>
+                        {formatDate(complaint.complaint_date)}
+                      </TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal break-words">
+                        {complaint.complainant_name ?? "-"}
+                      </TableCell>
                       <TableCell>{display.serviceLabel}</TableCell>
                       <TableCell>{display.causeLabel}</TableCell>
                       <TableCell>{display.zoneLabel}</TableCell>
                       <TableCell>{display.sinceWhenLabel}</TableCell>
                       <TableCell>{display.resolutionDateLabel}</TableCell>
-                      <TableCell>
-                        <div>
-                          {onStatusChange && !isReadOnly ? (
-                            <Select
-                              value={complaint.status}
-                              onValueChange={(value) =>
-                                handleStatusChange(complaint.id, value)
-                              }
-                              disabled={isUpdating}
-                            >
-                              <SelectTrigger
-                                className={`w-[150px] ${getStatusColor(
-                                  complaint.status,
-                                )} ${isUpdating ? "opacity-80" : ""}`}
-                              >
-                                {isUpdating ? (
-                                  <div className="flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>Guardando...</span>
-                                  </div>
-                                ) : (
-                                  <SelectValue />
-                                )}
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="En proceso">
-                                  En proceso
-                                </SelectItem>
-                                <SelectItem value="Resuelto">Resuelto</SelectItem>
-                                <SelectItem value="No resuelto">
-                                  No resuelto
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge className={getStatusColor(complaint.status)}>
-                              {complaint.status}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
+                      <TableCell>{statusCell}</TableCell>
                       <TableCell>
                         {complaint.loaded_by_user?.full_name ??
                           "Usuario no disponible"}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex justify-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleView(complaint.id)}
-                            title="Ver reclamo"
-                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openResolutionDateModal(complaint)}
-                            title={
-                              hasResolutionDate
-                                ? "Editar fecha de resolución"
-                                : "Cargar fecha de resolución"
-                            }
-                            disabled={isReadOnly || isUpdatingResolution}
-                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                          >
-                            {isUpdatingResolution ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <CalendarCheck
-                                className={`h-4 w-4 ${hasResolutionDate
-                                  ? "text-emerald-600"
-                                  : "text-muted-foreground"
-                                  }`}
-                              />
-                            )}
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(complaint.id)}
-                            title="Editar reclamo"
-                            className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      <TableCell>{actionsCell}</TableCell>
                     </>
                   )}
                 </TableRow>
@@ -1303,7 +1367,7 @@ export function ComplaintsTable({
                   Fecha de resolución
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Reclamo {resolutionModalComplaint.complaint_number}
+                  Reclamo {getVisibleComplaintNumber(resolutionModalComplaint)}
                 </p>
               </div>
 
