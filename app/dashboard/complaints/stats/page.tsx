@@ -44,16 +44,6 @@ type Service = {
   active?: boolean;
 };
 
-const getGroupByTitle = (groupBy: string) => {
-  if (groupBy === "all") return "general";
-  if (groupBy === "street") return "calle";
-  if (groupBy === "service") return "servicio";
-  if (groupBy === "cause") return "causa";
-  if (groupBy === "zone") return "zona";
-  if (groupBy === "status") return "estado";
-  return "general";
-};
-
 const getFilterLabel = ({
   dateFrom,
   dateTo,
@@ -142,7 +132,6 @@ export default function StatsPage() {
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [groupBy, setGroupBy] = useState("all");
   const [status, setStatus] = useState("all");
   const [serviceId, setServiceId] = useState("all");
   const [zone, setZone] = useState("all");
@@ -164,13 +153,7 @@ export default function StatsPage() {
     zone,
   });
 
-  const mainData = useMemo(() => {
-    if (!stats) return [];
-    if (groupBy === "all") return stats.byStreet;
-    return stats.grouped;
-  }, [stats, groupBy]);
-
-  const mainStat = mainData[0];
+  const mainStat = stats?.byStreet?.[0];
 
   const fetchServices = async () => {
     try {
@@ -196,7 +179,10 @@ export default function StatsPage() {
     try {
       const params = new URLSearchParams();
 
-      params.append("group_by", groupBy === "all" ? "street" : groupBy);
+      // Siempre fijo en General.
+      // La API usa street para calcular el ranking principal de calles,
+      // pero en pantalla mostramos todos los bloques generales.
+      params.append("group_by", "street");
 
       if (dateFrom) params.append("date_from", dateFrom);
       if (dateTo) params.append("date_to", dateTo);
@@ -234,12 +220,11 @@ export default function StatsPage() {
     }, 350);
 
     return () => clearTimeout(timeout);
-  }, [dateFrom, dateTo, groupBy, status, serviceId, zone]);
+  }, [dateFrom, dateTo, status, serviceId, zone]);
 
   const clearFilters = () => {
     setDateFrom("");
     setDateTo("");
-    setGroupBy("all");
     setStatus("all");
     setServiceId("all");
     setZone("all");
@@ -344,56 +329,47 @@ export default function StatsPage() {
         26,
       );
       doc.text(`Total analizado: ${stats.total}`, 14, 32);
-      doc.text(`Vista: ${getGroupByTitle(groupBy)}`, 14, 38);
+      doc.text("Vista: General", 14, 38);
 
       const splitFilters = doc.splitTextToSize(`Filtros: ${filterLabel}`, 180);
       doc.text(splitFilters, 14, 44);
 
       let currentY = 54 + splitFilters.length * 4;
 
-      if (groupBy === "all") {
-        currentY = addChartToPdf({
-          doc,
-          title: "Calles con más reclamos",
-          data: stats.byStreet,
-          startY: currentY,
-        });
+      currentY = addChartToPdf({
+        doc,
+        title: "Calles con más reclamos",
+        data: stats.byStreet,
+        startY: currentY,
+      });
 
-        currentY = addChartToPdf({
-          doc,
-          title: "Reclamos por servicio",
-          data: stats.byService,
-          startY: currentY,
-        });
+      currentY = addChartToPdf({
+        doc,
+        title: "Reclamos por servicio",
+        data: stats.byService,
+        startY: currentY,
+      });
 
-        currentY = addChartToPdf({
-          doc,
-          title: "Causas más frecuentes",
-          data: stats.byCause,
-          startY: currentY,
-        });
+      currentY = addChartToPdf({
+        doc,
+        title: "Causas más frecuentes",
+        data: stats.byCause,
+        startY: currentY,
+      });
 
-        currentY = addChartToPdf({
-          doc,
-          title: "Reclamos por zona",
-          data: stats.byZone,
-          startY: currentY,
-        });
+      currentY = addChartToPdf({
+        doc,
+        title: "Reclamos por zona",
+        data: stats.byZone,
+        startY: currentY,
+      });
 
-        addChartToPdf({
-          doc,
-          title: "Reclamos por estado",
-          data: stats.byStatus,
-          startY: currentY,
-        });
-      } else {
-        addChartToPdf({
-          doc,
-          title: `Estadística por ${getGroupByTitle(groupBy)}`,
-          data: stats.grouped,
-          startY: currentY,
-        });
-      }
+      addChartToPdf({
+        doc,
+        title: "Reclamos por estado",
+        data: stats.byStatus,
+        startY: currentY,
+      });
 
       const pageCount = doc.getNumberOfPages();
 
@@ -408,11 +384,7 @@ export default function StatsPage() {
         );
       }
 
-      doc.save(
-        groupBy === "all"
-          ? "estadisticas_reclamos_general.pdf"
-          : `estadisticas_reclamos_${getGroupByTitle(groupBy)}.pdf`,
-      );
+      doc.save("estadisticas_reclamos_general.pdf");
 
       toast.success("PDF exportado correctamente");
     } catch (error) {
@@ -427,7 +399,7 @@ export default function StatsPage() {
         <div>
           <h1 className="text-3xl font-bold text-[#373737]">Estadísticas</h1>
           <p className="mt-1 text-sm text-[#6B7280]">
-            Elegí qué querés analizar. Los filtros se aplican automáticamente.
+            Los filtros se aplican automáticamente.
           </p>
         </div>
 
@@ -459,9 +431,11 @@ export default function StatsPage() {
 
       <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">Desde</label>
+              <label className="text-xs font-semibold text-[#373737]">
+                Desde
+              </label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -471,7 +445,9 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">Hasta</label>
+              <label className="text-xs font-semibold text-[#373737]">
+                Hasta
+              </label>
               <Input
                 type="date"
                 value={dateTo}
@@ -482,25 +458,8 @@ export default function StatsPage() {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#373737]">
-                Estadística por
+                Estado
               </label>
-              <Select value={groupBy} onValueChange={setGroupBy}>
-                <SelectTrigger className="h-12 w-full rounded-xl text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">General</SelectItem>
-                  <SelectItem value="street">Calle</SelectItem>
-                  <SelectItem value="service">Servicio</SelectItem>
-                  <SelectItem value="cause">Causa</SelectItem>
-                  <SelectItem value="zone">Zona</SelectItem>
-                  <SelectItem value="status">Estado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">Estado</label>
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger className="h-12 w-full rounded-xl text-sm">
                   <SelectValue />
@@ -515,7 +474,9 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">Servicio</label>
+              <label className="text-xs font-semibold text-[#373737]">
+                Servicio
+              </label>
               <Select value={serviceId} onValueChange={setServiceId}>
                 <SelectTrigger className="h-12 w-full rounded-xl text-sm">
                   <SelectValue />
@@ -532,18 +493,22 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">Zona</label>
+              <label className="text-xs font-semibold text-[#373737]">
+                Zona
+              </label>
               <Select value={zone} onValueChange={setZone}>
                 <SelectTrigger className="h-12 w-full rounded-xl text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  {Array.from({ length: 16 }, (_, i) => String(i + 1)).map((z) => (
-                    <SelectItem key={z} value={z}>
-                      Zona {z}
-                    </SelectItem>
-                  ))}
+                  {Array.from({ length: 16 }, (_, i) => String(i + 1)).map(
+                    (z) => (
+                      <SelectItem key={z} value={z}>
+                        Zona {z}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -589,8 +554,7 @@ export default function StatsPage() {
           <CardHeader className="flex flex-row items-center gap-2 pb-2">
             <TrendingUp className="h-5 w-5 text-[#00A27F]" />
             <CardTitle className="text-sm font-bold text-[#373737]">
-              Más repetido por{" "}
-              {groupBy === "all" ? "calle" : getGroupByTitle(groupBy)}
+              Más repetido por calle
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -613,7 +577,7 @@ export default function StatsPage() {
             Cargando estadísticas...
           </CardContent>
         </Card>
-      ) : groupBy === "all" ? (
+      ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <StatBars
             title="Calles con más reclamos"
@@ -639,11 +603,6 @@ export default function StatsPage() {
             />
           </div>
         </div>
-      ) : (
-        <StatBars
-          title={`Estadística por ${getGroupByTitle(groupBy)}`}
-          data={stats?.grouped ?? []}
-        />
       )}
     </div>
   );
