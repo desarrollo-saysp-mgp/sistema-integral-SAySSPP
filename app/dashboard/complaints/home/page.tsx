@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { PageLoader } from "@/components/ui/page-loader";
 import { toast } from "sonner";
+import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
 
 type RecentComplaint = {
   id: number;
@@ -99,16 +100,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const fetchStats = useCallback(async (showLoader = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
 
-  const fetchStats = async () => {
-    setLoading(true);
     try {
       const response = await fetch("/api/dashboard/stats", {
         cache: "no-store",
       });
+
       const data = await response.json();
 
       if (response.ok && data.data) {
@@ -120,9 +121,21 @@ export default function DashboardPage() {
       console.error("Error fetching stats:", error);
       toast.error("Error al cargar estadísticas");
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void fetchStats();
+  }, [fetchStats]);
+
+  useComplaintsRealtime({
+    onChange: () => {
+      void fetchStats(false);
+    },
+  });
 
   const navigateWithLoading = (url: string) => {
     startTransition(() => {

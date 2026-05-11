@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { ComplaintsTable } from "@/components/tables/ComplaintsTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Plus, Filter } from "lucide-react";
 import type { Complaint, Service, User } from "@/types";
 import { toast } from "sonner";
+import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
 import { useUser } from "@/hooks/useUser";
 
 const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
@@ -88,7 +89,11 @@ const matchesStreetAddress = (address: unknown, filter: string) => {
 
 const isArboladoComplaint = (complaint: ComplaintWithDetails) => {
   const serviceName = normalizeText(complaint.service?.name);
-  return complaint.form_variant === "arbolado" || serviceName.includes("arbolado");
+
+  return (
+    complaint.form_variant === "arbolado" ||
+    serviceName.includes("arbolado")
+  );
 };
 
 const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
@@ -113,9 +118,10 @@ export default function ComplaintsClient() {
     isArboladoUser || (isAdminUser && variantFilter === "arbolado");
 
   const statusFromUrl = searchParams.get("status");
+
   const initialStatus =
     statusFromUrl &&
-    VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
       ? statusFromUrl
       : "all";
 
@@ -136,43 +142,12 @@ export default function ComplaintsClient() {
   const [levelFilter, setLevelFilter] = useState("all");
   const [descriptionFilter, setDescriptionFilter] = useState("all");
 
-  useEffect(() => {
-    fetchServices();
-  }, [profile?.role]);
-
-  useEffect(() => {
-    const nextStatus =
-      statusFromUrl &&
-      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
-        ? statusFromUrl
-        : "all";
-
-    setStatusFilter((prev) => (prev !== nextStatus ? nextStatus : prev));
-  }, [statusFromUrl]);
-
-  useEffect(() => {
-    setServiceFilter("all");
-    setZoneFilter("all");
-    setDepartmentFilter("all");
-    setLevelFilter("all");
-    setDescriptionFilter("all");
-  }, [variantFilter]);
-
-  useEffect(() => {
-    fetchComplaints();
-  }, [
-    statusFilter,
-    serviceFilter,
-    zoneFilter,
-    dateFromFilter,
-    dateToFilter,
-    isArboladoUser,
-    variantFilter,
-  ]);
-
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     try {
-      const response = await fetch("/api/services");
+      const response = await fetch("/api/services", {
+        cache: "no-store",
+      });
+
       const data = await response.json();
 
       if (data.data) {
@@ -196,68 +171,117 @@ export default function ComplaintsClient() {
     } catch (error) {
       console.error("Error fetching services:", error);
     }
-  };
+  }, [profile?.role]);
 
-  const fetchComplaints = async () => {
-    const requestId = ++latestRequestRef.current;
-    setLoading(true);
+  const fetchComplaints = useCallback(
+    async (showLoader = true) => {
+      const requestId = latestRequestRef.current + 1;
+      latestRequestRef.current = requestId;
 
-    try {
-      const params = new URLSearchParams();
-
-      if (statusFilter && statusFilter !== "all") {
-        params.append("status", statusFilter);
+      if (showLoader) {
+        setLoading(true);
       }
 
-      if (!isArboladoView && serviceFilter !== "all") {
-        params.append("service_id", serviceFilter);
+      try {
+        const params = new URLSearchParams();
+
+        if (statusFilter && statusFilter !== "all") {
+          params.append("status", statusFilter);
+        }
+
+        if (!isArboladoView && serviceFilter !== "all") {
+          params.append("service_id", serviceFilter);
+        }
+
+        if (!isArboladoView && zoneFilter !== "all") {
+          params.append("zone", zoneFilter);
+        }
+
+        if (dateFromFilter) {
+          params.append("date_from", dateFromFilter);
+        }
+
+        if (dateToFilter) {
+          params.append("date_to", dateToFilter);
+        }
+
+        if (isAdminUser) {
+          params.append("form_variant", variantFilter);
+        }
+
+        const response = await fetch(`/api/complaints?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (requestId !== latestRequestRef.current) return;
+
+        if (response.ok && data.data) {
+          setComplaints(data.data);
+        } else {
+          toast.error(data.error || "Error al cargar reclamos");
+        }
+      } catch (error) {
+        if (requestId !== latestRequestRef.current) return;
+
+        console.error("Error fetching complaints:", error);
+        toast.error("Error al cargar reclamos");
+      } finally {
+        if (showLoader && requestId === latestRequestRef.current) {
+          setLoading(false);
+        }
       }
+    },
+    [
+      statusFilter,
+      serviceFilter,
+      zoneFilter,
+      dateFromFilter,
+      dateToFilter,
+      isArboladoView,
+      isAdminUser,
+      variantFilter,
+    ],
+  );
 
-      if (!isArboladoView && zoneFilter !== "all") {
-        params.append("zone", zoneFilter);
-      }
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
-      if (dateFromFilter) params.append("date_from", dateFromFilter);
-      if (dateToFilter) params.append("date_to", dateToFilter);
+  useEffect(() => {
+    const nextStatus =
+      statusFromUrl &&
+        VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+        ? statusFromUrl
+        : "all";
 
-      if (isAdminUser) {
-        params.append("form_variant", variantFilter);
-      }
+    setStatusFilter((prev) => (prev !== nextStatus ? nextStatus : prev));
+  }, [statusFromUrl]);
 
-      const response = await fetch(`/api/complaints?${params.toString()}`, {
-        cache: "no-store",
-      });
+  useEffect(() => {
+    setServiceFilter("all");
+    setZoneFilter("all");
+    setDepartmentFilter("all");
+    setLevelFilter("all");
+    setDescriptionFilter("all");
+  }, [variantFilter]);
 
-      const data = await response.json();
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
 
-      if (requestId !== latestRequestRef.current) return;
-
-      if (response.ok && data.data) {
-        setComplaints(data.data);
-      } else {
-        toast.error(data.error || "Error al cargar reclamos");
-      }
-    } catch (error) {
-      if (requestId !== latestRequestRef.current) return;
-
-      console.error("Error fetching complaints:", error);
-      toast.error("Error al cargar reclamos");
-    } finally {
-      if (requestId === latestRequestRef.current) {
-        setLoading(false);
-      }
-    }
-  };
+  useComplaintsRealtime({
+    onChange: () => {
+      void fetchComplaints(false);
+    },
+  });
 
   const filteredComplaints = useMemo(() => {
     let sourceComplaints = complaints;
 
     if (isArboladoView) {
       sourceComplaints = complaints.filter(isArboladoComplaint);
-    }
-
-    if (!isArboladoView && !isAdminUser) {
-      sourceComplaints = complaints;
     }
 
     if (!isArboladoView && isAdminUser && variantFilter === "general") {
@@ -305,8 +329,7 @@ export default function ComplaintsClient() {
         !isArboladoView ||
         descriptionFilter === "all" ||
         (typeof extra.description_type === "string" &&
-          extra.description_type === descriptionFilter) ||
-        (descriptionFilter === "all" && isArboladoComplaint(complaint));
+          extra.description_type === descriptionFilter);
 
       return (
         matchesSearch &&
@@ -375,7 +398,7 @@ export default function ComplaintsClient() {
         throw new Error(data.error || "Error al actualizar");
       }
 
-      await fetchComplaints();
+      await fetchComplaints(false);
     } catch (error) {
       throw error;
     }
@@ -398,26 +421,26 @@ export default function ComplaintsClient() {
 
   const hasActiveFilters = isArboladoView
     ? !!(
-        searchTerm ||
-        addressFilter ||
-        streetNumberFilter ||
-        statusFilter !== "all" ||
-        dateFromFilter ||
-        dateToFilter ||
-        departmentFilter !== "all" ||
-        levelFilter !== "all" ||
-        descriptionFilter !== "all"
-      )
+      searchTerm ||
+      addressFilter ||
+      streetNumberFilter ||
+      statusFilter !== "all" ||
+      dateFromFilter ||
+      dateToFilter ||
+      departmentFilter !== "all" ||
+      levelFilter !== "all" ||
+      descriptionFilter !== "all"
+    )
     : !!(
-        searchTerm ||
-        addressFilter ||
-        streetNumberFilter ||
-        statusFilter !== "all" ||
-        serviceFilter !== "all" ||
-        zoneFilter !== "all" ||
-        dateFromFilter ||
-        dateToFilter
-      );
+      searchTerm ||
+      addressFilter ||
+      streetNumberFilter ||
+      statusFilter !== "all" ||
+      serviceFilter !== "all" ||
+      zoneFilter !== "all" ||
+      dateFromFilter ||
+      dateToFilter
+    );
 
   return (
     <>
@@ -431,6 +454,7 @@ export default function ComplaintsClient() {
               Gestión y seguimiento de reclamos ciudadanos
             </p>
           </div>
+
           <Button
             onClick={() => router.push("/dashboard/complaints/new")}
             className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
@@ -464,7 +488,9 @@ export default function ComplaintsClient() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="general">Reclamos</SelectItem>
-                      <SelectItem value="arbolado">Reclamos Arbolado</SelectItem>
+                      <SelectItem value="arbolado">
+                        Reclamos Arbolado
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -529,14 +555,20 @@ export default function ComplaintsClient() {
                 <>
                   <div className="flex w-full flex-col gap-1.5 sm:w-[170px] xl:w-[145px]">
                     <Label htmlFor="service-filter">Servicio</Label>
-                    <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                    <Select
+                      value={serviceFilter}
+                      onValueChange={setServiceFilter}
+                    >
                       <SelectTrigger id="service-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
                         {services.map((service) => (
-                          <SelectItem key={service.id} value={service.id.toString()}>
+                          <SelectItem
+                            key={service.id}
+                            value={service.id.toString()}
+                          >
                             {service.name}
                           </SelectItem>
                         ))}
@@ -571,7 +603,10 @@ export default function ComplaintsClient() {
                       value={departmentFilter}
                       onValueChange={setDepartmentFilter}
                     >
-                      <SelectTrigger id="department-filter" className="h-10 w-full">
+                      <SelectTrigger
+                        id="department-filter"
+                        className="h-10 w-full"
+                      >
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -608,7 +643,10 @@ export default function ComplaintsClient() {
                       value={descriptionFilter}
                       onValueChange={setDescriptionFilter}
                     >
-                      <SelectTrigger id="description-filter" className="h-10 w-full">
+                      <SelectTrigger
+                        id="description-filter"
+                        className="h-10 w-full"
+                      >
                         <SelectValue placeholder="Todas" />
                       </SelectTrigger>
                       <SelectContent>

@@ -196,6 +196,7 @@ export function ComplaintsTable({
   const router = useRouter();
   const { profile } = useUser();
 
+
   const isReadOnly = profile?.role === "AdminLectura";
   const isArboladoUser = profile?.role === "ReclamosArbolado";
   const isZyVUser = profile?.role === "ReclamosZyV";
