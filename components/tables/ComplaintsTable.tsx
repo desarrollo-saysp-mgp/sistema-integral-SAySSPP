@@ -225,7 +225,9 @@ export function ComplaintsTable({
   const isZyVUser = profile?.role === "ReclamosZyV";
 
   const canSendWhatsApp =
-    profile?.role === "Admin" || profile?.role === "Reclamos";
+    profile?.role === "Admin" ||
+    profile?.role === "Reclamos" ||
+    profile?.role === "ReclamosZyV";
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
@@ -1023,7 +1025,7 @@ export function ComplaintsTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-        {!isArboladoUser && !isZyVUser && canSendWhatsApp && (
+        {!isArboladoUser && canSendWhatsApp && (
           <Button
             type="button"
             variant="outline"

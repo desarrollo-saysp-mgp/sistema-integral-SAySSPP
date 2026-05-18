@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
+import { useUser } from "@/hooks/useUser";
 
 type StatItem = {
   name: string;
@@ -43,6 +44,22 @@ type Service = {
   name: string;
   active?: boolean;
 };
+
+type CurrentUser = {
+  id?: string;
+  full_name?: string;
+  email?: string;
+  role?: string;
+  default_module?: string;
+  module?: string;
+};
+
+const normalizeText = (value?: string | null) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
 const getFilterLabel = ({
   dateFrom,
@@ -126,9 +143,12 @@ function StatBars({
 }
 
 export default function StatsPage() {
+  const { profile } = useUser();
+
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -136,14 +156,84 @@ export default function StatsPage() {
   const [serviceId, setServiceId] = useState("all");
   const [zone, setZone] = useState("all");
 
-  const selectedServiceName = useMemo(() => {
-    if (serviceId === "all") return "Todos";
+  const isArboladoAccount = useMemo(() => {
+    const role = normalizeText(profile?.role || currentUser?.role);
+    const defaultModule = normalizeText(currentUser?.default_module);
+    const module = normalizeText(currentUser?.module);
 
     return (
-      services.find((service) => String(service.id) === serviceId)?.name ??
-      "Todos"
+      role.includes("arbolado") ||
+      defaultModule.includes("arbolado") ||
+      module.includes("arbolado")
     );
-  }, [serviceId, services]);
+  }, [profile, currentUser]);
+
+  const isZyvAccount = useMemo(() => {
+    const role = normalizeText(profile?.role || currentUser?.role);
+    const defaultModule = normalizeText(currentUser?.default_module);
+    const module = normalizeText(currentUser?.module);
+
+    return (
+      role.includes("reclamoszyv") ||
+      role.includes("zyv") ||
+      role.includes("zoonosis") ||
+      role.includes("vectores") ||
+      defaultModule.includes("zyv") ||
+      defaultModule.includes("zoonosis") ||
+      defaultModule.includes("vectores") ||
+      module.includes("zyv") ||
+      module.includes("zoonosis") ||
+      module.includes("vectores")
+    );
+  }, [profile, currentUser]);
+
+  const arboladoService = useMemo(() => {
+    return services.find((service) =>
+      normalizeText(service.name).includes("arbol"),
+    );
+  }, [services]);
+
+  const zyvServices = useMemo(() => {
+    return services.filter((service) => {
+      const name = normalizeText(service.name);
+      return name.includes("zoonosis") || name.includes("vectores");
+    });
+  }, [services]);
+
+  const visibleServices = useMemo(() => {
+    if (isArboladoAccount) {
+      return arboladoService ? [arboladoService] : [];
+    }
+
+    if (isZyvAccount) {
+      return zyvServices;
+    }
+
+    return services;
+  }, [isArboladoAccount, isZyvAccount, arboladoService, zyvServices, services]);
+
+  const effectiveServiceId = useMemo(() => {
+    if (isArboladoAccount && arboladoService) {
+      return String(arboladoService.id);
+    }
+
+    return serviceId;
+  }, [isArboladoAccount, arboladoService, serviceId]);
+
+  const selectedServiceName = useMemo(() => {
+    if (isArboladoAccount) return "Arbolado";
+
+    if (isZyvAccount && serviceId === "all") {
+      return "Zoonosis y Vectores";
+    }
+
+    if (effectiveServiceId === "all") return "Todos";
+
+    return (
+      services.find((service) => String(service.id) === effectiveServiceId)
+        ?.name ?? "Todos"
+    );
+  }, [effectiveServiceId, services, isArboladoAccount, isZyvAccount, serviceId]);
 
   const filterLabel = getFilterLabel({
     dateFrom,
@@ -154,6 +244,46 @@ export default function StatsPage() {
   });
 
   const mainStat = stats?.byStreet?.[0];
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const user = data.user ?? data.data ?? data;
+
+        if (user) {
+          setCurrentUser(user);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("No se pudo obtener el usuario desde /api/auth/me:", error);
+    }
+
+    try {
+      const possibleKeys = ["user", "currentUser", "authUser", "sessionUser"];
+
+      for (const key of possibleKeys) {
+        const rawValue = localStorage.getItem(key);
+
+        if (!rawValue) continue;
+
+        const parsedValue = JSON.parse(rawValue);
+        const user = parsedValue.user ?? parsedValue.data ?? parsedValue;
+
+        if (user) {
+          setCurrentUser(user);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("No se pudo leer el usuario desde localStorage:", error);
+    }
+  };
 
   const fetchServices = async () => {
     try {
@@ -179,15 +309,21 @@ export default function StatsPage() {
     try {
       const params = new URLSearchParams();
 
-      // Siempre fijo en General.
-      // La API usa street para calcular el ranking principal de calles,
-      // pero en pantalla mostramos todos los bloques generales.
       params.append("group_by", "street");
 
       if (dateFrom) params.append("date_from", dateFrom);
       if (dateTo) params.append("date_to", dateTo);
       if (status !== "all") params.append("status", status);
-      if (serviceId !== "all") params.append("service_id", serviceId);
+
+      if (isZyvAccount && serviceId === "all") {
+        params.append(
+          "service_ids",
+          zyvServices.map((service) => service.id).join(","),
+        );
+      } else if (effectiveServiceId !== "all") {
+        params.append("service_id", effectiveServiceId);
+      }
+
       if (zone !== "all") params.append("zone", zone);
 
       const response = await fetch(`/api/complaints/stats?${params}`, {
@@ -211,23 +347,55 @@ export default function StatsPage() {
   };
 
   useEffect(() => {
+    fetchCurrentUser();
     fetchServices();
   }, []);
 
   useEffect(() => {
+    if (isArboladoAccount && arboladoService) {
+      setServiceId(String(arboladoService.id));
+      return;
+    }
+
+    if (isZyvAccount) {
+      setServiceId("all");
+    }
+  }, [isArboladoAccount, isZyvAccount, arboladoService]);
+
+  useEffect(() => {
+    if (isArboladoAccount && !arboladoService) return;
+    if (isZyvAccount && zyvServices.length === 0) return;
+
     const timeout = setTimeout(() => {
       fetchStats();
     }, 350);
 
     return () => clearTimeout(timeout);
-  }, [dateFrom, dateTo, status, serviceId, zone]);
+  }, [
+    dateFrom,
+    dateTo,
+    status,
+    serviceId,
+    zone,
+    effectiveServiceId,
+    isArboladoAccount,
+    isZyvAccount,
+    arboladoService,
+    zyvServices,
+  ]);
 
   const clearFilters = () => {
     setDateFrom("");
     setDateTo("");
     setStatus("all");
-    setServiceId("all");
     setZone("all");
+
+    if (isArboladoAccount && arboladoService) {
+      setServiceId(String(arboladoService.id));
+      return;
+    }
+
+    setServiceId("all");
   };
 
   const addChartToPdf = ({
@@ -329,7 +497,16 @@ export default function StatsPage() {
         26,
       );
       doc.text(`Total analizado: ${stats.total}`, 14, 32);
-      doc.text("Vista: General", 14, 38);
+
+      doc.text(
+        isArboladoAccount
+          ? "Vista: Reclamos Arbolado"
+          : isZyvAccount
+            ? "Vista: Reclamos Zoonosis y Vectores"
+            : "Vista: General",
+        14,
+        38,
+      );
 
       const splitFilters = doc.splitTextToSize(`Filtros: ${filterLabel}`, 180);
       doc.text(splitFilters, 14, 44);
@@ -384,7 +561,13 @@ export default function StatsPage() {
         );
       }
 
-      doc.save("estadisticas_reclamos_general.pdf");
+      doc.save(
+        isArboladoAccount
+          ? "estadisticas_reclamos_arbolado.pdf"
+          : isZyvAccount
+            ? "estadisticas_reclamos_zyv.pdf"
+            : "estadisticas_reclamos_general.pdf",
+      );
 
       toast.success("PDF exportado correctamente");
     } catch (error) {
@@ -477,19 +660,34 @@ export default function StatsPage() {
               <label className="text-xs font-semibold text-[#373737]">
                 Servicio
               </label>
-              <Select value={serviceId} onValueChange={setServiceId}>
-                <SelectTrigger className="h-12 w-full rounded-xl text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={String(service.id)}>
-                      {service.name}
+
+              {isArboladoAccount ? (
+                <Select value={effectiveServiceId} disabled>
+                  <SelectTrigger className="h-12 w-full rounded-xl text-sm">
+                    <SelectValue placeholder="Arbolado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={effectiveServiceId}>Arbolado</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={serviceId} onValueChange={setServiceId}>
+                  <SelectTrigger className="h-12 w-full rounded-xl text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {isZyvAccount ? "Todos ZyV" : "Todos"}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+                    {visibleServices.map((service) => (
+                      <SelectItem key={service.id} value={String(service.id)}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-1.5">

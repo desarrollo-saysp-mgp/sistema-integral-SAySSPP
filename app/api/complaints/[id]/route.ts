@@ -25,12 +25,14 @@ const validSinceWhenValues = [
 ];
 
 const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
+
 const validContactMethods = [
   "Presencial",
   "Telefono",
   "Email",
   "WhatsApp",
 ];
+
 const validArboladoLevels = ["Urgente", "Importante", "Orden de llegada"];
 
 const normalizeValue = (value: unknown): string | null => {
@@ -149,7 +151,8 @@ export async function PATCH(
     if (
       currentUser.role !== "Admin" &&
       currentUser.role !== "Reclamos" &&
-      currentUser.role !== "ReclamosArbolado"
+      currentUser.role !== "ReclamosArbolado" &&
+      currentUser.role !== "ReclamosZyV"
     ) {
       return NextResponse.json(
         { error: "No tenés permisos para guardar cambios" },
@@ -235,6 +238,7 @@ export async function PATCH(
 
     const formVariant =
       body.form_variant || currentComplaint.form_variant || "general";
+
     const updateData: ComplaintUpdate = {};
 
     const hasResolutionDate =
@@ -323,6 +327,45 @@ export async function PATCH(
       if (body.details !== undefined) {
         updateData.details = body.details ? body.details.trim() : null;
       }
+    }
+
+    if (formVariant === "zyv") {
+      if (body.service_id !== undefined) {
+        updateData.service_id = body.service_id
+          ? parseInt(body.service_id)
+          : null;
+      }
+
+      if (body.cause_id !== undefined) {
+        updateData.cause_id = body.cause_id ? parseInt(body.cause_id) : null;
+      }
+
+      if (body.zone !== undefined) {
+        updateData.zone = body.zone ? body.zone.trim() : null;
+      }
+
+      if (body.since_when !== undefined) {
+        updateData.since_when = body.since_when || null;
+      }
+
+      if (body.contact_method !== undefined) {
+        updateData.contact_method = body.contact_method || null;
+      }
+
+      if (body.details !== undefined) {
+        updateData.details = body.details ? body.details.trim() : null;
+      }
+
+      const currentExtraData =
+        currentComplaint.extra_data &&
+        typeof currentComplaint.extra_data === "object"
+          ? currentComplaint.extra_data
+          : {};
+
+      updateData.extra_data = {
+        ...currentExtraData,
+        department: "Zoonosis y Vectores",
+      };
     }
 
     if (formVariant === "arbolado") {
@@ -439,6 +482,7 @@ export async function PATCH(
       const oldValue = normalizeValue(
         currentComplaint[key as keyof typeof currentComplaint],
       );
+
       const newValue = normalizeValue(updateData[key]);
 
       if (oldValue !== newValue) {
@@ -501,12 +545,14 @@ export async function PATCH(
       );
     }
 
-    const { error: historyError } = await adminClient
-      .from("complaint_history")
-      .insert(changes);
+    if (changes.length > 0) {
+      const { error: historyError } = await adminClient
+        .from("complaint_history")
+        .insert(changes);
 
-    if (historyError) {
-      console.error("Error saving complaint history:", historyError);
+      if (historyError) {
+        console.error("Error saving complaint history:", historyError);
+      }
     }
 
     return NextResponse.json({
@@ -554,7 +600,7 @@ export async function DELETE(
       .eq("id", authUser.id)
       .single();
 
-    if (userError) {
+    if (userError || !currentUser) {
       return NextResponse.json(
         { error: "No se pudo validar el usuario" },
         { status: 500 },
@@ -562,15 +608,15 @@ export async function DELETE(
     }
 
     if (
-      !currentUser ||
-      (currentUser.role !== "Admin" &&
-        currentUser.role !== "Reclamos" &&
-        currentUser.role !== "ReclamosArbolado")
+      currentUser.role !== "Admin" &&
+      currentUser.role !== "Reclamos" &&
+      currentUser.role !== "ReclamosArbolado" &&
+      currentUser.role !== "ReclamosZyV"
     ) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Solo usuarios Admin, Reclamos o ReclamosArbolado pueden eliminar reclamos",
+            "No autorizado. Solo usuarios Admin, Reclamos, ReclamosArbolado o ReclamosZyV pueden eliminar reclamos",
         },
         { status: 403 },
       );

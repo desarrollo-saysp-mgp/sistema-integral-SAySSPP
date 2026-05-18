@@ -36,7 +36,7 @@ type ComplaintExtraData = {
   level?: unknown;
 };
 
-type VariantFilter = "general" | "arbolado";
+type VariantFilter = "general" | "arbolado" | "zyv";
 
 const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   if (
@@ -126,6 +126,7 @@ export default function ComplaintsClient() {
   const { profile } = useUser();
 
   const isArboladoUser = profile?.role === "ReclamosArbolado";
+  const isZyvUser = profile?.role === "ReclamosZyV";
   const isAdminUser =
     profile?.role === "Admin" || profile?.role === "AdminLectura";
 
@@ -134,6 +135,8 @@ export default function ComplaintsClient() {
 
   const isArboladoView =
     isArboladoUser || (isAdminUser && variantFilter === "arbolado");
+
+  const isZyvView = isZyvUser || (isAdminUser && variantFilter === "zyv");
 
   const statusFromUrl = searchParams.get("status");
 
@@ -171,14 +174,14 @@ export default function ComplaintsClient() {
       if (data.data) {
         let activeServices = data.data.filter((s: Service) => s.active);
 
-        if (profile?.role === "ReclamosZyV") {
+        if (isZyvView) {
           activeServices = activeServices.filter((service: Service) => {
             const name = normalizeText(service.name);
             return name.includes("zoonosis") || name.includes("vectores");
           });
         }
 
-        if (profile?.role === "ReclamosArbolado") {
+        if (isArboladoView) {
           activeServices = activeServices.filter((service: Service) =>
             normalizeText(service.name).includes("arbolado"),
           );
@@ -189,7 +192,7 @@ export default function ComplaintsClient() {
     } catch (error) {
       console.error("Error fetching services:", error);
     }
-  }, [profile?.role]);
+  }, [isZyvView, isArboladoView]);
 
   const fetchComplaints = useCallback(
     async (showLoader = true) => {
@@ -498,7 +501,7 @@ export default function ComplaintsClient() {
 
             <div className="flex flex-wrap items-end gap-3 xl:flex-nowrap">
               {isAdminUser && (
-                <div className="flex w-full flex-col gap-1.5 sm:w-[150px] xl:w-[135px]">
+                <div className="flex w-full flex-col gap-1.5 sm:w-[170px] xl:w-[160px]">
                   <Label htmlFor="variant-filter">Tipo</Label>
                   <Select
                     value={variantFilter}
@@ -514,6 +517,7 @@ export default function ComplaintsClient() {
                       <SelectItem value="arbolado">
                         Reclamos Arbolado
                       </SelectItem>
+                      <SelectItem value="zyv">Reclamos ZyV</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

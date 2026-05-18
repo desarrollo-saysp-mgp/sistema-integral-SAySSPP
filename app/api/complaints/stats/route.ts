@@ -13,6 +13,7 @@ type ComplaintRow = {
   status: string;
   complaint_date: string;
   form_variant: string | null;
+  service_id?: number | null;
   service: RelatedItem | RelatedItem[] | null;
   cause: RelatedItem | RelatedItem[] | null;
 };
@@ -82,6 +83,13 @@ const getGroupedStats = (complaints: ComplaintRow[], groupByParam: string) => {
   }
 };
 
+const normalizeText = (value?: string | null) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -114,8 +122,49 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get("date_to");
     const status = searchParams.get("status");
     const serviceId = searchParams.get("service_id");
+    const serviceIdsParam = searchParams.get("service_ids");
     const zone = searchParams.get("zone");
     const groupByParam = searchParams.get("group_by") || "street";
+
+    const serviceIds = serviceIdsParam
+      ? serviceIdsParam
+          .split(",")
+          .map((id) => Number(id.trim()))
+          .filter((id) => Number.isFinite(id))
+      : [];
+
+    let zyvServiceIds: number[] = [];
+    let arboladoServiceIds: number[] = [];
+
+    if (
+      currentUser.role === "ReclamosZyV" ||
+      currentUser.role === "ReclamosArbolado"
+    ) {
+      const { data: roleServices, error: roleServicesError } = await supabase
+        .from("services")
+        .select("id, name");
+
+      if (roleServicesError) {
+        console.error("Error fetching role services:", roleServicesError);
+        return NextResponse.json(
+          { error: "Error al cargar servicios" },
+          { status: 500 },
+        );
+      }
+
+      zyvServiceIds =
+        roleServices
+          ?.filter((service) => {
+            const name = normalizeText(service.name);
+            return name.includes("zoonosis") || name.includes("vectores");
+          })
+          .map((service) => service.id) ?? [];
+
+      arboladoServiceIds =
+        roleServices
+          ?.filter((service) => normalizeText(service.name).includes("arbol"))
+          .map((service) => service.id) ?? [];
+    }
 
     const allComplaints: ComplaintRow[] = [];
     let from = 0;
@@ -132,6 +181,7 @@ export async function GET(request: NextRequest) {
           status,
           complaint_date,
           form_variant,
+          service_id,
           service:services(id, name),
           cause:causes(id, name)
         `,
@@ -139,8 +189,34 @@ export async function GET(request: NextRequest) {
         .order("id", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
 
+      /*
+        FILTRO POR ROL:
+        - ReclamosArbolado: solo Arbolado.
+        - ReclamosZyV: solo Zoonosis / Vectores.
+        - Reclamos: reclamos generales/importados normales.
+        - Admin u otros roles: todo.
+      */
+
       if (currentUser.role === "ReclamosArbolado") {
-        query = query.eq("form_variant", "arbolado");
+        if (arboladoServiceIds.length > 0) {
+          query = query.or(
+            `form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(
+              ",",
+            )})`,
+          );
+        } else {
+          query = query.eq("form_variant", "arbolado");
+        }
+      }
+
+      if (currentUser.role === "ReclamosZyV") {
+        if (zyvServiceIds.length > 0) {
+          query = query.or(
+            `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`,
+          );
+        } else {
+          query = query.eq("form_variant", "zyv");
+        }
       }
 
       if (currentUser.role === "Reclamos") {
@@ -161,8 +237,16 @@ export async function GET(request: NextRequest) {
         query = query.eq("status", status);
       }
 
+      /*
+        FILTRO DE SERVICIO:
+        - service_id: un solo servicio.
+        - service_ids: varios servicios, por ejemplo Zoonosis + Vectores.
+      */
+
       if (serviceId && serviceId !== "all") {
         query = query.eq("service_id", Number(serviceId));
+      } else if (serviceIds.length > 0) {
+        query = query.in("service_id", serviceIds);
       }
 
       if (zone && zone !== "all") {

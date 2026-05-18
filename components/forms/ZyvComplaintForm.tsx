@@ -270,10 +270,6 @@ export function ZyvComplaintForm({
       newErrors.status = "El seguimiento es requerido";
     }
 
-    if (!formData.zone) {
-      newErrors.zone = "El tipo de domicilio es requerido";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -596,9 +592,7 @@ export function ZyvComplaintForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="zone">
-                Tipo de domicilio <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="zone">Tipo de domicilio</Label>
               <Select
                 value={formData.zone}
                 onValueChange={(value) => handleChange("zone", value)}
@@ -614,9 +608,6 @@ export function ZyvComplaintForm({
                   ))}
                 </SelectContent>
               </Select>
-              {errors.zone && (
-                <p className="text-sm text-red-500">{errors.zone}</p>
-              )}
             </div>
           </div>
 

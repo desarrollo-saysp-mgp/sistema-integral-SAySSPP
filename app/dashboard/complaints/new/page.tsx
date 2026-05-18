@@ -23,9 +23,7 @@ export default function NewComplaintPage() {
   const isArboladoUser = profile?.role === "ReclamosArbolado";
   const isZyvUser = profile?.role === "ReclamosZyV";
 
-  const handleGeneralSubmit = async (
-    formData: ComplaintFormData | ZyvComplaintFormData,
-  ) => {
+  const handleGeneralSubmit = async (formData: ComplaintFormData) => {
     try {
       const response = await fetch("/api/complaints", {
         method: "POST",
@@ -85,6 +83,36 @@ export default function NewComplaintPage() {
     }
   };
 
+  const handleZyvSubmit = async (formData: ZyvComplaintFormData) => {
+    try {
+      const response = await fetch("/api/complaints", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          form_variant: "zyv",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || "Error al crear el reclamo de ZyV");
+        return { success: false, error: data.error };
+      }
+
+      toast.success("Reclamo de ZyV creado exitosamente");
+      router.push("/dashboard/complaints");
+      return { success: true };
+    } catch (error) {
+      console.error("Error submitting zyv complaint:", error);
+      toast.error("Error al crear el reclamo de ZyV");
+      return { success: false, error: "Error de conexión" };
+    }
+  };
+
   const handleCancel = () => {
     router.push("/dashboard/complaints");
   };
@@ -115,7 +143,7 @@ export default function NewComplaintPage() {
         />
       ) : isZyvUser ? (
         <ZyvComplaintForm
-          onSubmit={handleGeneralSubmit}
+          onSubmit={handleZyvSubmit}
           onCancel={handleCancel}
         />
       ) : (

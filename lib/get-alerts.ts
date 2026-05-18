@@ -42,6 +42,7 @@ type ComplaintNumberFields = {
   id: number;
   complaint_number: number | string | null;
   arbolado_number: number | null;
+  zyv_number?: number | null;
 };
 
 function getServiceName(service: ServiceRelation) {
@@ -50,22 +51,29 @@ function getServiceName(service: ServiceRelation) {
 }
 
 function getVisibleComplaintNumber(complaint: ComplaintNumberFields) {
-  return complaint.arbolado_number ?? complaint.complaint_number ?? complaint.id;
+  return (
+    complaint.zyv_number ??
+    complaint.arbolado_number ??
+    complaint.complaint_number ??
+    complaint.id
+  );
 }
 
 function isResolvedStatus(status: string | null | undefined) {
   return status?.trim().toLowerCase() === "resuelto";
 }
 
+const normalizeName = (value?: string | null) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
 export async function getAlerts() {
   const supabase = await createClient();
 
   const alerts: AlertItem[] = [];
 
-  /*
-    Detectamos usuario actual para saber si está logueado
-    con una cuenta específica de Reclamos Arbolado.
-  */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -83,27 +91,43 @@ export async function getAlerts() {
   }
 
   const isArboladoUser = currentUserRole === "ReclamosArbolado";
+  const isZyvUser = currentUserRole === "ReclamosZyV";
+  const isGeneralClaimsUser = currentUserRole === "Reclamos";
 
-  /*
-    Si el usuario es ReclamosArbolado, buscamos el id del servicio Arbolado.
-    Así las alertas solo se calculan sobre reclamos de ese servicio.
-  */
   let arboladoServiceIds: number[] = [];
+  let zyvServiceIds: number[] = [];
 
-  if (isArboladoUser) {
-    const { data: arboladoServices, error: arboladoServicesError } =
-      await supabase
-        .from("services")
-        .select("id, name")
-        .ilike("name", "%Arbol%");
+  if (isArboladoUser || isZyvUser) {
+    const { data: roleServices, error: roleServicesError } = await supabase
+      .from("services")
+      .select("id, name")
+      .or("name.ilike.%Arbol%,name.ilike.%Zoonosis%,name.ilike.%Vectores%");
 
-    if (arboladoServicesError) {
-      throw new Error(arboladoServicesError.message);
+    if (roleServicesError) {
+      throw new Error(roleServicesError.message);
     }
 
-    arboladoServiceIds = arboladoServices?.map((service) => service.id) ?? [];
+    arboladoServiceIds =
+      roleServices
+        ?.filter((service) => normalizeName(service.name).includes("arbol"))
+        .map((service) => service.id) ?? [];
 
-    if (arboladoServiceIds.length === 0) {
+    zyvServiceIds =
+      roleServices
+        ?.filter((service) => {
+          const name = normalizeName(service.name);
+          return name.includes("zoonosis") || name.includes("vectores");
+        })
+        .map((service) => service.id) ?? [];
+
+    if (isArboladoUser && arboladoServiceIds.length === 0) {
+      return {
+        total: 0,
+        alerts: [],
+      };
+    }
+
+    if (isZyvUser && zyvServiceIds.length === 0) {
       return {
         total: 0,
         alerts: [],
@@ -120,17 +144,13 @@ export async function getAlerts() {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  /*
-    ALERTA 1:
-    Reclamo en estado "En proceso" por más de 7 días.
-    Esta alerta ya excluye resueltos porque filtra directamente por "En proceso".
-  */
   let overdueQuery = supabase
     .from("complaints")
     .select(`
       id,
       complaint_number,
       arbolado_number,
+      zyv_number,
       complainant_name,
       complaint_date,
       status,
@@ -138,6 +158,7 @@ export async function getAlerts() {
       street_number,
       zone,
       service_id,
+      form_variant,
       services (
         id,
         name
@@ -148,9 +169,18 @@ export async function getAlerts() {
     .order("complaint_date", { ascending: true });
 
   if (isArboladoUser) {
-    overdueQuery = overdueQuery.in(
-      "service_id",
-      arboladoServiceIds
+    overdueQuery = overdueQuery
+      .or(`form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`) as typeof overdueQuery;
+  }
+
+  if (isZyvUser) {
+    overdueQuery = overdueQuery
+      .or(`form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`) as typeof overdueQuery;
+  }
+
+  if (isGeneralClaimsUser) {
+    overdueQuery = overdueQuery.or(
+      "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
     ) as typeof overdueQuery;
   }
 
@@ -179,24 +209,18 @@ export async function getAlerts() {
     });
   });
 
-  /*
-    ALERTA 2:
-    Más de 3 reclamos en el día para un mismo servicio.
-
-    Corrección importante:
-    Ahora NO se cuentan reclamos resueltos.
-    Si un reclamo ya está "Resuelto", no debe generar alerta.
-  */
   let todayQuery = supabase
     .from("complaints")
     .select(`
       id,
       complaint_number,
       arbolado_number,
+      zyv_number,
       complainant_name,
       complaint_date,
       status,
       service_id,
+      form_variant,
       services (
         id,
         name
@@ -206,9 +230,18 @@ export async function getAlerts() {
     .neq("status", "Resuelto");
 
   if (isArboladoUser) {
-    todayQuery = todayQuery.in(
-      "service_id",
-      arboladoServiceIds
+    todayQuery = todayQuery
+      .or(`form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`) as typeof todayQuery;
+  }
+
+  if (isZyvUser) {
+    todayQuery = todayQuery
+      .or(`form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`) as typeof todayQuery;
+  }
+
+  if (isGeneralClaimsUser) {
+    todayQuery = todayQuery.or(
+      "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
     ) as typeof todayQuery;
   }
 
@@ -271,25 +304,22 @@ export async function getAlerts() {
 
   /*
     ALERTA 3:
-    Más de 5 reclamos abiertos en una misma zona,
-    solamente para Rec. Domiciliaria o Rec. Especial.
-
-    Importante:
-    Si el usuario es ReclamosArbolado, esta alerta no aplica,
-    porque esa regla es para reclamos generales.
+    Solo aplica a reclamos generales.
+    No aplica para Arbolado ni ZyV.
   */
-  if (!isArboladoUser) {
+  if (!isArboladoUser && !isZyvUser) {
     const openStatuses = ["Pendiente", "En proceso", "Derivado"];
 
     const allowedZoneAlertServices = ["Rec. Domiciliaria", "Rec. Especial"];
 
-    const { data: openComplaints, error: openError } = await supabase
+    let openQuery = supabase
       .from("complaints")
       .select(`
         id,
         zone,
         status,
         service_id,
+        form_variant,
         services (
           id,
           name
@@ -297,6 +327,14 @@ export async function getAlerts() {
       `)
       .in("status", openStatuses)
       .not("zone", "is", null);
+
+    if (isGeneralClaimsUser) {
+      openQuery = openQuery.or(
+        "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+      ) as typeof openQuery;
+    }
+
+    const { data: openComplaints, error: openError } = await openQuery;
 
     if (openError) {
       throw new Error(openError.message);
