@@ -36,6 +36,7 @@ import {
   isAccessesPage,
   isAdminPage,
 } from "@/lib/navigation";
+import AlertsBell from "@/components/alerts-bell";
 
 export function Navbar() {
   const { profile } = useUser();
@@ -110,9 +111,9 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                   isActive("/dashboard") &&
-                  !pathname?.includes("/dashboard/complaints") &&
-                  !pathname?.includes("/dashboard/accesos") &&
-                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    !pathname?.includes("/dashboard/complaints") &&
+                    !pathname?.includes("/dashboard/accesos") &&
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                 )}
               >
                 <Home className="mr-2 h-4 w-4" />
@@ -128,7 +129,7 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                   isActive("/dashboard/accesos") &&
-                  "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                 )}
               >
                 <LayoutGrid className="mr-2 h-4 w-4" />
@@ -145,7 +146,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes(currentModuleConfig.basePath) &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                   )}
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -237,7 +238,7 @@ export function Navbar() {
                   className={cn(
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
                     pathname?.includes("admin") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
                   )}
                 >
                   <FolderKanban className="mr-2 h-4 w-4" />
@@ -289,6 +290,10 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          {showCurrentModuleNav && currentModuleConfig?.key === "complaints" && (
+            <AlertsBell />
+          )}
+
           <Button
             variant="ghost"
             size="icon"

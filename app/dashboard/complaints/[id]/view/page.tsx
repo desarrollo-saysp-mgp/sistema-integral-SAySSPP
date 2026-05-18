@@ -76,6 +76,7 @@ export default function ComplaintViewPage() {
 
   const fetchComplaint = async () => {
     setLoading(true);
+
     try {
       const response = await fetch(`/api/complaints/${id}`);
       const data = await response.json();
@@ -97,6 +98,7 @@ export default function ComplaintViewPage() {
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
+
     try {
       const response = await fetch(`/api/complaints/${id}/history`);
       const data = await response.json();
@@ -129,6 +131,7 @@ export default function ComplaintViewPage() {
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
+
     return date.toLocaleString("es-AR", {
       day: "2-digit",
       month: "2-digit",
@@ -165,6 +168,11 @@ export default function ComplaintViewPage() {
     return value;
   };
 
+  const cleanValue = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === "") return "-";
+    return String(value);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -186,15 +194,25 @@ export default function ComplaintViewPage() {
   }
 
   const serviceName = complaint.service?.name || "";
+
   const isZyV =
     complaint.form_variant === "zyv" ||
     serviceName === "Zoonosis" ||
     serviceName === "Vectores";
 
-  const displayComplaintNumber =
-    complaint.form_variant === "arbolado"
-      ? complaint.arbolado_number ?? "-"
-      : complaint.complaint_number ?? "-";
+  const isArbolado =
+    complaint.form_variant === "arbolado" ||
+    serviceName.toLowerCase().includes("arbol");
+
+  const displayComplaintNumber = cleanValue(
+    isArbolado
+      ? complaint.arbolado_number ?? complaint.complaint_number
+      : complaint.complaint_number ?? complaint.arbolado_number
+  );
+
+  const displayAddress = `${complaint.address || "-"} ${
+    complaint.street_number || ""
+  }`.trim();
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6 p-6">
@@ -212,8 +230,11 @@ export default function ComplaintViewPage() {
 
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{displayComplaintNumber}</h1>
+
             <Badge
-              className={`${getStatusColor(complaint.status)} border px-3 py-1 text-sm`}
+              className={`${getStatusColor(
+                complaint.status
+              )} border px-3 py-1 text-sm`}
             >
               {complaint.status}
             </Badge>
@@ -237,21 +258,34 @@ export default function ComplaintViewPage() {
             Datos del Reclamante
           </CardTitle>
         </CardHeader>
+
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-            <InfoField label="Nombre y Apellido" value={complaint.complainant_name || "-"} />
+            <InfoField
+              label="Nombre y Apellido"
+              value={cleanValue(complaint.complainant_name)}
+            />
+
             <InfoField
               label="Dirección"
-              value={`${complaint.address || "-"} ${complaint.street_number || ""}`.trim()}
+              value={displayAddress || "-"}
               icon={<MapPin className="h-4 w-4 text-muted-foreground" />}
             />
-            <InfoField label="DNI" value={complaint.dni || "-"} />
+
+            {!isArbolado && (
+              <InfoField label="DNI" value={cleanValue(complaint.dni)} />
+            )}
+
             <InfoField
               label="Teléfono"
-              value={complaint.phone_number || "-"}
+              value={cleanValue(complaint.phone_number)}
               icon={<Phone className="h-4 w-4 text-muted-foreground" />}
             />
-            <InfoField label="Medio de Contacto" value={complaint.contact_method || "-"} />
+
+            <InfoField
+              label="Medio de Contacto"
+              value={cleanValue(complaint.contact_method)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -263,19 +297,24 @@ export default function ComplaintViewPage() {
             {isZyV ? "Detalle ZyV" : "Detalles del Reclamo"}
           </CardTitle>
         </CardHeader>
+
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-            <InfoField label="Servicio" value={complaint.service?.name || "-"} />
-            <InfoField label="Causa" value={complaint.cause?.name || "-"} />
+            <InfoField label="Servicio" value={cleanValue(complaint.service?.name)} />
+
+            <InfoField label="Causa" value={cleanValue(complaint.cause?.name)} />
+
             <InfoField
               label={isZyV ? "Tipo de domicilio" : "Zona"}
-              value={complaint.zone || "-"}
+              value={cleanValue(complaint.zone)}
             />
+
             <InfoField
               label="Desde Cuándo"
-              value={complaint.since_when || "-"}
+              value={cleanValue(complaint.since_when)}
               icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
             />
+
             <InfoField
               label="Fecha de Resolución"
               value={formatDateOnly(complaint.resolution_date)}
@@ -286,8 +325,9 @@ export default function ComplaintViewPage() {
             <p className="mb-2 text-sm font-medium text-muted-foreground">
               Detalle
             </p>
+
             <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
-              {complaint.details || "-"}
+              {cleanValue(complaint.details)}
             </p>
           </div>
         </CardContent>
@@ -300,14 +340,18 @@ export default function ComplaintViewPage() {
             Estado y Seguimiento
           </CardTitle>
         </CardHeader>
+
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div>
               <p className="mb-1 text-sm font-medium text-muted-foreground">
                 Estado
               </p>
+
               <Badge
-                className={`${getStatusColor(complaint.status)} border px-3 py-1 text-sm`}
+                className={`${getStatusColor(
+                  complaint.status
+                )} border px-3 py-1 text-sm`}
               >
                 {complaint.status}
               </Badge>
@@ -315,7 +359,7 @@ export default function ComplaintViewPage() {
 
             <InfoField
               label="Responsable de Carga"
-              value={complaint.loaded_by_user?.full_name || "-"}
+              value={cleanValue(complaint.loaded_by_user?.full_name)}
             />
           </div>
 
@@ -324,6 +368,7 @@ export default function ComplaintViewPage() {
               <p className="text-xs text-muted-foreground">
                 Creado: {formatDateTime(complaint.created_at)}
               </p>
+
               <p className="text-xs text-muted-foreground">
                 Última modificación: {formatDateTime(complaint.updated_at)}
               </p>
@@ -340,11 +385,16 @@ export default function ComplaintViewPage() {
               Historial de Cambios
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             {historyLoading ? (
-              <p className="text-sm text-muted-foreground">Cargando historial...</p>
+              <p className="text-sm text-muted-foreground">
+                Cargando historial...
+              </p>
             ) : history.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay cambios registrados.</p>
+              <p className="text-sm text-muted-foreground">
+                No hay cambios registrados.
+              </p>
             ) : (
               <div className="space-y-4">
                 {history.map((item) => (
@@ -358,14 +408,17 @@ export default function ComplaintViewPage() {
                         {FIELD_LABELS[item.field_name] || item.field_name}
                       </span>
                     </p>
+
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium">Antes:</span>{" "}
                       {formatHistoryValue(item.old_value)}
                     </p>
+
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium">Después:</span>{" "}
                       {formatHistoryValue(item.new_value)}
                     </p>
+
                     <p className="pt-1 text-xs text-muted-foreground">
                       {formatDateTime(item.changed_at)}
                     </p>
@@ -394,6 +447,7 @@ function InfoField({
       <p className="mb-0.5 text-sm font-medium text-muted-foreground">
         {label}
       </p>
+
       <div className="flex items-center gap-1.5">
         {icon}
         <p className="text-sm">{value}</p>

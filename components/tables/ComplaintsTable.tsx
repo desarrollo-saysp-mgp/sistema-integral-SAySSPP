@@ -83,13 +83,28 @@ type PdfStatusColors = {
 
 type ComplaintExtraData = {
   department?: unknown;
+  depto?: unknown;
+
   description_type?: unknown;
+  descripcion?: unknown;
+
   level?: unknown;
+  nivel?: unknown;
+
   observations?: unknown;
+  observaciones_originales?: unknown;
+
   solution?: unknown;
+  solucion?: unknown;
+
   resolution_date?: unknown;
+  fecha_resolucion_original_excel?: unknown;
+
   agent?: unknown;
+  agente?: unknown;
+
   resolution_responsible?: unknown;
+  responsable_de_resolucion?: unknown;
 };
 
 const getExtraData = (complaint: Complaint): ComplaintExtraData => {
@@ -104,6 +119,21 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   return {};
 };
 
+const getStringExtraValue = (
+  extra: ComplaintExtraData,
+  keys: Array<keyof ComplaintExtraData>,
+): string | null => {
+  for (const key of keys) {
+    const value = extra[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+};
+
 const getVisibleComplaintNumber = (complaint: ComplaintWithDetails) => {
   return complaint.arbolado_number ?? complaint.complaint_number ?? "-";
 };
@@ -115,29 +145,32 @@ const getComplaintDisplayData = (
   const extra = getExtraData(complaint);
   const isArbolado = complaint.form_variant === "arbolado";
 
-  const serviceLabel =
-    complaint.service?.name ??
-    (typeof extra.department === "string" ? extra.department : null) ??
-    (isArbolado ? "Arbolado" : "-");
+  const extraDepartment = getStringExtraValue(extra, ["depto", "department"]);
+  const extraDescription = getStringExtraValue(extra, [
+    "descripcion",
+    "description_type",
+  ]);
+  const extraLevel = getStringExtraValue(extra, ["nivel", "level"]);
+  const extraObservations = getStringExtraValue(extra, [
+    "observaciones_originales",
+    "observations",
+  ]);
+  const extraResolutionDate = getStringExtraValue(extra, [
+    "fecha_resolucion_original_excel",
+    "resolution_date",
+  ]);
+  const extraAgent = getStringExtraValue(extra, ["agente", "agent"]);
 
-  const causeLabel =
-    complaint.cause?.name ??
-    (typeof extra.description_type === "string"
-      ? extra.description_type
-      : null) ??
-    "-";
+  const serviceLabel =
+    complaint.service?.name ?? extraDepartment ?? (isArbolado ? "Arbolado" : "-");
+
+  const causeLabel = complaint.cause?.name ?? extraDescription ?? "-";
 
   const zoneLabel = complaint.zone ?? "-";
 
-  const sinceWhenLabel =
-    complaint.since_when ??
-    (typeof extra.level === "string" ? extra.level : null) ??
-    "-";
+  const sinceWhenLabel = complaint.since_when ?? extraLevel ?? "-";
 
-  const detailLabel =
-    complaint.details ??
-    (typeof extra.observations === "string" ? extra.observations : null) ??
-    "-";
+  const detailLabel = complaint.details ?? extraObservations ?? "-";
 
   const addressLabel =
     `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
@@ -147,29 +180,20 @@ const getComplaintDisplayData = (
       ? resolutionDateOverride
       : complaint.resolution_date
         ? complaint.resolution_date
-        : typeof extra.resolution_date === "string" && extra.resolution_date
-          ? extra.resolution_date
-          : null;
+        : extraResolutionDate || null;
 
   const resolutionDateLabel = rawResolutionDate
     ? formatLocalDate(rawResolutionDate)
     : "-";
 
-  const agentLabel =
-    typeof extra.agent === "string" && extra.agent ? extra.agent : "-";
+  const agentLabel = extraAgent || "-";
 
-  const departmentLabel =
-    typeof extra.department === "string" && extra.department
-      ? extra.department
-      : "Arbolado";
+  const departmentLabel = extraDepartment || "Arbolado";
 
-  const levelLabel =
-    typeof extra.level === "string" && extra.level ? extra.level : "-";
+  const levelLabel = extraLevel || "-";
 
   const descriptionLabel =
-    typeof extra.description_type === "string" && extra.description_type
-      ? extra.description_type
-      : complaint.cause?.name || complaint.details || "-";
+    extraDescription || complaint.cause?.name || complaint.details || "-";
 
   return {
     isArbolado,
@@ -195,7 +219,6 @@ export function ComplaintsTable({
 }: ComplaintsTableProps) {
   const router = useRouter();
   const { profile } = useUser();
-
 
   const isReadOnly = profile?.role === "AdminLectura";
   const isArboladoUser = profile?.role === "ReclamosArbolado";
@@ -224,35 +247,61 @@ export function ComplaintsTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>([]);
 
-  const totalPages = Math.max(1, Math.ceil(complaints.length / ITEMS_PER_PAGE));
+  const sortedComplaints = useMemo(() => {
+    return [...complaints].sort((a, b) => {
+      const dateA = a.complaint_date
+        ? new Date(a.complaint_date).getTime()
+        : 0;
+
+      const dateB = b.complaint_date
+        ? new Date(b.complaint_date).getTime()
+        : 0;
+
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      const numberA = Number(getVisibleComplaintNumber(a)) || 0;
+      const numberB = Number(getVisibleComplaintNumber(b)) || 0;
+
+      return numberB - numberA;
+    });
+  }, [complaints]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedComplaints.length / ITEMS_PER_PAGE),
+  );
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(1);
     }
-  }, [complaints.length, currentPage, totalPages]);
+  }, [sortedComplaints.length, currentPage, totalPages]);
 
   useEffect(() => {
     setSelectedComplaintIds((prev) =>
-      prev.filter((id) => complaints.some((complaint) => complaint.id === id)),
+      prev.filter((id) =>
+        sortedComplaints.some((complaint) => complaint.id === id),
+      ),
     );
-  }, [complaints]);
+  }, [sortedComplaints]);
 
   const paginatedComplaints = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
-    return complaints.slice(start, end);
-  }, [complaints, currentPage]);
+    return sortedComplaints.slice(start, end);
+  }, [sortedComplaints, currentPage]);
 
   const selectedComplaints = useMemo(() => {
-    return complaints.filter((complaint) =>
+    return sortedComplaints.filter((complaint) =>
       selectedComplaintIds.includes(complaint.id),
     );
-  }, [complaints, selectedComplaintIds]);
+  }, [sortedComplaints, selectedComplaintIds]);
 
   const exportComplaints = useMemo(() => {
-    return selectedComplaints.length > 0 ? selectedComplaints : complaints;
-  }, [selectedComplaints, complaints]);
+    return selectedComplaints.length > 0 ? selectedComplaints : sortedComplaints;
+  }, [selectedComplaints, sortedComplaints]);
 
   const hasSelectedComplaints = selectedComplaints.length > 0;
 
@@ -518,7 +567,10 @@ export function ComplaintsTable({
 
   const getVisibleRangeText = () => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-    const end = Math.min(currentPage * ITEMS_PER_PAGE, complaints.length);
+    const end = Math.min(
+      currentPage * ITEMS_PER_PAGE,
+      sortedComplaints.length,
+    );
     return { start, end };
   };
 
@@ -748,42 +800,48 @@ export function ComplaintsTable({
         37,
       );
 
-      const arboladoHead = [[
-        "N°",
-        "Fecha",
-        "Nombre",
-        "Dirección",
-        "Depto",
-        "Nivel",
-        "Descripción",
-        "Fecha resolución",
-        "Agente",
-        "Estado",
-      ]];
+      const arboladoHead = [
+        [
+          "N°",
+          "Fecha",
+          "Nombre",
+          "Dirección",
+          "Depto",
+          "Nivel",
+          "Descripción",
+          "Fecha resolución",
+          "Agente",
+          "Estado",
+        ],
+      ];
 
-      const zyvHead = [[
-        "N°",
-        "Fecha",
-        "Nombre",
-        "Dirección",
-        "Servicio",
-        "Causa",
-        "Zona",
-        "Desde",
-        "Estado",
-      ]];
+      const zyvHead = [
+        [
+          "N°",
+          "Fecha",
+          "Nombre",
+          "Dirección",
+          "Servicio",
+          "Causa",
+          "Zona",
+          "Desde",
+          "Estado",
+        ],
+      ];
 
-      const generalHead = [[
-        "N°",
-        "Fecha",
-        "Nombre",
-        "Dirección",
-        "Servicio",
-        "Causa",
-        "Desde Cuándo",
-        "Fecha resolución",
-        "Estado",
-      ]];
+      const generalHead = [
+        [
+          "N°",
+          "Fecha",
+          "Nombre",
+          "Dirección",
+          "Servicio",
+          "Causa",
+          "Desde Cuándo",
+          "Fecha resolución",
+          "Estado",
+        ],
+      ];
 
       const tableData = exportComplaints.map((item) => {
         const display = getComplaintDisplayData(
@@ -835,7 +893,11 @@ export function ComplaintsTable({
         ];
       });
 
-      const head = isArboladoUser ? arboladoHead : isZyVUser ? zyvHead : generalHead;
+      const head = isArboladoUser
+        ? arboladoHead
+        : isZyVUser
+          ? zyvHead
+          : generalHead;
 
       autoTable(doc, {
         startY: 44,
@@ -865,40 +927,40 @@ export function ComplaintsTable({
         },
         columnStyles: isArboladoUser
           ? {
-            0: { cellWidth: 12 },
-            1: { cellWidth: 18 },
-            2: { cellWidth: 26 },
-            3: { cellWidth: 65 },
-            4: { cellWidth: 25 },
-            5: { cellWidth: 18 },
-            6: { cellWidth: 34 },
-            7: { cellWidth: 20 },
-            8: { cellWidth: 28 },
-            9: { cellWidth: 18 },
-          }
+              0: { cellWidth: 12 },
+              1: { cellWidth: 18 },
+              2: { cellWidth: 26 },
+              3: { cellWidth: 65 },
+              4: { cellWidth: 25 },
+              5: { cellWidth: 18 },
+              6: { cellWidth: 34 },
+              7: { cellWidth: 20 },
+              8: { cellWidth: 28 },
+              9: { cellWidth: 18 },
+            }
           : isZyVUser
             ? {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 20 },
-              2: { cellWidth: 32 },
-              3: { cellWidth: 56 },
-              4: { cellWidth: 28 },
-              5: { cellWidth: 38 },
-              6: { cellWidth: 22 },
-              7: { cellWidth: 22 },
-              8: { cellWidth: 22 },
-            }
+                0: { cellWidth: 12 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 32 },
+                3: { cellWidth: 56 },
+                4: { cellWidth: 28 },
+                5: { cellWidth: 38 },
+                6: { cellWidth: 22 },
+                7: { cellWidth: 22 },
+                8: { cellWidth: 22 },
+              }
             : {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 20 },
-              2: { cellWidth: 35 },
-              3: { cellWidth: 55 },
-              4: { cellWidth: 35 },
-              5: { cellWidth: 38 },
-              6: { cellWidth: 26 },
-              7: { cellWidth: 24 },
-              8: { cellWidth: 22 },
-            },
+                0: { cellWidth: 12 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 55 },
+                4: { cellWidth: 35 },
+                5: { cellWidth: 38 },
+                6: { cellWidth: 26 },
+                7: { cellWidth: 24 },
+                8: { cellWidth: 22 },
+              },
         didParseCell: (data: CellHookData) => {
           const statusColumnIndex = isArboladoUser ? 9 : 8;
 
@@ -945,7 +1007,7 @@ export function ComplaintsTable({
     }
   };
 
-  if (complaints.length === 0) {
+  if (sortedComplaints.length === 0) {
     return (
       <div className="py-12 text-center">
         <p className="text-muted-foreground">
@@ -1158,10 +1220,11 @@ export function ComplaintsTable({
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <CalendarCheck
-                          className={`h-4 w-4 ${hasResolutionDate
-                            ? "text-emerald-600"
-                            : "text-muted-foreground"
-                            }`}
+                          className={`h-4 w-4 ${
+                            hasResolutionDate
+                              ? "text-emerald-600"
+                              : "text-muted-foreground"
+                          }`}
                         />
                       )}
                     </Button>
@@ -1278,7 +1341,7 @@ export function ComplaintsTable({
           Mostrando <span className="font-medium text-foreground">{start}</span>{" "}
           a <span className="font-medium text-foreground">{end}</span> de{" "}
           <span className="font-medium text-foreground">
-            {complaints.length}
+            {sortedComplaints.length}
           </span>{" "}
           reclamos
         </p>
@@ -1397,9 +1460,7 @@ export function ComplaintsTable({
                 type="button"
                 variant="outline"
                 onClick={clearResolutionDate}
-                disabled={
-                  updatingResolutionDate === resolutionModalComplaint.id
-                }
+                disabled={updatingResolutionDate === resolutionModalComplaint.id}
               >
                 Quitar
               </Button>
@@ -1416,9 +1477,7 @@ export function ComplaintsTable({
                 <Button
                   type="button"
                   onClick={saveResolutionDate}
-                  disabled={
-                    updatingResolutionDate === resolutionModalComplaint.id
-                  }
+                  disabled={updatingResolutionDate === resolutionModalComplaint.id}
                 >
                   {updatingResolutionDate === resolutionModalComplaint.id ? (
                     <>

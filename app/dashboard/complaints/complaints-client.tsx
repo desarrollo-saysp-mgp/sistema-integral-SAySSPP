@@ -101,6 +101,24 @@ const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
   complaint.form_variant === "import_excel" ||
   complaint.form_variant == null;
 
+const normalizeComplaintForTable = (
+  complaint: ComplaintWithDetails,
+): ComplaintWithDetails => {
+  const isArbolado = isArboladoComplaint(complaint);
+
+  const displayNumber =
+    isArbolado && complaint.arbolado_number != null
+      ? String(complaint.arbolado_number)
+      : complaint.complaint_number != null
+        ? String(complaint.complaint_number)
+        : null;
+
+  return {
+    ...complaint,
+    complaint_number: displayNumber,
+  };
+};
+
 export default function ComplaintsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -121,7 +139,7 @@ export default function ComplaintsClient() {
 
   const initialStatus =
     statusFromUrl &&
-      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+    VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
       ? statusFromUrl
       : "all";
 
@@ -218,7 +236,12 @@ export default function ComplaintsClient() {
         if (requestId !== latestRequestRef.current) return;
 
         if (response.ok && data.data) {
-          setComplaints(data.data);
+          const normalizedComplaints: ComplaintWithDetails[] = data.data.map(
+            (complaint: ComplaintWithDetails) =>
+              normalizeComplaintForTable(complaint),
+          );
+
+          setComplaints(normalizedComplaints);
         } else {
           toast.error(data.error || "Error al cargar reclamos");
         }
@@ -252,7 +275,7 @@ export default function ComplaintsClient() {
   useEffect(() => {
     const nextStatus =
       statusFromUrl &&
-        VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
+      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
         ? statusFromUrl
         : "all";
 
@@ -421,26 +444,26 @@ export default function ComplaintsClient() {
 
   const hasActiveFilters = isArboladoView
     ? !!(
-      searchTerm ||
-      addressFilter ||
-      streetNumberFilter ||
-      statusFilter !== "all" ||
-      dateFromFilter ||
-      dateToFilter ||
-      departmentFilter !== "all" ||
-      levelFilter !== "all" ||
-      descriptionFilter !== "all"
-    )
+        searchTerm ||
+        addressFilter ||
+        streetNumberFilter ||
+        statusFilter !== "all" ||
+        dateFromFilter ||
+        dateToFilter ||
+        departmentFilter !== "all" ||
+        levelFilter !== "all" ||
+        descriptionFilter !== "all"
+      )
     : !!(
-      searchTerm ||
-      addressFilter ||
-      streetNumberFilter ||
-      statusFilter !== "all" ||
-      serviceFilter !== "all" ||
-      zoneFilter !== "all" ||
-      dateFromFilter ||
-      dateToFilter
-    );
+        searchTerm ||
+        addressFilter ||
+        streetNumberFilter ||
+        statusFilter !== "all" ||
+        serviceFilter !== "all" ||
+        zoneFilter !== "all" ||
+        dateFromFilter ||
+        dateToFilter
+      );
 
   return (
     <>

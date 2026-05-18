@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,8 @@ interface DashboardStats {
 }
 
 const formatDate = (dateString: string) => {
+  if (!dateString) return "-";
+
   const [year, month, day] = dateString.split("-").map(Number);
   const date = new Date(year, month - 1, day);
 
@@ -63,35 +65,69 @@ const getStatusBadge = (status: string) => {
   }
 };
 
+const getExtraValue = (
+  extra: Record<string, unknown> | null,
+  keys: string[],
+) => {
+  if (!extra) return null;
+
+  for (const key of keys) {
+    const value = extra[key];
+
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+
+  return null;
+};
+
 const getComplaintSubtitle = (complaint: RecentComplaint) => {
   const extra =
     complaint.extra_data &&
-      typeof complaint.extra_data === "object" &&
-      !Array.isArray(complaint.extra_data)
+    typeof complaint.extra_data === "object" &&
+    !Array.isArray(complaint.extra_data)
       ? complaint.extra_data
       : null;
 
   if (complaint.form_variant === "arbolado") {
     const depto =
-      extra && "department" in extra
-        ? String(extra.department)
-        : "Arbolado";
+      getExtraValue(extra, ["depto", "department"]) ||
+      complaint.service?.name ||
+      "Arbolado";
 
     const descripcion =
-      extra && "description_type" in extra
-        ? String(extra.description_type)
-        : complaint.details ?? "-";
+      getExtraValue(extra, ["descripcion", "description_type"]) ||
+      complaint.cause?.name ||
+      complaint.details ||
+      null;
 
-    return `${depto} - ${descripcion}`;
+    return descripcion ? `${depto} - ${descripcion}` : depto;
   }
 
-  return `${complaint.service?.name ?? "-"} - ${complaint.cause?.name ?? "-"}`;
+  const serviceName = complaint.service?.name || null;
+  const causeName = complaint.cause?.name || null;
+
+  if (serviceName && causeName) return `${serviceName} - ${causeName}`;
+  if (serviceName) return serviceName;
+  if (causeName) return causeName;
+
+  return complaint.details || "Sin detalle";
 };
 
 const getDisplayComplaintNumber = (complaint: RecentComplaint) => {
-  return complaint.form_variant === "arbolado"
-    ? complaint.arbolado_number ?? "-"
-    : complaint.complaint_number ?? "-";
+  if (complaint.form_variant === "arbolado") {
+    return complaint.arbolado_number ?? complaint.complaint_number ?? "-";
+  }
+
+  return complaint.complaint_number ?? "-";
+};
+
+const getDateTime = (dateString: string) => {
+  if (!dateString) return 0;
+
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day).getTime();
 };
 
 export default function DashboardPage() {
@@ -137,6 +173,26 @@ export default function DashboardPage() {
     },
   });
 
+  const recentComplaintsOrdered = useMemo(() => {
+    return [...(stats?.recentComplaints || [])].sort((a, b) => {
+      const dateDiff = getDateTime(b.complaint_date) - getDateTime(a.complaint_date);
+
+      if (dateDiff !== 0) return dateDiff;
+
+      const numberA =
+        a.form_variant === "arbolado"
+          ? Number(a.arbolado_number || 0)
+          : Number(a.complaint_number || 0);
+
+      const numberB =
+        b.form_variant === "arbolado"
+          ? Number(b.arbolado_number || 0)
+          : Number(b.complaint_number || 0);
+
+      return numberB - numberA;
+    });
+  }, [stats?.recentComplaints]);
+
   const navigateWithLoading = (url: string) => {
     startTransition(() => {
       router.push(url);
@@ -160,17 +216,7 @@ export default function DashboardPage() {
 
   return (
     <div className="relative space-y-8">
-      {isPending && (
-        <>
-          <div className="fixed inset-0 z-40 bg-white/35 backdrop-blur-[1px]" />
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-[#D8E3DE] bg-white px-6 py-5 shadow-lg">
-              <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#D8E3DE] border-t-[#00A27F]" />
-              <p className="text-sm font-medium text-[#6B7280]">Cargando...</p>
-            </div>
-          </div>
-        </>
-      )}
+      {isPending && <PageLoader show={true} />}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -312,9 +358,9 @@ export default function DashboardPage() {
         </CardHeader>
 
         <CardContent>
-          {stats?.recentComplaints && stats.recentComplaints.length > 0 ? (
+          {recentComplaintsOrdered.length > 0 ? (
             <div className="space-y-4">
-              {stats.recentComplaints.map((complaint) => (
+              {recentComplaintsOrdered.map((complaint) => (
                 <div
                   key={complaint.id}
                   className="flex cursor-pointer flex-col gap-4 rounded-2xl border border-[#E3E8E5] bg-[#FCFCFC] p-5 transition-all hover:-translate-y-0.5 hover:bg-[#F8FAF9] hover:shadow-md md:flex-row md:items-center md:justify-between"

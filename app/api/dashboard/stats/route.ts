@@ -130,7 +130,9 @@ export async function GET() {
           cause:causes(id, name)
         `,
         )
-        .order("created_at", { ascending: false })
+        .order("complaint_date", { ascending: false, nullsFirst: false })
+        .order("arbolado_number", { ascending: false, nullsFirst: false })
+        .order("complaint_number", { ascending: false, nullsFirst: false })
         .order("id", { ascending: false })
         .limit(5),
     );
