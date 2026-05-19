@@ -1070,7 +1070,269 @@ export function ComplaintsTable({
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      <div className="space-y-3 md:hidden">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+          <div>
+            <p className="text-sm font-semibold">Reclamos visibles</p>
+            <p className="text-xs text-muted-foreground">
+              Selección de la página actual
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Todos</span>
+            <Checkbox
+              checked={
+                allVisibleSelected
+                  ? true
+                  : someVisibleSelected
+                    ? "indeterminate"
+                    : false
+              }
+              onCheckedChange={(checked) =>
+                toggleVisibleSelection(checked === true)
+              }
+              aria-label="Seleccionar reclamos visibles"
+            />
+          </div>
+        </div>
+
+        {paginatedComplaints.map((complaint) => {
+          const isUpdating = updatingStatus === complaint.id;
+          const isSelected = selectedComplaintIds.includes(complaint.id);
+          const complaintStatus = getComplaintStatus(complaint);
+
+          const resolutionDateOverride = Object.prototype.hasOwnProperty.call(
+            resolutionDateOverrides,
+            complaint.id,
+          )
+            ? resolutionDateOverrides[complaint.id]
+            : undefined;
+
+          const display = getComplaintDisplayData(
+            complaint,
+            resolutionDateOverride,
+          );
+
+          const hasResolutionDate = display.resolutionDateLabel !== "-";
+          const isUpdatingResolution =
+            updatingResolutionDate === complaint.id;
+
+          const statusControl =
+            onStatusChange && !isReadOnly ? (
+              <Select
+                value={complaintStatus}
+                onValueChange={(value) =>
+                  handleStatusChange(complaint.id, value)
+                }
+                disabled={isUpdating}
+              >
+                <SelectTrigger
+                  className={`h-9 w-full ${getStatusColor(
+                    complaintStatus,
+                  )} ${isUpdating ? "opacity-80" : ""}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Guardando...</span>
+                    </div>
+                  ) : (
+                    <SelectValue />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="En proceso">En proceso</SelectItem>
+                  <SelectItem value="Resuelto">Resuelto</SelectItem>
+                  <SelectItem value="No resuelto">No resuelto</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <Badge className={getStatusColor(complaintStatus)}>
+                {complaintStatus}
+              </Badge>
+            );
+
+          return (
+            <div
+              key={complaint.id}
+              className="rounded-xl border border-border bg-card p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3 border-b pb-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Reclamo
+                  </p>
+                  <p className="text-lg font-bold leading-tight">
+                    N° {getVisibleComplaintNumber(complaint)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(complaint.complaint_date)}
+                  </p>
+                </div>
+
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={(checked) =>
+                    toggleComplaintSelection(complaint.id, checked === true)
+                  }
+                  aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
+                    complaint,
+                  )}`}
+                />
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm">
+                <div>
+                  <span className="font-semibold">Nombre: </span>
+                  <span>{complaint.complainant_name ?? "-"}</span>
+                </div>
+
+                <div>
+                  <span className="font-semibold">Dirección: </span>
+                  <span>{display.addressLabel}</span>
+                </div>
+
+                {isArboladoUser ? (
+                  <>
+                    <div>
+                      <span className="font-semibold">Descripción: </span>
+                      <span>{display.descriptionLabel}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Fecha resolución: </span>
+                      <span>{display.resolutionDateLabel}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Agente: </span>
+                      <span>{display.agentLabel}</span>
+                    </div>
+                  </>
+                ) : isZyVUser ? (
+                  <>
+                    <div>
+                      <span className="font-semibold">Servicio: </span>
+                      <span>{display.serviceLabel}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Causa: </span>
+                      <span>{display.causeLabel}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-semibold">Zona: </span>
+                        <span>{display.zoneLabel}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold">Desde: </span>
+                        <span>{display.sinceWhenLabel}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <span className="font-semibold">Servicio: </span>
+                      <span>{display.serviceLabel}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Causa: </span>
+                      <span>{display.causeLabel}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-semibold">Zona: </span>
+                        <span>{display.zoneLabel}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold">Desde: </span>
+                        <span>{display.sinceWhenLabel}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Fecha resolución: </span>
+                      <span>{display.resolutionDateLabel}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Cargado por: </span>
+                      <span>
+                        {complaint.loaded_by_user?.full_name ??
+                          "Usuario no disponible"}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div>{statusControl}</div>
+
+                <div className="flex items-center justify-end gap-2 border-t pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleView(complaint.id)}
+                    title="Ver reclamo"
+                    className="gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Ver
+                  </Button>
+
+                  {!isArboladoUser && !isZyVUser && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openResolutionDateModal(complaint)}
+                      title={
+                        hasResolutionDate
+                          ? "Editar fecha de resolución"
+                          : "Cargar fecha de resolución"
+                      }
+                      disabled={isReadOnly || isUpdatingResolution}
+                      className="gap-2"
+                    >
+                      {isUpdatingResolution ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CalendarCheck
+                          className={`h-4 w-4 ${
+                            hasResolutionDate
+                              ? "text-emerald-600"
+                              : "text-muted-foreground"
+                          }`}
+                        />
+                      )}
+                      Fecha
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(complaint.id)}
+                    title="Editar reclamo"
+                    className="gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
