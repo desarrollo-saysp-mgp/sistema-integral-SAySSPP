@@ -62,13 +62,17 @@ const normalizeAddressText = (value: unknown) =>
 
 const getStreetQuery = (value: string) => {
   const query = normalizeAddressText(value);
+
   if (!query) return "";
+
   if (/^\d+$/.test(query)) return `calle ${query}`;
+
   return query;
 };
 
 const matchesStreetAddress = (address: unknown, filter: string) => {
   const query = getStreetQuery(filter);
+
   if (!query) return true;
 
   const normalizedAddress = normalizeAddressText(address);
@@ -102,7 +106,7 @@ const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
   complaint.form_variant == null;
 
 const normalizeComplaintForTable = (
-  complaint: ComplaintWithDetails,
+  complaint: ComplaintWithDetails
 ): ComplaintWithDetails => {
   const isArbolado = isArboladoComplaint(complaint);
 
@@ -123,6 +127,7 @@ export default function ComplaintsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const latestRequestRef = useRef(0);
+
   const { profile } = useUser();
 
   const isArboladoUser = profile?.role === "ReclamosArbolado";
@@ -130,38 +135,148 @@ export default function ComplaintsClient() {
   const isAdminUser =
     profile?.role === "Admin" || profile?.role === "AdminLectura";
 
+  const getParam = useCallback(
+    (key: string, fallback = "") => searchParams.get(key) || fallback,
+    [searchParams]
+  );
+
+  const getValidStatusFromUrl = useCallback(() => {
+    const status = searchParams.get("status");
+
+    if (
+      status &&
+      VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])
+    ) {
+      return status;
+    }
+
+    return "all";
+  }, [searchParams]);
+
+  const getValidVariantFromUrl = useCallback((): VariantFilter => {
+    const variant = searchParams.get("tipo");
+
+    if (variant === "arbolado" || variant === "zyv" || variant === "general") {
+      return variant;
+    }
+
+    return "general";
+  }, [searchParams]);
+
   const [variantFilter, setVariantFilter] =
-    useState<VariantFilter>("general");
+    useState<VariantFilter>(getValidVariantFromUrl);
+
+  const previousVariantRef = useRef<VariantFilter>(variantFilter);
 
   const isArboladoView =
     isArboladoUser || (isAdminUser && variantFilter === "arbolado");
 
   const isZyvView = isZyvUser || (isAdminUser && variantFilter === "zyv");
 
-  const statusFromUrl = searchParams.get("status");
-
-  const initialStatus =
-    statusFromUrl &&
-    VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
-      ? statusFromUrl
-      : "all";
-
   const [complaints, setComplaints] = useState<ComplaintWithDetails[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [addressFilter, setAddressFilter] = useState("");
-  const [streetNumberFilter, setStreetNumberFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [serviceFilter, setServiceFilter] = useState("all");
-  const [zoneFilter, setZoneFilter] = useState("all");
-  const [dateFromFilter, setDateFromFilter] = useState("");
-  const [dateToFilter, setDateToFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => getParam("buscar"));
+  const [addressFilter, setAddressFilter] = useState(() => getParam("calle"));
+  const [streetNumberFilter, setStreetNumberFilter] = useState(() =>
+    getParam("numero")
+  );
+  const [statusFilter, setStatusFilter] = useState(getValidStatusFromUrl);
+  const [serviceFilter, setServiceFilter] = useState(() =>
+    getParam("servicio", "all")
+  );
+  const [zoneFilter, setZoneFilter] = useState(() => getParam("zona", "all"));
+  const [dateFromFilter, setDateFromFilter] = useState(() =>
+    getParam("desde")
+  );
+  const [dateToFilter, setDateToFilter] = useState(() => getParam("hasta"));
 
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [levelFilter, setLevelFilter] = useState("all");
-  const [descriptionFilter, setDescriptionFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState(() =>
+    getParam("depto", "all")
+  );
+  const [levelFilter, setLevelFilter] = useState(() =>
+    getParam("nivel", "all")
+  );
+  const [descriptionFilter, setDescriptionFilter] = useState(() =>
+    getParam("descripcion", "all")
+  );
+
+  const updateUrlFilters = useCallback(() => {
+    const params = new URLSearchParams();
+
+    if (isAdminUser && variantFilter !== "general") {
+      params.set("tipo", variantFilter);
+    }
+
+    if (searchTerm.trim()) {
+      params.set("buscar", searchTerm.trim());
+    }
+
+    if (addressFilter.trim()) {
+      params.set("calle", addressFilter.trim());
+    }
+
+    if (streetNumberFilter.trim()) {
+      params.set("numero", streetNumberFilter.trim());
+    }
+
+    if (statusFilter !== "all") {
+      params.set("status", statusFilter);
+    }
+
+    if (!isArboladoView && serviceFilter !== "all") {
+      params.set("servicio", serviceFilter);
+    }
+
+    if (!isArboladoView && zoneFilter !== "all") {
+      params.set("zona", zoneFilter);
+    }
+
+    if (dateFromFilter) {
+      params.set("desde", dateFromFilter);
+    }
+
+    if (dateToFilter) {
+      params.set("hasta", dateToFilter);
+    }
+
+    if (isArboladoView && departmentFilter !== "all") {
+      params.set("depto", departmentFilter);
+    }
+
+    if (isArboladoView && levelFilter !== "all") {
+      params.set("nivel", levelFilter);
+    }
+
+    if (isArboladoView && descriptionFilter !== "all") {
+      params.set("descripcion", descriptionFilter);
+    }
+
+    const queryString = params.toString();
+
+    const nextUrl = queryString
+      ? `/dashboard/complaints?${queryString}`
+      : "/dashboard/complaints";
+
+    router.replace(nextUrl, { scroll: false });
+  }, [
+    router,
+    isAdminUser,
+    variantFilter,
+    searchTerm,
+    addressFilter,
+    streetNumberFilter,
+    statusFilter,
+    isArboladoView,
+    serviceFilter,
+    zoneFilter,
+    dateFromFilter,
+    dateToFilter,
+    departmentFilter,
+    levelFilter,
+    descriptionFilter,
+  ]);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -177,13 +292,14 @@ export default function ComplaintsClient() {
         if (isZyvView) {
           activeServices = activeServices.filter((service: Service) => {
             const name = normalizeText(service.name);
+
             return name.includes("zoonosis") || name.includes("vectores");
           });
         }
 
         if (isArboladoView) {
           activeServices = activeServices.filter((service: Service) =>
-            normalizeText(service.name).includes("arbolado"),
+            normalizeText(service.name).includes("arbolado")
           );
         }
 
@@ -241,7 +357,7 @@ export default function ComplaintsClient() {
         if (response.ok && data.data) {
           const normalizedComplaints: ComplaintWithDetails[] = data.data.map(
             (complaint: ComplaintWithDetails) =>
-              normalizeComplaintForTable(complaint),
+              normalizeComplaintForTable(complaint)
           );
 
           setComplaints(normalizedComplaints);
@@ -268,7 +384,7 @@ export default function ComplaintsClient() {
       isArboladoView,
       isAdminUser,
       variantFilter,
-    ],
+    ]
   );
 
   useEffect(() => {
@@ -276,16 +392,16 @@ export default function ComplaintsClient() {
   }, [fetchServices]);
 
   useEffect(() => {
-    const nextStatus =
-      statusFromUrl &&
-      VALID_STATUSES.includes(statusFromUrl as (typeof VALID_STATUSES)[number])
-        ? statusFromUrl
-        : "all";
-
-    setStatusFilter((prev) => (prev !== nextStatus ? nextStatus : prev));
-  }, [statusFromUrl]);
+    updateUrlFilters();
+  }, [updateUrlFilters]);
 
   useEffect(() => {
+    if (previousVariantRef.current === variantFilter) {
+      return;
+    }
+
+    previousVariantRef.current = variantFilter;
+
     setServiceFilter("all");
     setZoneFilter("all");
     setDepartmentFilter("all");
@@ -330,7 +446,7 @@ export default function ComplaintsClient() {
 
       const matchesAddress = matchesStreetAddress(
         complaint.address,
-        addressFilter,
+        addressFilter
       );
 
       const matchesStreetNumber =
@@ -408,7 +524,7 @@ export default function ComplaintsClient() {
 
   const handleStatusChange = async (
     complaintId: number,
-    newStatus: string,
+    newStatus: string
   ) => {
     try {
       const response = await fetch(`/api/complaints/${complaintId}`, {
@@ -442,7 +558,12 @@ export default function ComplaintsClient() {
     setDepartmentFilter("all");
     setLevelFilter("all");
     setDescriptionFilter("all");
-    router.push("/dashboard/complaints");
+
+    if (isAdminUser) {
+      setVariantFilter("general");
+    }
+
+    router.replace("/dashboard/complaints", { scroll: false });
   };
 
   const hasActiveFilters = isArboladoView
@@ -512,6 +633,7 @@ export default function ComplaintsClient() {
                     <SelectTrigger id="variant-filter" className="h-10 w-full">
                       <SelectValue placeholder="Reclamos" />
                     </SelectTrigger>
+
                     <SelectContent>
                       <SelectItem value="general">Reclamos</SelectItem>
                       <SelectItem value="arbolado">
@@ -527,6 +649,7 @@ export default function ComplaintsClient() {
                 <Label htmlFor="search">Buscar</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
                   <Input
                     id="search"
                     placeholder={
@@ -569,6 +692,7 @@ export default function ComplaintsClient() {
                   <SelectTrigger id="status-filter" className="h-10 w-full">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
+
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="En proceso">En proceso</SelectItem>
@@ -589,6 +713,7 @@ export default function ComplaintsClient() {
                       <SelectTrigger id="service-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
+
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
                         {services.map((service) => (
@@ -609,6 +734,7 @@ export default function ComplaintsClient() {
                       <SelectTrigger id="zone-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todas" />
                       </SelectTrigger>
+
                       <SelectContent>
                         <SelectItem value="all">Todas</SelectItem>
                         {ZONE_OPTIONS.map((zone) => (
@@ -636,6 +762,7 @@ export default function ComplaintsClient() {
                       >
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
+
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
                         {arboladoDepartments.map((item) => (
@@ -653,6 +780,7 @@ export default function ComplaintsClient() {
                       <SelectTrigger id="level-filter" className="h-10 w-full">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
+
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
                         {arboladoLevels.map((item) => (
@@ -676,6 +804,7 @@ export default function ComplaintsClient() {
                       >
                         <SelectValue placeholder="Todas" />
                       </SelectTrigger>
+
                       <SelectContent>
                         <SelectItem value="all">Todas</SelectItem>
                         {arboladoDescriptions.map((item) => (

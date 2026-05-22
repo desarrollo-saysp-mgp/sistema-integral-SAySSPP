@@ -116,6 +116,22 @@ export default function ComplaintViewPage() {
     }
   };
 
+  const handleBack = () => {
+    /*
+      IMPORTANTE:
+      Usamos router.back() para volver exactamente a la URL anterior.
+      Así, si venías desde:
+      /dashboard/complaints?buscar=anonimo&servicio=5
+      vuelve con esos filtros cargados.
+    */
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/dashboard/complaints");
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "En proceso":
@@ -221,7 +237,7 @@ export default function ComplaintViewPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push("/dashboard/complaints")}
+            onClick={handleBack}
             className="-ml-2"
           >
             <ArrowLeft className="mr-1 h-4 w-4" />
@@ -300,7 +316,10 @@ export default function ComplaintViewPage() {
 
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-            <InfoField label="Servicio" value={cleanValue(complaint.service?.name)} />
+            <InfoField
+              label="Servicio"
+              value={cleanValue(complaint.service?.name)}
+            />
 
             <InfoField label="Causa" value={cleanValue(complaint.cause?.name)} />
 
