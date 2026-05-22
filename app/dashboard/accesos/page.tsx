@@ -38,6 +38,18 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
   },
 };
 
+const normalizeText = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+const normalizeModule = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
 export default async function AccesosPage() {
   const supabase = await createClient();
 
@@ -49,34 +61,52 @@ export default async function AccesosPage() {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("users")
     .select("full_name, email, role, modules, is_readonly")
     .eq("id", user.id)
     .single();
 
-  if (!profile) {
+  if (error || !profile) {
     redirect("/login");
   }
 
   const allowedRoles = ["admin", "adminlectura"];
+  const userRole = normalizeText(profile.role);
 
-  const userRole = String(profile.role || "").toLowerCase();
-
-  const modules: string[] = Array.isArray(profile.modules)
+  const rawModules: string[] = Array.isArray(profile.modules)
     ? profile.modules
     : [];
 
-  const accesses = modules
-    .map((moduleKey) => MODULE_CONFIG[moduleKey as ModuleKey])
-    .filter(Boolean)
-    .filter((item) => {
-      if (item.key === "general_dashboard") {
-        return allowedRoles.includes(userRole);
-      }
+  const modules = rawModules.map((module) => normalizeModule(module));
 
-      return true;
-    });
+  const hasAllowedRole = allowedRoles.includes(userRole);
+
+  const baseAccesses = modules
+    .map((moduleKey) => MODULE_CONFIG[moduleKey as ModuleKey])
+    .filter(Boolean);
+
+  const accesses = [...baseAccesses];
+
+  const alreadyHasDashboard = accesses.some(
+    (item) => item.key === "general_dashboard"
+  );
+
+  /*
+    Si la cuenta es admin o adminlectura, le mostramos sí o sí
+    el Tablero General, aunque en modules no tenga general_dashboard.
+  */
+  if (hasAllowedRole && !alreadyHasDashboard) {
+    accesses.push(MODULE_CONFIG.general_dashboard);
+  }
+
+  const filteredAccesses = accesses.filter((item) => {
+    if (item.key === "general_dashboard") {
+      return hasAllowedRole;
+    }
+
+    return true;
+  });
 
   return (
     <div className="container mx-auto space-y-8 p-6">
@@ -90,17 +120,22 @@ export default async function AccesosPage() {
       <Card>
         <CardContent className="flex flex-col gap-1 py-5">
           <span className="text-lg font-semibold">{profile.full_name}</span>
-          <span className="text-sm text-muted-foreground">{profile.email}</span>
+
+          <span className="text-sm text-muted-foreground">
+            {profile.email}
+          </span>
+
           <span className="text-sm text-muted-foreground">
             Rol actual: {profile.role}
           </span>
+
           <span className="text-sm text-muted-foreground">
             Modo: {profile.is_readonly ? "Solo lectura" : "Edición habilitada"}
           </span>
         </CardContent>
       </Card>
 
-      {accesses.length === 0 ? (
+      {filteredAccesses.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             No tenés módulos asignados para ingresar.
@@ -108,7 +143,7 @@ export default async function AccesosPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {accesses.map((item) => (
+          {filteredAccesses.map((item) => (
             <Card key={item.key} className="rounded-2xl">
               <CardHeader>
                 <CardTitle>{item.title}</CardTitle>

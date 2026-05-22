@@ -13,6 +13,12 @@ const normalizeText = (value: unknown) =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
+const normalizeModule = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
 export default async function TableroGeneralPage() {
   const supabase = await createClient();
 
@@ -24,26 +30,37 @@ export default async function TableroGeneralPage() {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("users")
     .select("role, modules")
     .eq("id", user.id)
     .single();
 
-  if (!profile) {
+  if (error || !profile) {
     redirect("/login");
   }
 
   const userRole = normalizeText(profile.role);
 
   const modules: string[] = Array.isArray(profile.modules)
-    ? profile.modules
+    ? profile.modules.map((module) => normalizeModule(module))
     : [];
 
   const hasAllowedRole = ALLOWED_ROLES.includes(userRole);
-  const hasDashboardModule = modules.includes("general_dashboard");
 
-  if (!hasAllowedRole || !hasDashboardModule) {
+  const hasDashboardModule =
+    modules.includes("general_dashboard") ||
+    modules.includes("tablero_general") ||
+    modules.includes("tablero") ||
+    modules.includes("powerbi") ||
+    modules.includes("power_bi");
+
+  /*
+    IMPORTANTE:
+    - Si es admin o adminlectura, entra.
+    - Si no es admin, solamente entraría si tiene el módulo asignado.
+  */
+  if (!hasAllowedRole && !hasDashboardModule) {
     redirect("/dashboard/accesos");
   }
 

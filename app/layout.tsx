@@ -17,8 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Sistema Integral SAySSPP",
-  description:
-    "Portal Interno - Secretaría Municipal",
+  description: "Portal Interno - Secretaría Municipal",
 };
 
 export default function RootLayout({
@@ -27,18 +26,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-screen flex-col`}
+        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-background text-foreground antialiased`}
       >
         <UserProvider>
-          {/* CONTENIDO PRINCIPAL */}
           <main className="flex-1">{children}</main>
 
-          {/* FOOTER */}
           <Footer />
 
-          {/* TOAST */}
           <Toaster />
         </UserProvider>
       </body>

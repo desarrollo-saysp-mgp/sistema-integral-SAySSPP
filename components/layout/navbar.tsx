@@ -25,9 +25,11 @@ import {
   X,
   LayoutGrid,
   BarChart3,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   MODULES,
@@ -42,7 +44,32 @@ export function Navbar() {
   const { profile } = useUser();
   const pathname = usePathname();
   const router = useRouter();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+
+    const shouldUseDark = savedTheme ? savedTheme === "dark" : prefersDark;
+
+    setDarkMode(shouldUseDark);
+    document.documentElement.classList.toggle("dark", shouldUseDark);
+  }, []);
+
+  const toggleDarkMode = () => {
+    setDarkMode((current) => {
+      const next = !current;
+
+      document.documentElement.classList.toggle("dark", next);
+      localStorage.setItem("theme", next ? "dark" : "light");
+
+      return next;
+    });
+  };
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -77,7 +104,7 @@ export function Navbar() {
   const logoHref = isAdmin ? "/dashboard/accesos" : "/dashboard";
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+    <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:border-slate-700 dark:bg-slate-950/95 dark:supports-[backdrop-filter]:bg-slate-950/90">
       <div className="flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href={logoHref}
@@ -93,27 +120,27 @@ export function Navbar() {
             />
           </div>
 
-          <div className="hidden xl:flex flex-col border-l border-[#D8E3DE] pl-3">
-            <span className="text-sm font-semibold leading-tight text-[#373737]">
+          <div className="hidden flex-col border-l border-[#D8E3DE] pl-3 dark:border-slate-700 xl:flex">
+            <span className="text-sm font-semibold leading-tight text-[#373737] dark:text-slate-100">
               {navbarContext.title}
             </span>
-            <span className="text-xs leading-tight text-[#6B7280]">
+            <span className="text-xs leading-tight text-[#6B7280] dark:text-slate-400">
               {navbarContext.subtitle}
             </span>
           </div>
         </Link>
 
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex">
           {!isAdmin && (
             <Link href="/dashboard">
               <Button
                 variant="ghost"
                 className={cn(
-                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
                   isActive("/dashboard") &&
                     !pathname?.includes("/dashboard/complaints") &&
                     !pathname?.includes("/dashboard/accesos") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
                 )}
               >
                 <Home className="mr-2 h-4 w-4" />
@@ -127,9 +154,9 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 className={cn(
-                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                  "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
                   isActive("/dashboard/accesos") &&
-                    "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                    "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
                 )}
               >
                 <LayoutGrid className="mr-2 h-4 w-4" />
@@ -144,9 +171,9 @@ export function Navbar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
                     pathname?.includes(currentModuleConfig.basePath) &&
-                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
                   )}
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -157,7 +184,7 @@ export function Navbar() {
               <DropdownMenuContent
                 align="center"
                 side="bottom"
-                className="w-[280px] rounded-2xl border-[#D8E3DE]"
+                className="w-[280px] rounded-2xl border-[#D8E3DE] dark:border-slate-700 dark:bg-slate-900"
               >
                 <DropdownMenuItem asChild>
                   <Link
@@ -236,9 +263,9 @@ export function Navbar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]",
+                    "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
                     pathname?.includes("admin") &&
-                      "bg-[#00A27F]/12 font-semibold text-[#00A27F]",
+                      "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
                   )}
                 >
                   <FolderKanban className="mr-2 h-4 w-4" />
@@ -249,7 +276,7 @@ export function Navbar() {
               <DropdownMenuContent
                 align="center"
                 side="bottom"
-                className="w-[280px] rounded-2xl border-[#D8E3DE]"
+                className="w-[280px] rounded-2xl border-[#D8E3DE] dark:border-slate-700 dark:bg-slate-900"
               >
                 <DropdownMenuItem asChild>
                   <Link
@@ -295,9 +322,24 @@ export function Navbar() {
           )}
 
           <Button
+            type="button"
             variant="ghost"
             size="icon"
-            className="text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] md:hidden"
+            onClick={toggleDarkMode}
+            title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D8E3DE] bg-white text-[#373737] shadow-sm transition hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]"
+          >
+            {darkMode ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA] md:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? (
@@ -312,17 +354,17 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex items-center gap-2 rounded-xl text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F]"
+                  className="flex items-center gap-2 rounded-xl text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00A27F]/12">
-                    <User className="h-4 w-4 text-[#00A27F]" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00A27F]/12 dark:bg-[#00A27F]/20">
+                    <User className="h-4 w-4 text-[#00A27F] dark:text-[#00D6AA]" />
                   </div>
 
-                  <div className="hidden lg:flex flex-col items-start">
+                  <div className="hidden flex-col items-start lg:flex">
                     <span className="text-sm font-medium">
                       {profile.full_name}
                     </span>
-                    <span className="text-xs text-[#6B7280]">
+                    <span className="text-xs text-[#6B7280] dark:text-slate-400">
                       {profile.role}
                     </span>
                   </div>
@@ -331,7 +373,7 @@ export function Navbar() {
 
               <DropdownMenuContent
                 align="end"
-                className="w-56 rounded-2xl border-[#D8E3DE]"
+                className="w-56 rounded-2xl border-[#D8E3DE] dark:border-slate-700 dark:bg-slate-900"
               >
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
@@ -339,7 +381,7 @@ export function Navbar() {
                     <p className="text-xs text-muted-foreground">
                       {profile.email}
                     </p>
-                    <p className="text-xs font-semibold text-[#00A27F]">
+                    <p className="text-xs font-semibold text-[#00A27F] dark:text-[#00D6AA]">
                       {profile.role}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -366,7 +408,7 @@ export function Navbar() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="border-t border-[#D8E3DE] bg-white md:hidden">
+        <div className="border-t border-[#D8E3DE] bg-white dark:border-slate-700 dark:bg-slate-950 md:hidden">
           <div className="space-y-2 px-4 py-4">
             {!isAdmin && (
               <Link
@@ -377,8 +419,8 @@ export function Navbar() {
                   isActive("/dashboard") &&
                     !pathname?.includes("/dashboard/complaints") &&
                     !pathname?.includes("/dashboard/accesos")
-                    ? "bg-[#00A27F]/12 text-[#00A27F]"
-                    : "text-[#373737] hover:bg-[#00A27F]/8",
+                    ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                 )}
               >
                 <Home className="h-5 w-5" />
@@ -393,8 +435,8 @@ export function Navbar() {
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                   isActive("/dashboard/accesos")
-                    ? "bg-[#00A27F]/12 text-[#00A27F]"
-                    : "text-[#373737] hover:bg-[#00A27F]/8",
+                    ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                    : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                 )}
               >
                 <LayoutGrid className="h-5 w-5" />
@@ -404,7 +446,7 @@ export function Navbar() {
 
             {showCurrentModuleNav && currentModuleConfig?.key === "complaints" && (
               <div className="space-y-1">
-                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
+                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280] dark:text-slate-400">
                   {currentModuleConfig.label}
                 </div>
 
@@ -414,8 +456,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     pathname === "/dashboard/complaints/home"
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <Home className="h-5 w-5" />
@@ -428,8 +470,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/dashboard/complaints/new")
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <PlusCircle className="h-5 w-5" />
@@ -442,8 +484,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     pathname === "/dashboard/complaints"
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <FileText className="h-5 w-5" />
@@ -456,8 +498,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     pathname === "/dashboard/complaints/stats"
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <BarChart3 className="h-5 w-5" />
@@ -467,8 +509,8 @@ export function Navbar() {
             )}
 
             {isAdmin && (
-              <div className="mt-2 space-y-1 border-t border-[#D8E3DE] pt-2">
-                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280]">
+              <div className="mt-2 space-y-1 border-t border-[#D8E3DE] pt-2 dark:border-slate-700">
+                <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280] dark:text-slate-400">
                   Administración
                 </div>
 
@@ -478,8 +520,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/users")
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <Users className="h-5 w-5" />
@@ -492,8 +534,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
                     isActive("/admin/services")
-                      ? "bg-[#00A27F]/12 text-[#00A27F]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8",
+                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
                   )}
                 >
                   <FolderKanban className="h-5 w-5" />

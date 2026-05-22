@@ -100,16 +100,18 @@ function StatBars({
   );
 
   return (
-    <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
+    <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-bold text-[#373737]">
+        <CardTitle className="text-base font-bold text-foreground">
           {title}
         </CardTitle>
       </CardHeader>
 
       <CardContent>
         {data.length === 0 ? (
-          <p className="py-8 text-center text-sm text-[#6B7280]">{emptyText}</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {emptyText}
+          </p>
         ) : (
           <div className="space-y-3">
             {data.map((item) => {
@@ -118,15 +120,16 @@ function StatBars({
               return (
                 <div key={item.name} className="space-y-1">
                   <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="truncate font-medium text-[#373737]">
+                    <span className="truncate font-medium text-foreground">
                       {item.name}
                     </span>
+
                     <span className="shrink-0 font-bold text-[#00A27F]">
                       {item.count}
                     </span>
                   </div>
 
-                  <div className="h-3 overflow-hidden rounded-full bg-[#EAF3F0]">
+                  <div className="h-3 overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-[#00A27F]"
                       style={{ width: `${percentage}%` }}
@@ -577,11 +580,11 @@ export default function StatsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-foreground">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-[#373737]">Estadísticas</h1>
-          <p className="mt-1 text-sm text-[#6B7280]">
+          <h1 className="text-3xl font-bold text-foreground">Estadísticas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Los filtros se aplican automáticamente.
           </p>
         </div>
@@ -591,7 +594,7 @@ export default function StatsPage() {
             variant="outline"
             onClick={exportPdf}
             disabled={loading || !stats}
-            className="h-11 rounded-xl border-[#D8E3DE] bg-white px-5"
+            className="h-11 rounded-xl border-border bg-card px-5 text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <Download className="mr-2 h-4 w-4" />
             Exportar PDF
@@ -612,11 +615,11 @@ export default function StatsPage() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
+      <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
         <CardContent className="p-5">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">
+              <label className="text-xs font-semibold text-foreground">
                 Desde
               </label>
               <Input
@@ -628,7 +631,7 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">
+              <label className="text-xs font-semibold text-foreground">
                 Hasta
               </label>
               <Input
@@ -640,7 +643,7 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">
+              <label className="text-xs font-semibold text-foreground">
                 Estado
               </label>
               <Select value={status} onValueChange={setStatus}>
@@ -657,7 +660,7 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">
+              <label className="text-xs font-semibold text-foreground">
                 Servicio
               </label>
 
@@ -691,7 +694,7 @@ export default function StatsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#373737]">
+              <label className="text-xs font-semibold text-foreground">
                 Zona
               </label>
               <Select value={zone} onValueChange={setZone}>
@@ -713,14 +716,14 @@ export default function StatsPage() {
           </div>
 
           <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p className="text-xs text-[#6B7280]">
+            <p className="text-xs text-muted-foreground">
               {loading ? "Aplicando filtros..." : filterLabel}
             </p>
 
             <Button
               variant="outline"
               onClick={clearFilters}
-              className="h-11 rounded-xl border-[#D8E3DE] px-5"
+              className="h-11 rounded-xl border-border bg-card px-5 text-foreground hover:bg-accent hover:text-accent-foreground"
               disabled={loading}
             >
               <FilterX className="mr-2 h-4 w-4" />
@@ -731,35 +734,37 @@ export default function StatsPage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
+        <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-[#373737]">
+            <CardTitle className="text-sm font-bold text-foreground">
               Total analizado
             </CardTitle>
             <BarChart3 className="h-5 w-5 text-[#00A27F]" />
           </CardHeader>
+
           <CardContent>
-            <div className="text-4xl font-bold text-[#373737]">
+            <div className="text-4xl font-bold text-foreground">
               {loading ? "..." : stats?.total ?? 0}
             </div>
-            <p className="mt-1 text-sm text-[#6B7280]">
+            <p className="mt-1 text-sm text-muted-foreground">
               Reclamos con filtros aplicados
             </p>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm md:col-span-2">
+        <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm md:col-span-2">
           <CardHeader className="flex flex-row items-center gap-2 pb-2">
             <TrendingUp className="h-5 w-5 text-[#00A27F]" />
-            <CardTitle className="text-sm font-bold text-[#373737]">
+            <CardTitle className="text-sm font-bold text-foreground">
               Más repetido por calle
             </CardTitle>
           </CardHeader>
+
           <CardContent>
-            <div className="text-2xl font-bold text-[#373737]">
+            <div className="text-2xl font-bold text-foreground">
               {loading ? "..." : mainStat?.name ?? "Sin datos"}
             </div>
-            <p className="mt-1 text-sm text-[#6B7280]">
+            <p className="mt-1 text-sm text-muted-foreground">
               {mainStat
                 ? `${mainStat.count} reclamos registrados`
                 : "No hay información disponible"}
@@ -769,8 +774,8 @@ export default function StatsPage() {
       </div>
 
       {loading ? (
-        <Card className="rounded-2xl border-[#D8E3DE] bg-white shadow-sm">
-          <CardContent className="flex items-center justify-center gap-2 py-14 text-[#6B7280]">
+        <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
+          <CardContent className="flex items-center justify-center gap-2 py-14 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             Cargando estadísticas...
           </CardContent>
