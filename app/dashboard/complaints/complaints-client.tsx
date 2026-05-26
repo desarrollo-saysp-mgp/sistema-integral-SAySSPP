@@ -31,9 +31,15 @@ type ComplaintWithDetails = Complaint & {
 };
 
 type ComplaintExtraData = {
+  // Formato que usaba el código
   department?: unknown;
   description_type?: unknown;
   level?: unknown;
+
+  // Formato real que vino desde la importación de Arbolado
+  depto?: unknown;
+  descripcion?: unknown;
+  nivel?: unknown;
 };
 
 type VariantFilter = "general" | "arbolado" | "zyv";
@@ -48,6 +54,30 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
   }
 
   return {};
+};
+
+const getArboladoDepartment = (extra: ComplaintExtraData) => {
+  if (typeof extra.department === "string") return extra.department;
+  if (typeof extra.depto === "string") return extra.depto;
+  return "";
+};
+
+const getArboladoLevel = (extra: ComplaintExtraData) => {
+  if (typeof extra.level === "string") return extra.level;
+  if (typeof extra.nivel === "string") return extra.nivel;
+  return "";
+};
+
+const getArboladoDescription = (extra: ComplaintExtraData) => {
+  if (typeof extra.description_type === "string") {
+    return extra.description_type;
+  }
+
+  if (typeof extra.descripcion === "string") {
+    return extra.descripcion;
+  }
+
+  return "";
 };
 
 const normalizeText = (value: unknown) =>
@@ -97,6 +127,16 @@ const isArboladoComplaint = (complaint: ComplaintWithDetails) => {
   return (
     complaint.form_variant === "arbolado" ||
     serviceName.includes("arbolado")
+  );
+};
+
+const isZyvComplaint = (complaint: ComplaintWithDetails) => {
+  const serviceName = normalizeText(complaint.service?.name);
+
+  return (
+    complaint.form_variant === "zyv" ||
+    serviceName.includes("zoonosis") ||
+    serviceName.includes("vectores")
   );
 };
 
@@ -342,7 +382,27 @@ export default function ComplaintsClient() {
           params.append("date_to", dateToFilter);
         }
 
-        if (isAdminUser) {
+        /*
+          IMPORTANTE:
+          En Admin, cuando seleccionamos "Reclamos Arbolado" o "Reclamos ZyV",
+          NO mandamos form_variant al backend.
+
+          Motivo:
+          - Hay reclamos con servicio "Arbolado" que tienen form_variant="general".
+          - Hay reclamos con servicio "Zoonosis" o "Vectores" que pueden tener form_variant="general".
+
+          Si mandamos form_variant=arbolado o form_variant=zyv,
+          el backend devuelve menos reclamos.
+
+          Si no lo mandamos, traemos todos y filtramos en frontend con:
+          - isArboladoComplaint
+          - isZyvComplaint
+        */
+        if (
+          isAdminUser &&
+          variantFilter !== "arbolado" &&
+          variantFilter !== "zyv"
+        ) {
           params.append("form_variant", variantFilter);
         }
 
@@ -426,12 +486,25 @@ export default function ComplaintsClient() {
       sourceComplaints = complaints.filter(isArboladoComplaint);
     }
 
-    if (!isArboladoView && isAdminUser && variantFilter === "general") {
+    if (isZyvView) {
+      sourceComplaints = complaints.filter(isZyvComplaint);
+    }
+
+    if (
+      !isArboladoView &&
+      !isZyvView &&
+      isAdminUser &&
+      variantFilter === "general"
+    ) {
       sourceComplaints = complaints.filter(isGeneralComplaint);
     }
 
     return sourceComplaints.filter((complaint) => {
       const extra = getExtraData(complaint);
+      const arboladoDescriptionValue = getArboladoDescription(extra);
+      const departmentValue = getArboladoDepartment(extra);
+      const levelValue = getArboladoLevel(extra);
+
       const query = searchTerm.toLowerCase().trim();
       const streetNumberQuery = streetNumberFilter.toLowerCase().trim();
 
@@ -439,8 +512,7 @@ export default function ComplaintsClient() {
         !query ||
         (complaint.complainant_name || "").toLowerCase().includes(query) ||
         (isArboladoView &&
-          typeof extra.description_type === "string" &&
-          extra.description_type.toLowerCase().includes(query)) ||
+          arboladoDescriptionValue.toLowerCase().includes(query)) ||
         (isArboladoView &&
           (complaint.details || "").toLowerCase().includes(query));
 
@@ -458,20 +530,15 @@ export default function ComplaintsClient() {
       const matchesDepartment =
         !isArboladoView ||
         departmentFilter === "all" ||
-        (typeof extra.department === "string" &&
-          extra.department === departmentFilter) ||
-        isArboladoComplaint(complaint);
+        departmentValue === departmentFilter;
 
       const matchesLevel =
-        !isArboladoView ||
-        levelFilter === "all" ||
-        (typeof extra.level === "string" && extra.level === levelFilter);
+        !isArboladoView || levelFilter === "all" || levelValue === levelFilter;
 
       const matchesDescription =
         !isArboladoView ||
         descriptionFilter === "all" ||
-        (typeof extra.description_type === "string" &&
-          extra.description_type === descriptionFilter);
+        arboladoDescriptionValue === descriptionFilter;
 
       return (
         matchesSearch &&
@@ -485,6 +552,7 @@ export default function ComplaintsClient() {
   }, [
     complaints,
     isArboladoView,
+    isZyvView,
     isAdminUser,
     variantFilter,
     searchTerm,
@@ -497,27 +565,27 @@ export default function ComplaintsClient() {
 
   const arboladoDepartments = useMemo(() => {
     const values = complaints
-      .filter((complaint) => complaint.form_variant === "arbolado")
-      .map((complaint) => getExtraData(complaint).department)
-      .filter((value): value is string => typeof value === "string" && !!value);
+      .filter(isArboladoComplaint)
+      .map((complaint) => getArboladoDepartment(getExtraData(complaint)))
+      .filter((value): value is string => !!value);
 
     return [...new Set(values)].sort();
   }, [complaints]);
 
   const arboladoLevels = useMemo(() => {
     const values = complaints
-      .filter((complaint) => complaint.form_variant === "arbolado")
-      .map((complaint) => getExtraData(complaint).level)
-      .filter((value): value is string => typeof value === "string" && !!value);
+      .filter(isArboladoComplaint)
+      .map((complaint) => getArboladoLevel(getExtraData(complaint)))
+      .filter((value): value is string => !!value);
 
     return [...new Set(values)].sort();
   }, [complaints]);
 
   const arboladoDescriptions = useMemo(() => {
     const values = complaints
-      .filter((complaint) => complaint.form_variant === "arbolado")
-      .map((complaint) => getExtraData(complaint).description_type)
-      .filter((value): value is string => typeof value === "string" && !!value);
+      .filter(isArboladoComplaint)
+      .map((complaint) => getArboladoDescription(getExtraData(complaint)))
+      .filter((value): value is string => !!value);
 
     return [...new Set(values)].sort();
   }, [complaints]);

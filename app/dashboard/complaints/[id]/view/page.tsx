@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,17 @@ type ComplaintWithDetails = Complaint & {
   loaded_by_user: UserType;
 };
 
+type ComplaintExtraData = {
+  department?: unknown;
+  description_type?: unknown;
+  level?: unknown;
+
+  depto?: unknown;
+  descripcion?: unknown;
+  nivel?: unknown;
+  agente?: unknown;
+};
+
 const FIELD_LABELS: Record<string, string> = {
   complaint_date: "Fecha de reclamo",
   resolution_date: "Fecha de resolución",
@@ -51,6 +63,41 @@ const FIELD_LABELS: Record<string, string> = {
   referred: "Derivado",
   latlon: "Lat/Lon",
   extra_data: "Datos adicionales",
+};
+
+const getExtraData = (complaint: Complaint): ComplaintExtraData => {
+  if (
+    complaint.extra_data &&
+    typeof complaint.extra_data === "object" &&
+    !Array.isArray(complaint.extra_data)
+  ) {
+    return complaint.extra_data as ComplaintExtraData;
+  }
+
+  return {};
+};
+
+const getArboladoDepartment = (extra: ComplaintExtraData) => {
+  if (typeof extra.department === "string") return extra.department;
+  if (typeof extra.depto === "string") return extra.depto;
+  return "";
+};
+
+const getArboladoLevel = (extra: ComplaintExtraData) => {
+  if (typeof extra.level === "string") return extra.level;
+  if (typeof extra.nivel === "string") return extra.nivel;
+  return "";
+};
+
+const getArboladoDescription = (extra: ComplaintExtraData) => {
+  if (typeof extra.description_type === "string") return extra.description_type;
+  if (typeof extra.descripcion === "string") return extra.descripcion;
+  return "";
+};
+
+const getArboladoAgent = (extra: ComplaintExtraData) => {
+  if (typeof extra.agente === "string") return extra.agente;
+  return "";
 };
 
 export default function ComplaintViewPage() {
@@ -220,6 +267,13 @@ export default function ComplaintViewPage() {
     complaint.form_variant === "arbolado" ||
     serviceName.toLowerCase().includes("arbol");
 
+  const extra = getExtraData(complaint);
+
+  const arboladoDepartment = getArboladoDepartment(extra);
+  const arboladoLevel = getArboladoLevel(extra);
+  const arboladoDescription = getArboladoDescription(extra);
+  const arboladoAgent = getArboladoAgent(extra);
+
   const displayComplaintNumber = cleanValue(
     isArbolado
       ? complaint.arbolado_number ?? complaint.complaint_number
@@ -317,20 +371,39 @@ export default function ComplaintViewPage() {
         <CardContent>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <InfoField
-              label="Servicio"
-              value={cleanValue(complaint.service?.name)}
-            />
-
-            <InfoField label="Causa" value={cleanValue(complaint.cause?.name)} />
-
-            <InfoField
-              label={isZyV ? "Tipo de domicilio" : "Zona"}
-              value={cleanValue(complaint.zone)}
+              label={isArbolado ? "Depto" : "Servicio"}
+              value={
+                isArbolado
+                  ? cleanValue(arboladoDepartment || complaint.service?.name)
+                  : cleanValue(complaint.service?.name)
+              }
             />
 
             <InfoField
-              label="Desde Cuándo"
-              value={cleanValue(complaint.since_when)}
+              label={isArbolado ? "Descripción" : "Causa"}
+              value={
+                isArbolado
+                  ? cleanValue(arboladoDescription || complaint.cause?.name)
+                  : cleanValue(complaint.cause?.name)
+              }
+            />
+
+            <InfoField
+              label={isZyV ? "Tipo de domicilio" : isArbolado ? "Nivel" : "Zona"}
+              value={
+                isArbolado
+                  ? cleanValue(arboladoLevel || complaint.since_when)
+                  : cleanValue(complaint.zone)
+              }
+            />
+
+            <InfoField
+              label={isArbolado ? "Agente" : "Desde Cuándo"}
+              value={
+                isArbolado
+                  ? cleanValue(arboladoAgent)
+                  : cleanValue(complaint.since_when)
+              }
               icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
             />
 
@@ -459,7 +532,7 @@ function InfoField({
 }: {
   label: string;
   value: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div>
