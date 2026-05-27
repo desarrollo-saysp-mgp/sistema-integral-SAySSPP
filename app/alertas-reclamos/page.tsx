@@ -7,7 +7,7 @@ export default async function AlertasReclamosPage() {
   const data = await getAlerts();
 
   return (
-    <main className="min-h-screen bg-[#F8FAF9] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <div>
           <Link
@@ -24,11 +24,11 @@ export default async function AlertasReclamosPage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold text-[#1F2937]">
+              <h1 className="text-2xl font-bold text-foreground">
                 Alertas de reclamos
               </h1>
 
-              <p className="text-sm text-[#6B7280]">
+              <p className="text-sm text-muted-foreground">
                 Reclamos que requieren atención según reglas automáticas.
               </p>
             </div>

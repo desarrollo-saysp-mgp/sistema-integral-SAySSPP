@@ -102,7 +102,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredAlerts.length / alertsPerPage),
+    Math.ceil(filteredAlerts.length / alertsPerPage)
   );
 
   const paginatedAlerts = useMemo(() => {
@@ -124,11 +124,11 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
   ]);
 
   const highAlerts = filteredAlerts.filter(
-    (alert) => alert.severity === "high",
+    (alert) => alert.severity === "high"
   );
 
   const mediumAlerts = filteredAlerts.filter(
-    (alert) => alert.severity === "medium",
+    (alert) => alert.severity === "medium"
   );
 
   const hasActiveFilters =
@@ -220,26 +220,26 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
 
   const getSeverityClass = (severity: AlertSeverity) => {
     if (severity === "high") {
-      return "border-red-200 bg-red-50 text-red-700";
+      return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300";
     }
 
     if (severity === "medium") {
-      return "border-yellow-200 bg-yellow-50 text-yellow-700";
+      return "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/60 dark:bg-yellow-950/40 dark:text-yellow-300";
     }
 
-    return "border-blue-200 bg-blue-50 text-blue-700";
+    return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300";
   };
 
   const getIconClass = (severity: AlertSeverity) => {
     if (severity === "high") {
-      return "bg-red-100 text-red-600";
+      return "bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300";
     }
 
     if (severity === "medium") {
-      return "bg-yellow-100 text-yellow-600";
+      return "bg-yellow-100 text-yellow-600 dark:bg-yellow-950/50 dark:text-yellow-300";
     }
 
-    return "bg-blue-100 text-blue-600";
+    return "bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300";
   };
 
   const { start, end } = getVisibleRangeText();
@@ -251,14 +251,14 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
         <button
           type="button"
           onClick={() => handleSummaryFilter("all")}
-          className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#00A27F] hover:shadow-md ${
+          className={`rounded-2xl border bg-card p-5 text-left text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-[#00A27F] hover:shadow-md ${
             severityFilter === "all"
               ? "border-[#00A27F] ring-2 ring-[#00A27F]/15"
-              : "border-[#D8E3DE]"
+              : "border-border"
           }`}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-[#6B7280]">
+            <p className="text-sm font-medium text-muted-foreground">
               Alertas activas
             </p>
 
@@ -267,11 +267,11 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
             </div>
           </div>
 
-          <p className="mt-4 text-3xl font-bold text-[#1F2937]">
+          <p className="mt-4 text-3xl font-bold text-foreground">
             {filteredAlerts.length}
           </p>
 
-          <p className="mt-1 text-sm text-[#6B7280]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Ver todas las alertas
           </p>
         </button>
@@ -279,27 +279,27 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
         <button
           type="button"
           onClick={() => handleSummaryFilter("high")}
-          className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md ${
+          className={`rounded-2xl border bg-card p-5 text-left text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md ${
             severityFilter === "high"
-              ? "border-red-300 ring-2 ring-red-100"
-              : "border-[#D8E3DE]"
+              ? "border-red-300 ring-2 ring-red-100 dark:ring-red-950/50"
+              : "border-border"
           }`}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-[#6B7280]">
+            <p className="text-sm font-medium text-muted-foreground">
               Prioridad alta
             </p>
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300">
               <AlertTriangle className="h-4 w-4" />
             </div>
           </div>
 
-          <p className="mt-4 text-3xl font-bold text-red-600">
+          <p className="mt-4 text-3xl font-bold text-red-600 dark:text-red-300">
             {highAlerts.length}
           </p>
 
-          <p className="mt-1 text-sm text-[#6B7280]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Reclamos demorados o críticos
           </p>
         </button>
@@ -307,69 +307,69 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
         <button
           type="button"
           onClick={() => handleSummaryFilter("medium")}
-          className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-md ${
+          className={`rounded-2xl border bg-card p-5 text-left text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-md ${
             severityFilter === "medium"
-              ? "border-yellow-300 ring-2 ring-yellow-100"
-              : "border-[#D8E3DE]"
+              ? "border-yellow-300 ring-2 ring-yellow-100 dark:ring-yellow-950/50"
+              : "border-border"
           }`}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-[#6B7280]">
+            <p className="text-sm font-medium text-muted-foreground">
               Prioridad media
             </p>
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-100 text-yellow-600 dark:bg-yellow-950/50 dark:text-yellow-300">
               <ClipboardList className="h-4 w-4" />
             </div>
           </div>
 
-          <p className="mt-4 text-3xl font-bold text-yellow-600">
+          <p className="mt-4 text-3xl font-bold text-yellow-600 dark:text-yellow-300">
             {mediumAlerts.length}
           </p>
 
-          <p className="mt-1 text-sm text-[#6B7280]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Acumulación por servicio o zona
           </p>
         </button>
       </section>
 
-      <section className="rounded-2xl border border-[#D8E3DE] bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center gap-2 border-b border-[#D8E3DE] pb-3">
-          <Filter className="h-4 w-4 text-[#6B7280]" />
+      <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+        <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
+          <Filter className="h-4 w-4 text-muted-foreground" />
 
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[#6B7280]">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Filtros
           </h2>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <div className="lg:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-[#374151]">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Buscar
             </label>
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
               <input
                 type="text"
                 placeholder="Nombre, reclamo, servicio..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-10 w-full rounded-xl border border-[#D8E3DE] bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
+                className="h-10 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#374151]">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Servicio
             </label>
 
             <select
               value={serviceFilter}
               onChange={(e) => setServiceFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#D8E3DE] bg-white px-3 text-sm outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
             >
               <option value="all">Todos</option>
 
@@ -382,7 +382,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#374151]">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Prioridad
             </label>
 
@@ -393,7 +393,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
                 setExpandedAlertId(null);
                 setCurrentPage(1);
               }}
-              className="h-10 w-full rounded-xl border border-[#D8E3DE] bg-white px-3 text-sm outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
             >
               <option value="all">Todas</option>
               <option value="high">Alta</option>
@@ -403,7 +403,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#374151]">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Desde
             </label>
 
@@ -411,12 +411,12 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
               type="date"
               value={dateFromFilter}
               onChange={(e) => setDateFromFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#D8E3DE] bg-white px-3 text-sm outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#374151]">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Hasta
             </label>
 
@@ -424,7 +424,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
               type="date"
               value={dateToFilter}
               onChange={(e) => setDateToFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#D8E3DE] bg-white px-3 text-sm outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-[#00A27F] focus:ring-2 focus:ring-[#00A27F]/15"
             />
           </div>
         </div>
@@ -434,7 +434,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
             <button
               type="button"
               onClick={clearFilters}
-              className="rounded-xl border border-[#D8E3DE] bg-white px-4 py-2 text-sm font-medium text-[#374151] transition hover:bg-[#F9FAFB]"
+              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             >
               Limpiar filtros
             </button>
@@ -442,7 +442,7 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
         )}
       </section>
 
-      <div className="flex flex-col gap-1 text-sm text-[#6B7280] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>
           {filteredAlerts.length} alerta
           {filteredAlerts.length !== 1 ? "s" : ""} encontrada
@@ -456,13 +456,13 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
         )}
       </div>
 
-      <section className="rounded-2xl border border-[#D8E3DE] bg-white shadow-sm">
-        <div className="border-b border-[#D8E3DE] px-5 py-4">
-          <h2 className="text-lg font-semibold text-[#1F2937]">
+      <section className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-lg font-semibold text-foreground">
             Listado detallado
           </h2>
 
-          <p className="mt-1 text-sm text-[#6B7280]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Se muestran las alertas activas en base al estado actual de los
             reclamos.
           </p>
@@ -474,16 +474,16 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
               <Bell className="h-6 w-6" />
             </div>
 
-            <h3 className="mt-4 font-semibold text-[#1F2937]">
+            <h3 className="mt-4 font-semibold text-foreground">
               No hay alertas con esos filtros
             </h3>
 
-            <p className="mt-1 text-sm text-[#6B7280]">
+            <p className="mt-1 text-sm text-muted-foreground">
               Probá limpiar los filtros o cambiar los criterios de búsqueda.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-[#E5E7EB]">
+          <div className="divide-y divide-border">
             {paginatedAlerts.map((alert) => {
               const hasRelatedComplaints =
                 !!alert.relatedComplaints &&
@@ -495,13 +495,13 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
                 <article
                   className={`flex gap-4 p-5 transition ${
                     alert.complaintId
-                      ? "cursor-pointer hover:bg-[#F9FAFB]"
-                      : "hover:bg-[#F9FAFB]"
+                      ? "cursor-pointer hover:bg-muted/50"
+                      : "hover:bg-muted/50"
                   }`}
                 >
                   <div
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${getIconClass(
-                      alert.severity,
+                      alert.severity
                     )}`}
                   >
                     {alert.zone ? (
@@ -513,44 +513,44 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="font-semibold text-[#1F2937]">
+                      <h3 className="font-semibold text-foreground">
                         {alert.title}
                       </h3>
 
                       <span
                         className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${getSeverityClass(
-                          alert.severity,
+                          alert.severity
                         )}`}
                       >
                         Prioridad {getSeverityLabel(alert.severity)}
                       </span>
                     </div>
 
-                    <p className="mt-2 text-sm text-[#4B5563]">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       {alert.description}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#6B7280]">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       {alert.complainantName && (
-                        <span className="rounded-full bg-[#F3F4F6] px-3 py-1">
+                        <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
                           Nombre: {alert.complainantName}
                         </span>
                       )}
 
                       {alert.serviceName && (
-                        <span className="rounded-full bg-[#F3F4F6] px-3 py-1">
+                        <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
                           Servicio: {alert.serviceName}
                         </span>
                       )}
 
                       {alert.zone && (
-                        <span className="rounded-full bg-[#F3F4F6] px-3 py-1">
+                        <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
                           Zona: {alert.zone}
                         </span>
                       )}
 
                       {alert.count && (
-                        <span className="rounded-full bg-[#F3F4F6] px-3 py-1">
+                        <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
                           Cantidad: {alert.count}
                         </span>
                       )}
@@ -586,14 +586,14 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
                     </div>
 
                     {isExpanded && hasRelatedComplaints && (
-                      <div className="mt-4 w-full rounded-2xl border border-[#D8E3DE] bg-[#F8FAF9] p-4">
+                      <div className="mt-4 w-full rounded-2xl border border-border bg-muted/30 p-4">
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-[#1F2937]">
+                            <p className="text-sm font-semibold text-foreground">
                               Reclamos incluidos en esta alerta
                             </p>
 
-                            <p className="text-xs text-[#6B7280]">
+                            <p className="text-xs text-muted-foreground">
                               Se encontraron {alert.relatedComplaints?.length}{" "}
                               reclamos que generaron esta alerta.
                             </p>
@@ -605,20 +605,20 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
                             <Link
                               key={complaint.id}
                               href={`/dashboard/complaints/${complaint.id}/view`}
-                              className="group rounded-xl border border-[#E5E7EB] bg-white p-3 text-sm transition hover:border-[#00A27F] hover:bg-[#00A27F]/5"
+                              className="group rounded-xl border border-border bg-card p-3 text-sm transition hover:border-[#00A27F] hover:bg-[#00A27F]/5"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="truncate font-semibold text-[#1F2937]">
+                                  <p className="truncate font-semibold text-foreground">
                                     Reclamo #
                                     {complaint.complaintNumber ?? complaint.id}
                                   </p>
 
-                                  <p className="mt-1 truncate text-xs text-[#6B7280]">
+                                  <p className="mt-1 truncate text-xs text-muted-foreground">
                                     {complaint.complainantName || "Sin nombre"}
                                   </p>
 
-                                  <p className="mt-1 text-xs text-[#6B7280]">
+                                  <p className="mt-1 text-xs text-muted-foreground">
                                     {complaint.complaintDate || "Sin fecha"} ·{" "}
                                     {complaint.status || "Sin estado"}
                                   </p>
@@ -657,12 +657,12 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
       </section>
 
       {filteredAlerts.length > alertsPerPage && (
-        <div className="flex flex-col gap-3 rounded-xl border border-[#D8E3DE] bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-[#6B7280]">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-muted-foreground">
             Mostrando{" "}
-            <span className="font-medium text-[#1F2937]">{start}</span> a{" "}
-            <span className="font-medium text-[#1F2937]">{end}</span> de{" "}
-            <span className="font-medium text-[#1F2937]">
+            <span className="font-medium text-foreground">{start}</span> a{" "}
+            <span className="font-medium text-foreground">{end}</span> de{" "}
+            <span className="font-medium text-foreground">
               {filteredAlerts.length}
             </span>{" "}
             alertas
@@ -694,7 +694,9 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
                 </Button>
 
                 {pageNumbers[0] > 2 && (
-                  <span className="px-1 text-sm text-[#6B7280]">...</span>
+                  <span className="px-1 text-sm text-muted-foreground">
+                    ...
+                  </span>
                 )}
               </>
             )}
@@ -715,7 +717,9 @@ export function AlertsPageClient({ alerts }: AlertsPageClientProps) {
             {pageNumbers[pageNumbers.length - 1] < totalPages && (
               <>
                 {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
-                  <span className="px-1 text-sm text-[#6B7280]">...</span>
+                  <span className="px-1 text-sm text-muted-foreground">
+                    ...
+                  </span>
                 )}
 
                 <Button
