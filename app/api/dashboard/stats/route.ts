@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 
 const normalizeName = (value?: string | null) =>
   (value || "")
@@ -10,9 +12,23 @@ const normalizeName = (value?: string | null) =>
 const buildRoleOrFilter = (items: Array<string | null>) =>
   items.filter(Boolean).join(",");
 
-export async function GET() {
+const isServiciosPublicosService = (serviceName?: string | null) => {
+  const name = normalizeName(serviceName);
+
+  return (
+    name.includes("barrido") ||
+    name.includes("riego") ||
+    name.includes("motonivelacion") ||
+    name.includes("canales y desagues")
+  );
+};
+
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+
+    const { searchParams } = new URL(request.url);
+    const scope = searchParams.get("scope");
 
     const {
       data: { user },
@@ -25,7 +41,7 @@ export async function GET() {
 
     const { data: currentUser, error: userError } = await supabase
       .from("users")
-      .select("role")
+      .select("role, email")
       .eq("id", user.id)
       .single();
 
@@ -36,10 +52,15 @@ export async function GET() {
       );
     }
 
+    const userEmail = (currentUser.email || user.email || "").toLowerCase();
+
+    const isServiciosPublicosUser =
+      userEmail === SERVICIOS_PUBLICOS_EMAIL ||
+      scope === "servicios-publicos";
+
     const { data: serviceRoles } = await supabase
       .from("services")
-      .select("id, name")
-      .or("name.ilike.%Arbolado%,name.ilike.%Zoonosis%,name.ilike.%Vectores%");
+      .select("id, name");
 
     const arboladoServiceIds =
       serviceRoles
@@ -54,7 +75,20 @@ export async function GET() {
         })
         .map((service) => service.id) ?? [];
 
+    const serviciosPublicosServiceIds =
+      serviceRoles
+        ?.filter((service) => isServiciosPublicosService(service.name))
+        .map((service) => service.id) ?? [];
+
     const applyRoleFilter = <T>(query: T): T => {
+      if (isServiciosPublicosUser) {
+        if (!serviciosPublicosServiceIds.length) {
+          return (query as any).eq("service_id", -1);
+        }
+
+        return (query as any).in("service_id", serviciosPublicosServiceIds);
+      }
+
       if (currentUser.role === "ReclamosArbolado") {
         return (query as any).or(
           buildRoleOrFilter([

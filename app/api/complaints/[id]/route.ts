@@ -45,6 +45,24 @@ const normalizeValue = (value: unknown): string | null => {
 const hasOwn = (object: Record<string, unknown>, key: string) =>
   Object.prototype.hasOwnProperty.call(object, key);
 
+const normalizeServiceText = (value: unknown) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const isServiciosPublicosAllowedService = (serviceName: unknown) => {
+  const normalized = normalizeServiceText(serviceName);
+
+  return (
+    normalized.includes("barrido") ||
+    normalized.includes("riego") ||
+    normalized.includes("motonivelacion") ||
+    normalized.includes("canales y desagues")
+  );
+};
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -137,7 +155,7 @@ export async function PATCH(
 
     const { data: currentUser, error: userError } = await supabase
       .from("users")
-      .select("role")
+      .select("role, email")
       .eq("id", authUser.id)
       .single();
 
@@ -239,6 +257,30 @@ export async function PATCH(
     const formVariant =
       body.form_variant || currentComplaint.form_variant || "general";
 
+    const isServiciosPublicosUser =
+      String(currentUser.email || "").toLowerCase() ===
+      "adm.serviciospublicos.mgp@gmail.com";
+
+    const hasSPTrackingFields =
+      hasOwn(body, "sp_seen") ||
+      hasOwn(body, "sp_observations") ||
+      hasOwn(body, "sp_resolution_date");
+
+    if (isServiciosPublicosUser) {
+      const { data: serviceRow, error: serviceError } = await supabase
+        .from("services")
+        .select("name")
+        .eq("id", currentComplaint.service_id)
+        .single();
+
+      if (serviceError || !isServiciosPublicosAllowedService(serviceRow?.name)) {
+        return NextResponse.json(
+          { error: "No tenés permisos para modificar este servicio" },
+          { status: 403 },
+        );
+      }
+    }
+
     const updateData: ComplaintUpdate = {};
 
     const hasResolutionDate =
@@ -247,6 +289,26 @@ export async function PATCH(
     const rawResolutionDate = hasOwn(body, "resolution_date")
       ? body.resolution_date
       : body.resolutionDate;
+
+    if (isServiciosPublicosUser) {
+      const allowedKeys = new Set([
+        "status",
+        "resolution_date",
+        "resolutionDate",
+        "sp_seen",
+        "sp_observations",
+        "sp_resolution_date",
+      ]);
+
+      const invalidKeys = Object.keys(body).filter((key) => !allowedKeys.has(key));
+
+      if (invalidKeys.length > 0) {
+        return NextResponse.json(
+          { error: "Esta cuenta solo puede guardar seguimiento del reclamo" },
+          { status: 403 },
+        );
+      }
+    }
 
     if (body.complainant_name !== undefined) {
       updateData.complainant_name = body.complainant_name
@@ -437,6 +499,44 @@ export async function PATCH(
       updateData.extra_data = nextExtraData;
     }
 
+    if (hasSPTrackingFields || (isServiciosPublicosUser && hasResolutionDate)) {
+      const currentExtraData =
+        currentComplaint.extra_data &&
+        typeof currentComplaint.extra_data === "object"
+          ? currentComplaint.extra_data
+          : {};
+
+      const nextExtraData = {
+        ...currentExtraData,
+        ...(updateData.extra_data && typeof updateData.extra_data === "object"
+          ? updateData.extra_data
+          : {}),
+      } as Record<string, unknown>;
+
+      if (body.sp_seen !== undefined) {
+        nextExtraData.sp_seen = Boolean(body.sp_seen);
+      }
+
+      if (body.sp_observations !== undefined) {
+        nextExtraData.sp_observations = body.sp_observations
+          ? String(body.sp_observations).trim()
+          : null;
+      }
+
+      if (body.sp_resolution_date !== undefined) {
+        nextExtraData.sp_resolution_date = body.sp_resolution_date
+          ? String(body.sp_resolution_date).trim()
+          : null;
+      } else if (isServiciosPublicosUser && hasResolutionDate) {
+        nextExtraData.sp_resolution_date =
+          rawResolutionDate && String(rawResolutionDate).trim()
+            ? String(rawResolutionDate).trim()
+            : null;
+      }
+
+      updateData.extra_data = nextExtraData;
+    }
+
     const addressChanged =
       body.address !== undefined &&
       (body.address ? body.address.trim() : "") !==
@@ -596,7 +696,7 @@ export async function DELETE(
 
     const { data: currentUser, error: userError } = await supabase
       .from("users")
-      .select("role")
+      .select("role, email")
       .eq("id", authUser.id)
       .single();
 

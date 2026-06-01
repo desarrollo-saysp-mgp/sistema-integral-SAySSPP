@@ -17,6 +17,8 @@ import {
   Clock,
   CalendarDays,
   History,
+  Eye,
+  MessageSquareText,
 } from "lucide-react";
 import type {
   Complaint,
@@ -42,6 +44,10 @@ type ComplaintExtraData = {
   descripcion?: unknown;
   nivel?: unknown;
   agente?: unknown;
+
+  sp_seen?: unknown;
+  sp_observations?: unknown;
+  sp_resolution_date?: unknown;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -100,11 +106,44 @@ const getArboladoAgent = (extra: ComplaintExtraData) => {
   return "";
 };
 
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isServiciosPublicosService = (serviceName: string) => {
+  const normalized = normalizeText(serviceName);
+
+  return (
+    normalized.includes("barrido") ||
+    normalized.includes("riego") ||
+    normalized.includes("motonivelacion") ||
+    normalized.includes("canales y desagues")
+  );
+};
+
+const getSPTrackingData = (extra: ComplaintExtraData) => {
+  return {
+    seen: extra.sp_seen === true,
+    observations:
+      typeof extra.sp_observations === "string" ? extra.sp_observations : "",
+    resolutionDate:
+      typeof extra.sp_resolution_date === "string"
+        ? extra.sp_resolution_date
+        : "",
+  };
+};
+
 export default function ComplaintViewPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
   const { profile } = useUser();
+
+  const isServiciosPublicosUser =
+    profile?.email?.toLowerCase() === "adm.serviciospublicos.mgp@gmail.com";
 
   const [complaint, setComplaint] = useState<ComplaintWithDetails | null>(null);
   const [history, setHistory] = useState<ComplaintHistoryWithUser[]>([]);
@@ -164,13 +203,6 @@ export default function ComplaintViewPage() {
   };
 
   const handleBack = () => {
-    /*
-      IMPORTANTE:
-      Usamos router.back() para volver exactamente a la URL anterior.
-      Así, si venías desde:
-      /dashboard/complaints?buscar=anonimo&servicio=5
-      vuelve con esos filtros cargados.
-    */
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
@@ -224,10 +256,69 @@ export default function ComplaintViewPage() {
     });
   };
 
-  const formatHistoryValue = (value: string | null) => {
+  const formatBoolean = (value: boolean) => (value ? "Sí" : "No");
+
+  const formatJsonHistoryValue = (value: string | null) => {
+    if (!value || value === "-") return "-";
+
+    try {
+      const parsed = JSON.parse(value);
+
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return value;
+      }
+
+      const data = parsed as ComplaintExtraData;
+
+      const lines: string[] = [];
+
+      if ("sp_seen" in data) {
+        lines.push(`Visto: ${data.sp_seen === true ? "Sí" : "No"}`);
+      }
+
+      if ("sp_resolution_date" in data) {
+        lines.push(
+          `Fecha de resolución: ${
+            typeof data.sp_resolution_date === "string" &&
+            data.sp_resolution_date
+              ? formatDateOnly(data.sp_resolution_date)
+              : "-"
+          }`
+        );
+      }
+
+      if ("sp_observations" in data) {
+        lines.push(
+          `Observaciones: ${
+            typeof data.sp_observations === "string" &&
+            data.sp_observations.trim()
+              ? data.sp_observations
+              : "-"
+          }`
+        );
+      }
+
+      if (lines.length > 0) {
+        return lines.join("\n");
+      }
+
+      return Object.entries(parsed)
+        .map(([key, itemValue]) => `${key}: ${String(itemValue ?? "-")}`)
+        .join("\n");
+    } catch {
+      return value;
+    }
+  };
+
+  const formatHistoryValue = (value: string | null, fieldName?: string) => {
     if (value === null || value === "") return "-";
     if (value === "true") return "Sí";
     if (value === "false") return "No";
+
+    if (fieldName === "extra_data") {
+      return formatJsonHistoryValue(value);
+    }
+
     return value;
   };
 
@@ -274,6 +365,14 @@ export default function ComplaintViewPage() {
   const arboladoDescription = getArboladoDescription(extra);
   const arboladoAgent = getArboladoAgent(extra);
 
+  const spTracking = getSPTrackingData(extra);
+
+  const shouldShowSPTracking =
+    isServiciosPublicosService(serviceName) ||
+    "sp_seen" in extra ||
+    "sp_observations" in extra ||
+    "sp_resolution_date" in extra;
+
   const displayComplaintNumber = cleanValue(
     isArbolado
       ? complaint.arbolado_number ?? complaint.complaint_number
@@ -315,10 +414,12 @@ export default function ComplaintViewPage() {
           </p>
         </div>
 
-        <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
-          <Pencil className="mr-2 h-4 w-4" />
-          Editar Reclamo
-        </Button>
+        {!isServiciosPublicosUser && (
+          <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Editar Reclamo
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -455,6 +556,44 @@ export default function ComplaintViewPage() {
             />
           </div>
 
+          {shouldShowSPTracking && (
+            <div className="mt-5 rounded-xl border bg-muted/20 p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <Eye className="h-4 w-4 text-[#00A27F]" />
+                <h3 className="text-sm font-semibold">
+                  Seguimiento de Servicios Públicos
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+                <InfoField
+                  label="Visto"
+                  value={formatBoolean(spTracking.seen)}
+                />
+
+                <InfoField
+                  label="Fecha de resolución"
+                  value={formatDateOnly(spTracking.resolutionDate)}
+                />
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Observaciones
+                  </p>
+                </div>
+
+                <p className="min-h-[44px] whitespace-pre-wrap rounded-md bg-background p-3 text-sm leading-relaxed">
+                  {spTracking.observations.trim()
+                    ? spTracking.observations
+                    : "-"}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 border-t pt-4">
             <div className="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2">
               <p className="text-xs text-muted-foreground">
@@ -501,14 +640,14 @@ export default function ComplaintViewPage() {
                       </span>
                     </p>
 
-                    <p className="text-sm text-muted-foreground">
+                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                       <span className="font-medium">Antes:</span>{" "}
-                      {formatHistoryValue(item.old_value)}
+                      {formatHistoryValue(item.old_value, item.field_name)}
                     </p>
 
-                    <p className="text-sm text-muted-foreground">
+                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                       <span className="font-medium">Después:</span>{" "}
-                      {formatHistoryValue(item.new_value)}
+                      {formatHistoryValue(item.new_value, item.field_name)}
                     </p>
 
                     <p className="pt-1 text-xs text-muted-foreground">

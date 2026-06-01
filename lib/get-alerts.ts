@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 
 type AlertSeverity = "high" | "medium" | "low";
 
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
 export type RelatedComplaintAlert = {
   id: number;
   complaintNumber: number | string | null;
@@ -69,6 +71,17 @@ const normalizeName = (value?: string | null) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+function isServiciosPublicosService(serviceName?: string | null) {
+  const name = normalizeName(serviceName);
+
+  return (
+    name.includes("barrido") ||
+    name.includes("riego") ||
+    name.includes("motonivelacion") ||
+    name.includes("canales y desagues")
+  );
+}
+
 export async function getAlerts() {
   const supabase = await createClient();
 
@@ -79,29 +92,36 @@ export async function getAlerts() {
   } = await supabase.auth.getUser();
 
   let currentUserRole: string | null = null;
+  let currentUserEmail = user?.email?.toLowerCase() ?? "";
 
   if (user?.id) {
     const { data: userProfile } = await supabase
       .from("users")
-      .select("role")
+      .select("role, email")
       .eq("id", user.id)
       .maybeSingle();
 
     currentUserRole = userProfile?.role ?? null;
+    currentUserEmail =
+      userProfile?.email?.toLowerCase() ?? user?.email?.toLowerCase() ?? "";
   }
+
+  const isServiciosPublicosUser =
+    currentUserEmail === SERVICIOS_PUBLICOS_EMAIL;
 
   const isArboladoUser = currentUserRole === "ReclamosArbolado";
   const isZyvUser = currentUserRole === "ReclamosZyV";
-  const isGeneralClaimsUser = currentUserRole === "Reclamos";
+  const isGeneralClaimsUser =
+    currentUserRole === "Reclamos" && !isServiciosPublicosUser;
 
   let arboladoServiceIds: number[] = [];
   let zyvServiceIds: number[] = [];
+  let serviciosPublicosServiceIds: number[] = [];
 
-  if (isArboladoUser || isZyvUser) {
+  if (isArboladoUser || isZyvUser || isServiciosPublicosUser) {
     const { data: roleServices, error: roleServicesError } = await supabase
       .from("services")
-      .select("id, name")
-      .or("name.ilike.%Arbol%,name.ilike.%Zoonosis%,name.ilike.%Vectores%");
+      .select("id, name");
 
     if (roleServicesError) {
       throw new Error(roleServicesError.message);
@@ -120,6 +140,11 @@ export async function getAlerts() {
         })
         .map((service) => service.id) ?? [];
 
+    serviciosPublicosServiceIds =
+      roleServices
+        ?.filter((service) => isServiciosPublicosService(service.name))
+        .map((service) => service.id) ?? [];
+
     if (isArboladoUser && arboladoServiceIds.length === 0) {
       return {
         total: 0,
@@ -133,7 +158,43 @@ export async function getAlerts() {
         alerts: [],
       };
     }
+
+    if (isServiciosPublicosUser && serviciosPublicosServiceIds.length === 0) {
+      return {
+        total: 0,
+        alerts: [],
+      };
+    }
   }
+
+  const applyUserScope = <T>(query: T): T => {
+    if (isServiciosPublicosUser) {
+      return (query as any).in(
+        "service_id",
+        serviciosPublicosServiceIds,
+      ) as T;
+    }
+
+    if (isArboladoUser) {
+      return (query as any).or(
+        `form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`,
+      ) as T;
+    }
+
+    if (isZyvUser) {
+      return (query as any).or(
+        `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`,
+      ) as T;
+    }
+
+    if (isGeneralClaimsUser) {
+      return (query as any).or(
+        "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+      ) as T;
+    }
+
+    return query;
+  };
 
   const today = new Date();
   const todayStart = new Date(today);
@@ -168,21 +229,7 @@ export async function getAlerts() {
     .lte("complaint_date", sevenDaysAgo.toISOString().split("T")[0])
     .order("complaint_date", { ascending: true });
 
-  if (isArboladoUser) {
-    overdueQuery = overdueQuery
-      .or(`form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`) as typeof overdueQuery;
-  }
-
-  if (isZyvUser) {
-    overdueQuery = overdueQuery
-      .or(`form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`) as typeof overdueQuery;
-  }
-
-  if (isGeneralClaimsUser) {
-    overdueQuery = overdueQuery.or(
-      "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
-    ) as typeof overdueQuery;
-  }
+  overdueQuery = applyUserScope(overdueQuery);
 
   const { data: overdueComplaints, error: overdueError } = await overdueQuery;
 
@@ -229,21 +276,7 @@ export async function getAlerts() {
     .gte("complaint_date", todayString)
     .neq("status", "Resuelto");
 
-  if (isArboladoUser) {
-    todayQuery = todayQuery
-      .or(`form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`) as typeof todayQuery;
-  }
-
-  if (isZyvUser) {
-    todayQuery = todayQuery
-      .or(`form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`) as typeof todayQuery;
-  }
-
-  if (isGeneralClaimsUser) {
-    todayQuery = todayQuery.or(
-      "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
-    ) as typeof todayQuery;
-  }
+  todayQuery = applyUserScope(todayQuery);
 
   const { data: todayComplaints, error: todayError } = await todayQuery;
 
@@ -304,10 +337,10 @@ export async function getAlerts() {
 
   /*
     ALERTA 3:
-    Solo aplica a reclamos generales.
-    No aplica para Arbolado ni ZyV.
+    Solo aplica a reclamos generales comunes.
+    No aplica para Arbolado, ZyV ni Servicios Públicos.
   */
-  if (!isArboladoUser && !isZyvUser) {
+  if (!isArboladoUser && !isZyvUser && !isServiciosPublicosUser) {
     const openStatuses = ["Pendiente", "En proceso", "Derivado"];
 
     const allowedZoneAlertServices = ["Rec. Domiciliaria", "Rec. Especial"];

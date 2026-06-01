@@ -54,6 +54,8 @@ type CurrentUser = {
   module?: string;
 };
 
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
 const normalizeText = (value?: string | null) =>
   String(value ?? "")
     .normalize("NFD")
@@ -190,6 +192,12 @@ export default function StatsPage() {
     );
   }, [profile, currentUser]);
 
+  const isServiciosPublicosAccount = useMemo(() => {
+    const email = normalizeText(profile?.email || currentUser?.email);
+
+    return email === SERVICIOS_PUBLICOS_EMAIL;
+  }, [profile?.email, currentUser?.email]);
+
   const arboladoService = useMemo(() => {
     return services.find((service) =>
       normalizeText(service.name).includes("arbol"),
@@ -203,9 +211,26 @@ export default function StatsPage() {
     });
   }, [services]);
 
+  const serviciosPublicosServices = useMemo(() => {
+    return services.filter((service) => {
+      const name = normalizeText(service.name);
+
+      return (
+        name.includes("barrido") ||
+        name.includes("riego") ||
+        name.includes("motonivelacion") ||
+        name.includes("canales y desagues")
+      );
+    });
+  }, [services]);
+
   const visibleServices = useMemo(() => {
     if (isArboladoAccount) {
       return arboladoService ? [arboladoService] : [];
+    }
+
+    if (isServiciosPublicosAccount) {
+      return serviciosPublicosServices;
     }
 
     if (isZyvAccount) {
@@ -213,7 +238,15 @@ export default function StatsPage() {
     }
 
     return services;
-  }, [isArboladoAccount, isZyvAccount, arboladoService, zyvServices, services]);
+  }, [
+    isArboladoAccount,
+    isServiciosPublicosAccount,
+    isZyvAccount,
+    arboladoService,
+    serviciosPublicosServices,
+    zyvServices,
+    services,
+  ]);
 
   const effectiveServiceId = useMemo(() => {
     if (isArboladoAccount && arboladoService) {
@@ -226,6 +259,10 @@ export default function StatsPage() {
   const selectedServiceName = useMemo(() => {
     if (isArboladoAccount) return "Arbolado";
 
+    if (isServiciosPublicosAccount && serviceId === "all") {
+      return "Servicios Públicos";
+    }
+
     if (isZyvAccount && serviceId === "all") {
       return "Zoonosis y Vectores";
     }
@@ -236,7 +273,14 @@ export default function StatsPage() {
       services.find((service) => String(service.id) === effectiveServiceId)
         ?.name ?? "Todos"
     );
-  }, [effectiveServiceId, services, isArboladoAccount, isZyvAccount, serviceId]);
+  }, [
+    effectiveServiceId,
+    services,
+    isArboladoAccount,
+    isServiciosPublicosAccount,
+    isZyvAccount,
+    serviceId,
+  ]);
 
   const filterLabel = getFilterLabel({
     dateFrom,
@@ -318,7 +362,12 @@ export default function StatsPage() {
       if (dateTo) params.append("date_to", dateTo);
       if (status !== "all") params.append("status", status);
 
-      if (isZyvAccount && serviceId === "all") {
+      if (isServiciosPublicosAccount && serviceId === "all") {
+        params.append(
+          "service_ids",
+          serviciosPublicosServices.map((service) => service.id).join(","),
+        );
+      } else if (isZyvAccount && serviceId === "all") {
         params.append(
           "service_ids",
           zyvServices.map((service) => service.id).join(","),
@@ -360,13 +409,32 @@ export default function StatsPage() {
       return;
     }
 
-    if (isZyvAccount) {
+    if (isServiciosPublicosAccount || isZyvAccount) {
       setServiceId("all");
     }
-  }, [isArboladoAccount, isZyvAccount, arboladoService]);
+  }, [
+    isArboladoAccount,
+    isServiciosPublicosAccount,
+    isZyvAccount,
+    arboladoService,
+  ]);
 
   useEffect(() => {
     if (isArboladoAccount && !arboladoService) return;
+    if (isServiciosPublicosAccount && serviciosPublicosServices.length === 0) {
+      setStats({
+        total: 0,
+        groupBy: "street",
+        grouped: [],
+        byStreet: [],
+        byService: [],
+        byCause: [],
+        byStatus: [],
+        byZone: [],
+      });
+      setLoading(false);
+      return;
+    }
     if (isZyvAccount && zyvServices.length === 0) return;
 
     const timeout = setTimeout(() => {
@@ -382,8 +450,10 @@ export default function StatsPage() {
     zone,
     effectiveServiceId,
     isArboladoAccount,
+    isServiciosPublicosAccount,
     isZyvAccount,
     arboladoService,
+    serviciosPublicosServices,
     zyvServices,
   ]);
 
@@ -504,9 +574,11 @@ export default function StatsPage() {
       doc.text(
         isArboladoAccount
           ? "Vista: Reclamos Arbolado"
-          : isZyvAccount
-            ? "Vista: Reclamos Zoonosis y Vectores"
-            : "Vista: General",
+          : isServiciosPublicosAccount
+            ? "Vista: Servicios Públicos"
+            : isZyvAccount
+              ? "Vista: Reclamos Zoonosis y Vectores"
+              : "Vista: General",
         14,
         38,
       );
@@ -567,9 +639,11 @@ export default function StatsPage() {
       doc.save(
         isArboladoAccount
           ? "estadisticas_reclamos_arbolado.pdf"
-          : isZyvAccount
-            ? "estadisticas_reclamos_zyv.pdf"
-            : "estadisticas_reclamos_general.pdf",
+          : isServiciosPublicosAccount
+            ? "estadisticas_reclamos_servicios_publicos.pdf"
+            : isZyvAccount
+              ? "estadisticas_reclamos_zyv.pdf"
+              : "estadisticas_reclamos_general.pdf",
       );
 
       toast.success("PDF exportado correctamente");
@@ -680,7 +754,11 @@ export default function StatsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">
-                      {isZyvAccount ? "Todos ZyV" : "Todos"}
+                      {isServiciosPublicosAccount
+                        ? "Todos Servicios Públicos"
+                        : isZyvAccount
+                          ? "Todos ZyV"
+                          : "Todos"}
                     </SelectItem>
 
                     {visibleServices.map((service) => (

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +22,7 @@ import {
 import { PageLoader } from "@/components/ui/page-loader";
 import { toast } from "sonner";
 import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
+import { useUser } from "@/hooks/useUser";
 
 type RecentComplaint = {
   id: number;
@@ -38,6 +45,8 @@ interface DashboardStats {
   unresolved: number;
   recentComplaints: RecentComplaint[];
 }
+
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 
 const formatDate = (dateString: string) => {
   if (!dateString) return "-";
@@ -132,36 +141,48 @@ const getDateTime = (dateString: string) => {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { profile } = useUser();
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  const fetchStats = useCallback(async (showLoader = true) => {
-    if (showLoader) {
-      setLoading(true);
-    }
+  const isServiciosPublicosUser =
+    profile?.email?.toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
 
-    try {
-      const response = await fetch("/api/dashboard/stats", {
-        cache: "no-store",
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.data) {
-        setStats(data.data);
-      } else {
-        toast.error(data.error || "Error al cargar estadísticas");
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-      toast.error("Error al cargar estadísticas");
-    } finally {
+  const fetchStats = useCallback(
+    async (showLoader = true) => {
       if (showLoader) {
-        setLoading(false);
+        setLoading(true);
       }
-    }
-  }, []);
+
+      try {
+        const url = isServiciosPublicosUser
+          ? "/api/dashboard/stats?scope=servicios-publicos"
+          : "/api/dashboard/stats";
+
+        const response = await fetch(url, {
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.data) {
+          setStats(data.data);
+        } else {
+          toast.error(data.error || "Error al cargar estadísticas");
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+        toast.error("Error al cargar estadísticas");
+      } finally {
+        if (showLoader) {
+          setLoading(false);
+        }
+      }
+    },
+    [isServiciosPublicosUser],
+  );
 
   useEffect(() => {
     void fetchStats();
@@ -201,14 +222,14 @@ export default function DashboardPage() {
   };
 
   const goToFilteredComplaints = (status?: string) => {
+    const baseUrl = "/dashboard/complaints";
+
     if (!status) {
-      navigateWithLoading("/dashboard/complaints");
+      navigateWithLoading(baseUrl);
       return;
     }
 
-    navigateWithLoading(
-      `/dashboard/complaints?status=${encodeURIComponent(status)}`,
-    );
+    navigateWithLoading(`${baseUrl}?status=${encodeURIComponent(status)}`);
   };
 
   if (loading) {
@@ -224,20 +245,25 @@ export default function DashboardPage() {
           <h1 className="text-4xl font-bold tracking-tight text-foreground">
             Dashboard
           </h1>
+
           <p className="mt-2 text-base text-muted-foreground">
-            Resumen general del sistema de reclamos
+            {isServiciosPublicosUser
+              ? "Seguimiento de reclamos de Servicios Públicos"
+              : "Resumen general del sistema de reclamos"}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={() => navigateWithLoading("/dashboard/complaints/new")}
-            className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
-            disabled={isPending}
-          >
-            <Plus className="mr-2 h-5 w-5" />
-            Nuevo Reclamo
-          </Button>
+          {!isServiciosPublicosUser && (
+            <Button
+              onClick={() => navigateWithLoading("/dashboard/complaints/new")}
+              className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
+              disabled={isPending}
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              Nuevo Reclamo
+            </Button>
+          )}
 
           <Button
             variant="outline"
@@ -270,16 +296,21 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-card-foreground">
               Total de Reclamos
             </CardTitle>
+
             <div className="rounded-full bg-[#00A27F]/10 p-2">
               <FileText className="h-4 w-4 text-[#00A27F]" />
             </div>
           </CardHeader>
+
           <CardContent>
             <div className="text-3xl font-bold text-card-foreground">
               {stats?.total || 0}
             </div>
+
             <p className="mt-2 text-sm text-muted-foreground">
-              Reclamos registrados
+              {isServiciosPublicosUser
+                ? "Reclamos de servicios públicos"
+                : "Reclamos registrados"}
             </p>
           </CardContent>
         </Card>
@@ -292,14 +323,17 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-card-foreground">
               En Proceso
             </CardTitle>
+
             <div className="rounded-full bg-[#FFF7E8] p-2 dark:bg-yellow-500/10">
               <Clock className="h-4 w-4 text-[#C48814] dark:text-yellow-300" />
             </div>
           </CardHeader>
+
           <CardContent>
             <div className="text-3xl font-bold text-[#C48814] dark:text-yellow-300">
               {stats?.inProgress || 0}
             </div>
+
             <p className="mt-2 text-sm text-muted-foreground">
               Pendientes de resolución
             </p>
@@ -314,14 +348,17 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-card-foreground">
               Resueltos
             </CardTitle>
+
             <div className="rounded-full bg-[#ECFDF7] p-2 dark:bg-emerald-500/10">
               <CheckCircle className="h-4 w-4 text-[#00A27F] dark:text-emerald-300" />
             </div>
           </CardHeader>
+
           <CardContent>
             <div className="text-3xl font-bold text-[#00A27F] dark:text-emerald-300">
               {stats?.resolved || 0}
             </div>
+
             <p className="mt-2 text-sm text-muted-foreground">
               Casos completados
             </p>
@@ -336,14 +373,17 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-card-foreground">
               No Resueltos
             </CardTitle>
+
             <div className="rounded-full bg-[#FFF0F3] p-2 dark:bg-rose-500/10">
               <XCircle className="h-4 w-4 text-[#D85C76] dark:text-rose-300" />
             </div>
           </CardHeader>
+
           <CardContent>
             <div className="text-3xl font-bold text-[#D85C76] dark:text-rose-300">
               {stats?.unresolved || 0}
             </div>
+
             <p className="mt-2 text-sm text-muted-foreground">
               Casos sin resolución
             </p>

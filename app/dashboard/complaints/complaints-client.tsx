@@ -24,6 +24,16 @@ import { useUser } from "@/hooks/useUser";
 const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
 const ZONE_OPTIONS = Array.from({ length: 16 }, (_, i) => String(i + 1));
 
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
+const SERVICIOS_PUBLICOS_KEYWORDS = [
+  "barrido",
+  "riego",
+  "motonivelacion",
+  "canales y desagues",
+];
+
+
 type ComplaintWithDetails = Complaint & {
   service: Service | null;
   cause: any | null;
@@ -140,6 +150,17 @@ const isZyvComplaint = (complaint: ComplaintWithDetails) => {
   );
 };
 
+const isServiciosPublicosServiceName = (serviceName: unknown) => {
+  const normalizedServiceName = normalizeText(serviceName);
+
+  return SERVICIOS_PUBLICOS_KEYWORDS.some((keyword) =>
+    normalizedServiceName.includes(keyword)
+  );
+};
+
+const isServiciosPublicosComplaint = (complaint: ComplaintWithDetails) =>
+  isServiciosPublicosServiceName(complaint.service?.name);
+
 const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
   complaint.form_variant === "general" ||
   complaint.form_variant === "import_excel" ||
@@ -174,6 +195,10 @@ export default function ComplaintsClient() {
   const isZyvUser = profile?.role === "ReclamosZyV";
   const isAdminUser =
     profile?.role === "Admin" || profile?.role === "AdminLectura";
+  const isServiciosPublicosUser =
+    normalizeText(profile?.email) === SERVICIOS_PUBLICOS_EMAIL;
+
+  const canCreateComplaints = !isServiciosPublicosUser;
 
   const getParam = useCallback(
     (key: string, fallback = "") => searchParams.get(key) || fallback,
@@ -343,12 +368,18 @@ export default function ComplaintsClient() {
           );
         }
 
+        if (isServiciosPublicosUser) {
+          activeServices = activeServices.filter((service: Service) =>
+            isServiciosPublicosServiceName(service.name)
+          );
+        }
+
         setServices(activeServices);
       }
     } catch (error) {
       console.error("Error fetching services:", error);
     }
-  }, [isZyvView, isArboladoView]);
+  }, [isZyvView, isArboladoView, isServiciosPublicosUser]);
 
   const fetchComplaints = useCallback(
     async (showLoader = true) => {
@@ -490,7 +521,12 @@ export default function ComplaintsClient() {
       sourceComplaints = complaints.filter(isZyvComplaint);
     }
 
+    if (isServiciosPublicosUser) {
+      sourceComplaints = complaints.filter(isServiciosPublicosComplaint);
+    }
+
     if (
+      !isServiciosPublicosUser &&
       !isArboladoView &&
       !isZyvView &&
       isAdminUser &&
@@ -553,6 +589,7 @@ export default function ComplaintsClient() {
     complaints,
     isArboladoView,
     isZyvView,
+    isServiciosPublicosUser,
     isAdminUser,
     variantFilter,
     searchTerm,
@@ -670,13 +707,15 @@ export default function ComplaintsClient() {
             </p>
           </div>
 
-          <Button
-            onClick={() => router.push("/dashboard/complaints/new")}
-            className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
-          >
-            <Plus className="mr-2 h-5 w-5" />
-            Nuevo Reclamo
-          </Button>
+          {canCreateComplaints && (
+            <Button
+              onClick={() => router.push("/dashboard/complaints/new")}
+              className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              Nuevo Reclamo
+            </Button>
+          )}
         </div>
 
         <Card>

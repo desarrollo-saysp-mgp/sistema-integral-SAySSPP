@@ -33,6 +33,7 @@ import {
   Loader2,
   MessageCircle,
   CalendarCheck,
+  ArrowUpDown,
   X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -42,6 +43,7 @@ import autoTable, { type CellHookData } from "jspdf-autotable";
 import { useUser } from "@/hooks/useUser";
 
 const ITEMS_PER_PAGE = 20;
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 
 const parseLocalDate = (dateStr: string): Date => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -76,6 +78,8 @@ interface ComplaintsTableProps {
   onStatusChange?: (complaintId: number, newStatus: string) => Promise<void>;
 }
 
+type SortOption = "fecha_desc" | "fecha_asc" | "numero_desc" | "numero_asc";
+
 type PdfStatusColors = {
   fillColor: [number, number, number];
   textColor: [number, number, number];
@@ -105,6 +109,10 @@ type ComplaintExtraData = {
 
   resolution_responsible?: unknown;
   responsable_de_resolucion?: unknown;
+
+  sp_seen?: unknown;
+  sp_observations?: unknown;
+  sp_resolution_date?: unknown;
 };
 
 const getExtraData = (complaint: Complaint): ComplaintExtraData => {
@@ -138,6 +146,19 @@ const getVisibleComplaintNumber = (complaint: ComplaintWithDetails) => {
   return complaint.arbolado_number ?? complaint.complaint_number ?? "-";
 };
 
+const getComplaintNumberForSort = (complaint: ComplaintWithDetails) => {
+  const visibleNumber = getVisibleComplaintNumber(complaint);
+  const numericValue = Number(visibleNumber);
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
+};
+
+const getComplaintDateForSort = (complaint: ComplaintWithDetails) => {
+  if (!complaint.complaint_date) return 0;
+
+  return parseLocalDate(complaint.complaint_date).getTime();
+};
+
 const getComplaintDisplayData = (
   complaint: ComplaintWithDetails,
   resolutionDateOverride?: string | null,
@@ -162,7 +183,9 @@ const getComplaintDisplayData = (
   const extraAgent = getStringExtraValue(extra, ["agente", "agent"]);
 
   const serviceLabel =
-    complaint.service?.name ?? extraDepartment ?? (isArbolado ? "Arbolado" : "-");
+    complaint.service?.name ??
+    extraDepartment ??
+    (isArbolado ? "Arbolado" : "-");
 
   const causeLabel = complaint.cause?.name ?? extraDescription ?? "-";
 
@@ -223,11 +246,18 @@ export function ComplaintsTable({
   const isReadOnly = profile?.role === "AdminLectura";
   const isArboladoUser = profile?.role === "ReclamosArbolado";
   const isZyVUser = profile?.role === "ReclamosZyV";
+  const isServiciosPublicosUser =
+    String(profile?.email || "")
+      .trim()
+      .toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
+
+  const canEditComplaint = !isReadOnly && !isServiciosPublicosUser;
 
   const canSendWhatsApp =
-    profile?.role === "Admin" ||
-    profile?.role === "Reclamos" ||
-    profile?.role === "ReclamosZyV";
+    !isServiciosPublicosUser &&
+    (profile?.role === "Admin" ||
+      profile?.role === "Reclamos" ||
+      profile?.role === "ReclamosZyV");
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
@@ -238,37 +268,53 @@ export function ComplaintsTable({
     Record<number, string | null>
   >({});
 
-  const [statusOverrides, setStatusOverrides] = useState<Record<number, string>>(
-    {},
-  );
+  const [statusOverrides, setStatusOverrides] = useState<
+    Record<number, string>
+  >({});
 
   const [resolutionModalComplaint, setResolutionModalComplaint] =
     useState<ComplaintWithDetails | null>(null);
 
   const [resolutionModalDate, setResolutionModalDate] = useState("");
+  const [resolutionModalSeen, setResolutionModalSeen] = useState(false);
+  const [resolutionModalObservations, setResolutionModalObservations] =
+    useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>([]);
+  const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>(
+    [],
+  );
+  const [sortOption, setSortOption] = useState<SortOption>("fecha_desc");
 
   const sortedComplaints = useMemo(() => {
     return [...complaints].sort((a, b) => {
-      const dateA = a.complaint_date
-        ? new Date(a.complaint_date).getTime()
-        : 0;
+      const dateA = getComplaintDateForSort(a);
+      const dateB = getComplaintDateForSort(b);
+      const numberA = getComplaintNumberForSort(a);
+      const numberB = getComplaintNumberForSort(b);
 
-      const dateB = b.complaint_date
-        ? new Date(b.complaint_date).getTime()
-        : 0;
+      if (sortOption === "fecha_desc") {
+        if (dateA !== dateB) return dateB - dateA;
+        return numberB - numberA;
+      }
 
-      if (dateA !== dateB) {
+      if (sortOption === "fecha_asc") {
+        if (dateA !== dateB) return dateA - dateB;
+        return numberA - numberB;
+      }
+
+      if (sortOption === "numero_desc") {
+        if (numberA !== numberB) return numberB - numberA;
         return dateB - dateA;
       }
 
-      const numberA = Number(getVisibleComplaintNumber(a)) || 0;
-      const numberB = Number(getVisibleComplaintNumber(b)) || 0;
+      if (sortOption === "numero_asc") {
+        if (numberA !== numberB) return numberA - numberB;
+        return dateA - dateB;
+      }
 
-      return numberB - numberA;
+      return 0;
     });
-  }, [complaints]);
+  }, [complaints, sortOption]);
 
   const totalPages = Math.max(
     1,
@@ -302,7 +348,9 @@ export function ComplaintsTable({
   }, [sortedComplaints, selectedComplaintIds]);
 
   const exportComplaints = useMemo(() => {
-    return selectedComplaints.length > 0 ? selectedComplaints : sortedComplaints;
+    return selectedComplaints.length > 0
+      ? selectedComplaints
+      : sortedComplaints;
   }, [selectedComplaints, sortedComplaints]);
 
   const hasSelectedComplaints = selectedComplaints.length > 0;
@@ -336,10 +384,7 @@ export function ComplaintsTable({
     return statusOverrides[complaint.id] ?? complaint.status;
   };
 
-  const handleStatusChange = async (
-    complaintId: number,
-    newStatus: string,
-  ) => {
+  const handleStatusChange = async (complaintId: number, newStatus: string) => {
     if (!onStatusChange || isReadOnly) return;
 
     setUpdatingStatus(complaintId);
@@ -366,22 +411,40 @@ export function ComplaintsTable({
     }
   };
 
+  const getSPTrackingData = (complaint: ComplaintWithDetails) => {
+    const extra = getExtraData(complaint);
+
+    return {
+      seen: extra.sp_seen === true || extra.sp_seen === "true",
+      observations:
+        typeof extra.sp_observations === "string"
+          ? extra.sp_observations
+          : "",
+    };
+  };
+
   const openResolutionDateModal = (complaint: ComplaintWithDetails) => {
     const currentDate = getResolutionDateValue(complaint);
+    const currentTracking = getSPTrackingData(complaint);
+
     setResolutionModalComplaint(complaint);
-    setResolutionModalDate(currentDate || getTodayLocalDate());
+    setResolutionModalDate(currentDate ?? "");
+    setResolutionModalSeen(currentTracking.seen);
+    setResolutionModalObservations(currentTracking.observations);
   };
 
   const closeResolutionDateModal = () => {
     setResolutionModalComplaint(null);
     setResolutionModalDate("");
+    setResolutionModalSeen(false);
+    setResolutionModalObservations("");
   };
 
   const saveResolutionDate = async () => {
     if (!resolutionModalComplaint || isReadOnly) return;
 
     setUpdatingResolutionDate(resolutionModalComplaint.id);
-    const toastId = toast.loading("Guardando fecha de resolución...");
+    const toastId = toast.loading("Guardando seguimiento del reclamo...");
 
     try {
       const shouldMarkAsResolved = Boolean(resolutionModalDate);
@@ -395,6 +458,8 @@ export function ComplaintsTable({
           },
           body: JSON.stringify({
             resolution_date: resolutionModalDate || null,
+            sp_seen: resolutionModalSeen,
+            sp_observations: resolutionModalObservations,
             ...(shouldMarkAsResolved ? { status: "Resuelto" } : {}),
           }),
         },
@@ -420,8 +485,8 @@ export function ComplaintsTable({
 
       toast.success(
         shouldMarkAsResolved
-          ? "Fecha guardada y reclamo marcado como resuelto"
-          : "Fecha de resolución guardada correctamente",
+          ? "Seguimiento guardado y reclamo marcado como resuelto"
+          : "Seguimiento guardado correctamente",
         {
           id: toastId,
         },
@@ -459,6 +524,8 @@ export function ComplaintsTable({
           },
           body: JSON.stringify({
             resolution_date: null,
+            sp_seen: false,
+            sp_observations: "",
           }),
         },
       );
@@ -474,7 +541,7 @@ export function ComplaintsTable({
         [resolutionModalComplaint.id]: null,
       }));
 
-      toast.success("Fecha de resolución quitada correctamente", {
+      toast.success("Seguimiento quitado correctamente", {
         id: toastId,
       });
 
@@ -514,9 +581,7 @@ export function ComplaintsTable({
     const visibleIds = paginatedComplaints.map((complaint) => complaint.id);
 
     if (checked) {
-      setSelectedComplaintIds((prev) => [
-        ...new Set([...prev, ...visibleIds]),
-      ]);
+      setSelectedComplaintIds((prev) => [...new Set([...prev, ...visibleIds])]);
       return;
     }
 
@@ -569,10 +634,7 @@ export function ComplaintsTable({
 
   const getVisibleRangeText = () => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-    const end = Math.min(
-      currentPage * ITEMS_PER_PAGE,
-      sortedComplaints.length,
-    );
+    const end = Math.min(currentPage * ITEMS_PER_PAGE, sortedComplaints.length);
     return { start, end };
   };
 
@@ -929,40 +991,40 @@ export function ComplaintsTable({
         },
         columnStyles: isArboladoUser
           ? {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 18 },
-              2: { cellWidth: 26 },
-              3: { cellWidth: 65 },
-              4: { cellWidth: 25 },
-              5: { cellWidth: 18 },
-              6: { cellWidth: 34 },
-              7: { cellWidth: 20 },
-              8: { cellWidth: 28 },
-              9: { cellWidth: 18 },
-            }
+            0: { cellWidth: 12 },
+            1: { cellWidth: 18 },
+            2: { cellWidth: 26 },
+            3: { cellWidth: 65 },
+            4: { cellWidth: 25 },
+            5: { cellWidth: 18 },
+            6: { cellWidth: 34 },
+            7: { cellWidth: 20 },
+            8: { cellWidth: 28 },
+            9: { cellWidth: 18 },
+          }
           : isZyVUser
             ? {
-                0: { cellWidth: 12 },
-                1: { cellWidth: 20 },
-                2: { cellWidth: 32 },
-                3: { cellWidth: 56 },
-                4: { cellWidth: 28 },
-                5: { cellWidth: 38 },
-                6: { cellWidth: 22 },
-                7: { cellWidth: 22 },
-                8: { cellWidth: 22 },
-              }
+              0: { cellWidth: 12 },
+              1: { cellWidth: 20 },
+              2: { cellWidth: 32 },
+              3: { cellWidth: 56 },
+              4: { cellWidth: 28 },
+              5: { cellWidth: 38 },
+              6: { cellWidth: 22 },
+              7: { cellWidth: 22 },
+              8: { cellWidth: 22 },
+            }
             : {
-                0: { cellWidth: 12 },
-                1: { cellWidth: 20 },
-                2: { cellWidth: 35 },
-                3: { cellWidth: 55 },
-                4: { cellWidth: 35 },
-                5: { cellWidth: 38 },
-                6: { cellWidth: 26 },
-                7: { cellWidth: 24 },
-                8: { cellWidth: 22 },
-              },
+              0: { cellWidth: 12 },
+              1: { cellWidth: 20 },
+              2: { cellWidth: 35 },
+              3: { cellWidth: 55 },
+              4: { cellWidth: 35 },
+              5: { cellWidth: 38 },
+              6: { cellWidth: 26 },
+              7: { cellWidth: 24 },
+              8: { cellWidth: 22 },
+            },
         didParseCell: (data: CellHookData) => {
           const statusColumnIndex = isArboladoUser ? 9 : 8;
 
@@ -1024,7 +1086,36 @@ export function ComplaintsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <Select
+          value={sortOption}
+          onValueChange={(value) => {
+            setSortOption(value as SortOption);
+            setCurrentPage(1);
+          }}
+        >
+          <SelectTrigger className="h-10 w-[305px] rounded-xl border-border bg-card pr-8 text-sm text-card-foreground shadow-sm hover:bg-muted">
+            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+              <ArrowUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+
+              <span className="shrink-0 text-muted-foreground">
+                Ordenar por:
+              </span>
+
+              <span className="min-w-0 truncate font-medium">
+                <SelectValue placeholder="Fecha más reciente" />
+              </span>
+            </div>
+          </SelectTrigger>
+
+          <SelectContent align="end" className="rounded-xl">
+            <SelectItem value="fecha_desc">Fecha más reciente </SelectItem>
+            <SelectItem value="fecha_asc">Fecha más antigua </SelectItem>
+            <SelectItem value="numero_desc">N° reclamo mayor </SelectItem>
+            <SelectItem value="numero_asc">N° reclamo menor </SelectItem>
+          </SelectContent>
+        </Select>
+
         {!isArboladoUser && canSendWhatsApp && (
           <Button
             type="button"
@@ -1115,8 +1206,7 @@ export function ComplaintsTable({
           );
 
           const hasResolutionDate = display.resolutionDateLabel !== "-";
-          const isUpdatingResolution =
-            updatingResolutionDate === complaint.id;
+          const isUpdatingResolution = updatingResolutionDate === complaint.id;
 
           const statusControl =
             onStatusChange && !isReadOnly ? (
@@ -1304,27 +1394,28 @@ export function ComplaintsTable({
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <CalendarCheck
-                          className={`h-4 w-4 ${
-                            hasResolutionDate
-                              ? "text-emerald-600"
-                              : "text-muted-foreground"
-                          }`}
+                          className={`h-4 w-4 ${hasResolutionDate
+                            ? "text-emerald-600"
+                            : "text-muted-foreground"
+                            }`}
                         />
                       )}
                       Fecha
                     </Button>
                   )}
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(complaint.id)}
-                    title="Editar reclamo"
-                    className="gap-2"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Editar
-                  </Button>
+                  {canEditComplaint && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(complaint.id)}
+                      title="Editar reclamo"
+                      className="gap-2"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1388,7 +1479,9 @@ export function ComplaintsTable({
                   <TableHead>Causa</TableHead>
                   <TableHead>Zona</TableHead>
                   <TableHead>Desde Cuándo</TableHead>
+                  {isServiciosPublicosUser && <TableHead>Visto</TableHead>}
                   <TableHead>Fecha resolución</TableHead>
+                  {isServiciosPublicosUser && <TableHead>Observaciones</TableHead>}
                   <TableHead>Estado</TableHead>
                   <TableHead>Cargado por</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
@@ -1403,6 +1496,7 @@ export function ComplaintsTable({
               const isUpdating = updatingStatus === complaint.id;
               const isSelected = selectedComplaintIds.includes(complaint.id);
               const complaintStatus = getComplaintStatus(complaint);
+              const spTrackingData = getSPTrackingData(complaint);
 
               const resolutionDateOverride =
                 Object.prototype.hasOwnProperty.call(
@@ -1421,39 +1515,40 @@ export function ComplaintsTable({
               const isUpdatingResolution =
                 updatingResolutionDate === complaint.id;
 
-              const statusCell = onStatusChange && !isReadOnly ? (
-                <Select
-                  value={complaintStatus}
-                  onValueChange={(value) =>
-                    handleStatusChange(complaint.id, value)
-                  }
-                  disabled={isUpdating}
-                >
-                  <SelectTrigger
-                    className={`w-[150px] ${getStatusColor(
-                      complaintStatus,
-                    )} ${isUpdating ? "opacity-80" : ""}`}
+              const statusCell =
+                onStatusChange && !isReadOnly ? (
+                  <Select
+                    value={complaintStatus}
+                    onValueChange={(value) =>
+                      handleStatusChange(complaint.id, value)
+                    }
+                    disabled={isUpdating}
                   >
-                    {isUpdating ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Guardando...</span>
-                      </div>
-                    ) : (
-                      <SelectValue />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="En proceso">En proceso</SelectItem>
-                    <SelectItem value="Resuelto">Resuelto</SelectItem>
-                    <SelectItem value="No resuelto">No resuelto</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Badge className={getStatusColor(complaintStatus)}>
-                  {complaintStatus}
-                </Badge>
-              );
+                    <SelectTrigger
+                      className={`w-[150px] ${getStatusColor(
+                        complaintStatus,
+                      )} ${isUpdating ? "opacity-80" : ""}`}
+                    >
+                      {isUpdating ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Guardando...</span>
+                        </div>
+                      ) : (
+                        <SelectValue />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="En proceso">En proceso</SelectItem>
+                      <SelectItem value="Resuelto">Resuelto</SelectItem>
+                      <SelectItem value="No resuelto">No resuelto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge className={getStatusColor(complaintStatus)}>
+                    {complaintStatus}
+                  </Badge>
+                );
 
               const actionsCell = (
                 <div className="flex justify-center gap-2">
@@ -1484,25 +1579,26 @@ export function ComplaintsTable({
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <CalendarCheck
-                          className={`h-4 w-4 ${
-                            hasResolutionDate
-                              ? "text-emerald-600"
-                              : "text-muted-foreground"
-                          }`}
+                          className={`h-4 w-4 ${hasResolutionDate
+                            ? "text-emerald-600"
+                            : "text-muted-foreground"
+                            }`}
                         />
                       )}
                     </Button>
                   )}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEdit(complaint.id)}
-                    title="Editar reclamo"
-                    className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  {canEditComplaint && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEdit(complaint.id)}
+                      title="Editar reclamo"
+                      className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               );
 
@@ -1584,7 +1680,23 @@ export function ComplaintsTable({
                       <TableCell>{display.causeLabel}</TableCell>
                       <TableCell>{display.zoneLabel}</TableCell>
                       <TableCell>{display.sinceWhenLabel}</TableCell>
+                      {isServiciosPublicosUser && (
+                        <TableCell>
+                          {spTrackingData.seen ? (
+                            <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                              Visto
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>{display.resolutionDateLabel}</TableCell>
+                      {isServiciosPublicosUser && (
+                        <TableCell className="max-w-[220px] whitespace-normal break-words">
+                          {spTrackingData.observations || "-"}
+                        </TableCell>
+                      )}
                       <TableCell>{statusCell}</TableCell>
                       <TableCell>
                         {complaint.loaded_by_user?.full_name ??
@@ -1692,7 +1804,9 @@ export function ComplaintsTable({
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold">
-                  Fecha de resolución
+                  {isServiciosPublicosUser
+                    ? "Seguimiento del reclamo"
+                    : "Fecha de resolución"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Reclamo {getVisibleComplaintNumber(resolutionModalComplaint)}
@@ -1710,13 +1824,44 @@ export function ComplaintsTable({
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Seleccionar fecha</label>
-              <Input
-                type="date"
-                value={resolutionModalDate}
-                onChange={(e) => setResolutionModalDate(e.target.value)}
-              />
+            <div className="space-y-4">
+              {isServiciosPublicosUser && (
+                <label className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-3 text-sm">
+                  <Checkbox
+                    checked={resolutionModalSeen}
+                    onCheckedChange={(checked) =>
+                      setResolutionModalSeen(Boolean(checked))
+                    }
+                  />
+                  <span>Marcar como visto</span>
+                </label>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Seleccionar fecha de resolución
+                </label>
+                <Input
+                  type="date"
+                  value={resolutionModalDate}
+                  onChange={(e) => setResolutionModalDate(e.target.value)}
+                />
+              </div>
+
+              {isServiciosPublicosUser && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Observaciones</label>
+                  <textarea
+                    value={resolutionModalObservations}
+                    onChange={(e) =>
+                      setResolutionModalObservations(e.target.value)
+                    }
+                    rows={4}
+                    placeholder="Escribí una observación..."
+                    className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="mt-5 flex justify-between gap-2">
@@ -1724,7 +1869,9 @@ export function ComplaintsTable({
                 type="button"
                 variant="outline"
                 onClick={clearResolutionDate}
-                disabled={updatingResolutionDate === resolutionModalComplaint.id}
+                disabled={
+                  updatingResolutionDate === resolutionModalComplaint.id
+                }
               >
                 Quitar
               </Button>
@@ -1741,7 +1888,9 @@ export function ComplaintsTable({
                 <Button
                   type="button"
                   onClick={saveResolutionDate}
-                  disabled={updatingResolutionDate === resolutionModalComplaint.id}
+                  disabled={
+                    updatingResolutionDate === resolutionModalComplaint.id
+                  }
                 >
                   {updatingResolutionDate === resolutionModalComplaint.id ? (
                     <>

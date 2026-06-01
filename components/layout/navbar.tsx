@@ -40,6 +40,8 @@ import {
 } from "@/lib/navigation";
 import AlertsBell from "@/components/alerts-bell";
 
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
 export function Navbar() {
   const { profile } = useUser();
   const pathname = usePathname();
@@ -47,6 +49,9 @@ export function Navbar() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+
+  const isServiciosPublicosUser =
+    profile?.email?.toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -203,22 +208,24 @@ export function Navbar() {
                   </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem asChild>
-                  <Link
-                    href="/dashboard/complaints/new"
-                    className="cursor-pointer rounded-xl"
-                  >
-                    <div className="flex flex-col gap-1 py-1">
-                      <div className="flex items-center gap-2">
-                        <PlusCircle className="h-4 w-4 text-[#00A27F]" />
-                        <span className="font-medium">Nuevo Reclamo</span>
+                {!isServiciosPublicosUser && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/dashboard/complaints/new"
+                      className="cursor-pointer rounded-xl"
+                    >
+                      <div className="flex flex-col gap-1 py-1">
+                        <div className="flex items-center gap-2">
+                          <PlusCircle className="h-4 w-4 text-[#00A27F]" />
+                          <span className="font-medium">Nuevo Reclamo</span>
+                        </div>
+                        <p className="ml-6 text-xs text-muted-foreground">
+                          Crear un nuevo reclamo ciudadano
+                        </p>
                       </div>
-                      <p className="ml-6 text-xs text-muted-foreground">
-                        Crear un nuevo reclamo ciudadano
-                      </p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
 
                 <DropdownMenuItem asChild>
                   <Link
@@ -464,19 +471,21 @@ export function Navbar() {
                   <span>Inicio</span>
                 </Link>
 
-                <Link
-                  href="/dashboard/complaints/new"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
-                    isActive("/dashboard/complaints/new")
-                      ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
-                      : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
-                  )}
-                >
-                  <PlusCircle className="h-5 w-5" />
-                  <span>Nuevo Reclamo</span>
-                </Link>
+                {!isServiciosPublicosUser && (
+                  <Link
+                    href="/dashboard/complaints/new"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                      isActive("/dashboard/complaints/new")
+                        ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                        : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
+                    )}
+                  >
+                    <PlusCircle className="h-5 w-5" />
+                    <span>Nuevo Reclamo</span>
+                  </Link>
+                )}
 
                 <Link
                   href="/dashboard/complaints"
