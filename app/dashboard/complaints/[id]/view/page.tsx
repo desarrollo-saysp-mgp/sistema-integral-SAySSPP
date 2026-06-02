@@ -20,6 +20,8 @@ import {
   Eye,
   MessageSquareText,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import type {
   Complaint,
   Service,
@@ -224,6 +226,31 @@ export default function ComplaintViewPage() {
     }
   };
 
+  const getPdfStatusColors = (status: string) => {
+    switch (status) {
+      case "En proceso":
+        return {
+          fillColor: [254, 249, 195] as [number, number, number],
+          textColor: [133, 77, 14] as [number, number, number],
+        };
+      case "Resuelto":
+        return {
+          fillColor: [220, 252, 231] as [number, number, number],
+          textColor: [22, 101, 52] as [number, number, number],
+        };
+      case "No resuelto":
+        return {
+          fillColor: [254, 226, 226] as [number, number, number],
+          textColor: [153, 27, 27] as [number, number, number],
+        };
+      default:
+        return {
+          fillColor: [243, 244, 246] as [number, number, number],
+          textColor: [55, 65, 81] as [number, number, number],
+        };
+    }
+  };
+
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
 
@@ -283,7 +310,7 @@ export default function ComplaintViewPage() {
             data.sp_resolution_date
               ? formatDateOnly(data.sp_resolution_date)
               : "-"
-          }`
+          }`,
         );
       }
 
@@ -294,7 +321,7 @@ export default function ComplaintViewPage() {
             data.sp_observations.trim()
               ? data.sp_observations
               : "-"
-          }`
+          }`,
         );
       }
 
@@ -325,6 +352,278 @@ export default function ComplaintViewPage() {
   const cleanValue = (value?: string | number | null) => {
     if (value === null || value === undefined || value === "") return "-";
     return String(value);
+  };
+
+  const loadImageAsDataUrl = (src: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width * 2;
+        canvas.height = image.height * 2;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("No se pudo procesar la imagen"));
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      image.onerror = () => reject(new Error("No se pudo cargar el logo"));
+      image.src = src;
+    });
+  };
+
+  const handleExportPDF = async () => {
+    if (!complaint) return;
+
+    try {
+      const serviceName = complaint.service?.name || "";
+
+      const isZyV =
+        complaint.form_variant === "zyv" ||
+        serviceName === "Zoonosis" ||
+        serviceName === "Vectores";
+
+      const isArbolado =
+        complaint.form_variant === "arbolado" ||
+        serviceName.toLowerCase().includes("arbol");
+
+      const extra = getExtraData(complaint);
+
+      const arboladoDepartment = getArboladoDepartment(extra);
+      const arboladoLevel = getArboladoLevel(extra);
+      const arboladoDescription = getArboladoDescription(extra);
+      const arboladoAgent = getArboladoAgent(extra);
+
+      const displayComplaintNumber = cleanValue(
+        isArbolado
+          ? complaint.arbolado_number ?? complaint.complaint_number
+          : complaint.complaint_number ?? complaint.arbolado_number,
+      );
+
+      const displayAddress = `${complaint.address || "-"} ${
+        complaint.street_number || ""
+      }`.trim();
+
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      let logoDataUrl: string | null = null;
+
+      try {
+        logoDataUrl = await loadImageAsDataUrl(
+          "/logo-general-pico-horizontal.png",
+        );
+      } catch (error) {
+        console.warn("No se pudo cargar el logo para el PDF:", error);
+      }
+
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, "PNG", 14, 10, 34, 12);
+      }
+
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Sistema de Gestión de Reclamos", 52, 15);
+
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      doc.text("Atención Ciudadana - General Pico", 52, 21);
+
+      doc.setFontSize(13);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Reclamo N° ${displayComplaintNumber}`, 14, 34);
+
+      const statusColors = getPdfStatusColors(complaint.status);
+      doc.setFillColor(...statusColors.fillColor);
+      doc.setTextColor(...statusColors.textColor);
+      doc.roundedRect(62, 28.5, 32, 8, 2, 2, "F");
+      doc.setFontSize(8);
+      doc.text(complaint.status, 66, 34);
+
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Creado el ${formatDateTime(complaint.created_at)}`, 14, 41);
+      doc.text(
+        `Exportado el ${new Date().toLocaleString("es-AR")}`,
+        14,
+        46,
+      );
+
+      const commonTableStyles = {
+        theme: "grid" as const,
+        margin: { left: 14, right: 14 },
+        styles: {
+          fontSize: 7.6,
+          cellPadding: 1.6,
+          overflow: "linebreak" as const,
+          textColor: [51, 65, 85] as [number, number, number],
+          lineColor: [226, 232, 240] as [number, number, number],
+          lineWidth: 0.15,
+          valign: "middle" as const,
+        },
+        headStyles: {
+          fillColor: [16, 185, 129] as [number, number, number],
+          textColor: [255, 255, 255] as [number, number, number],
+          fontStyle: "bold" as const,
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] as [number, number, number],
+        },
+        columnStyles: {
+          0: { cellWidth: 36, fontStyle: "bold" as const },
+          1: { cellWidth: 58 },
+          2: { cellWidth: 36, fontStyle: "bold" as const },
+          3: { cellWidth: 46 },
+        },
+      };
+
+      autoTable(doc, {
+        ...commonTableStyles,
+        startY: 53,
+        head: [["Datos del reclamante", "", "", ""]],
+        body: [
+          [
+            "Nombre y apellido",
+            cleanValue(complaint.complainant_name),
+            "Dirección",
+            displayAddress || "-",
+          ],
+          [
+            "Teléfono",
+            cleanValue(complaint.phone_number),
+            "Medio de contacto",
+            cleanValue(complaint.contact_method),
+          ],
+        ],
+      });
+
+      const yAfterApplicant =
+        (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+          ?.finalY ?? 76;
+
+      autoTable(doc, {
+        ...commonTableStyles,
+        startY: yAfterApplicant + 6,
+        head: [[isZyV ? "Detalle ZyV" : "Detalles del reclamo", "", "", ""]],
+        body: [
+          [
+            isArbolado ? "Depto" : "Servicio",
+            isArbolado
+              ? cleanValue(arboladoDepartment || complaint.service?.name)
+              : cleanValue(complaint.service?.name),
+            isArbolado ? "Descripción" : "Causa",
+            isArbolado
+              ? cleanValue(arboladoDescription || complaint.cause?.name)
+              : cleanValue(complaint.cause?.name),
+          ],
+          [
+            isZyV ? "Tipo de domicilio" : isArbolado ? "Nivel" : "Zona",
+            isArbolado
+              ? cleanValue(arboladoLevel || complaint.since_when)
+              : cleanValue(complaint.zone),
+            isArbolado ? "Agente" : "Desde cuándo",
+            isArbolado
+              ? cleanValue(arboladoAgent)
+              : cleanValue(complaint.since_when),
+          ],
+          [
+            "Fecha de resolución",
+            formatDateOnly(complaint.resolution_date),
+            "",
+            "",
+          ],
+        ],
+      });
+
+      const yAfterDetails =
+        (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+          ?.finalY ?? 105;
+
+      autoTable(doc, {
+        theme: "grid",
+        startY: yAfterDetails + 6,
+        margin: { left: 14, right: 14 },
+        head: [["Detalle"]],
+        body: [[cleanValue(complaint.details)]],
+        styles: {
+          fontSize: 7.6,
+          cellPadding: 2,
+          overflow: "linebreak",
+          textColor: [51, 65, 85],
+          lineColor: [226, 232, 240],
+          lineWidth: 0.15,
+          valign: "top",
+        },
+        headStyles: {
+          fillColor: [16, 185, 129],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        bodyStyles: {
+          fillColor: [248, 250, 252],
+        },
+      });
+
+      const yAfterText =
+        (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+          ?.finalY ?? 135;
+
+      autoTable(doc, {
+        ...commonTableStyles,
+        startY: yAfterText + 6,
+        head: [["Estado y seguimiento", "", "", ""]],
+        body: [
+          [
+            "Estado",
+            complaint.status,
+            "Responsable de carga",
+            cleanValue(complaint.loaded_by_user?.full_name),
+          ],
+          [
+            "Creado",
+            formatDateTime(complaint.created_at),
+            "",
+            "",
+          ],
+        ],
+        didParseCell: (data) => {
+          if (
+            data.section === "body" &&
+            data.row.index === 0 &&
+            data.column.index === 1
+          ) {
+            data.cell.styles.fillColor = statusColors.fillColor;
+            data.cell.styles.textColor = statusColors.textColor;
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.halign = "center";
+          }
+        },
+      });
+
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text(
+        "Sistema Integral SAySSPP",
+        doc.internal.pageSize.getWidth() / 2,
+        doc.internal.pageSize.getHeight() - 8,
+        { align: "center" },
+      );
+
+      doc.save(`reclamo_${displayComplaintNumber}.pdf`);
+
+      toast.success("PDF del reclamo exportado correctamente");
+    } catch (error) {
+      console.error("Error exporting complaint PDF:", error);
+      toast.error("Error al exportar PDF del reclamo");
+    }
   };
 
   if (loading) {
@@ -376,7 +675,7 @@ export default function ComplaintViewPage() {
   const displayComplaintNumber = cleanValue(
     isArbolado
       ? complaint.arbolado_number ?? complaint.complaint_number
-      : complaint.complaint_number ?? complaint.arbolado_number
+      : complaint.complaint_number ?? complaint.arbolado_number,
   );
 
   const displayAddress = `${complaint.address || "-"} ${
@@ -402,7 +701,7 @@ export default function ComplaintViewPage() {
 
             <Badge
               className={`${getStatusColor(
-                complaint.status
+                complaint.status,
               )} border px-3 py-1 text-sm`}
             >
               {complaint.status}
@@ -414,12 +713,19 @@ export default function ComplaintViewPage() {
           </p>
         </div>
 
-        {!isServiciosPublicosUser && (
-          <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Editar Reclamo
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleExportPDF}>
+            <FileText className="mr-2 h-4 w-4" />
+            Exportar PDF
           </Button>
-        )}
+
+          {!isServiciosPublicosUser && (
+            <Button onClick={() => router.push(`/dashboard/complaints/${id}`)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar Reclamo
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -490,7 +796,9 @@ export default function ComplaintViewPage() {
             />
 
             <InfoField
-              label={isZyV ? "Tipo de domicilio" : isArbolado ? "Nivel" : "Zona"}
+              label={
+                isZyV ? "Tipo de domicilio" : isArbolado ? "Nivel" : "Zona"
+              }
               value={
                 isArbolado
                   ? cleanValue(arboladoLevel || complaint.since_when)
@@ -543,7 +851,7 @@ export default function ComplaintViewPage() {
 
               <Badge
                 className={`${getStatusColor(
-                  complaint.status
+                  complaint.status,
                 )} border px-3 py-1 text-sm`}
               >
                 {complaint.status}
@@ -629,7 +937,10 @@ export default function ComplaintViewPage() {
             ) : (
               <div className="space-y-4">
                 {history.map((item) => (
-                  <div key={item.id} className="rounded-md border bg-muted/20 p-4">
+                  <div
+                    key={item.id}
+                    className="rounded-md border bg-muted/20 p-4"
+                  >
                     <p className="text-sm">
                       <span className="font-semibold">
                         {item.user?.full_name || "Usuario desconocido"}
