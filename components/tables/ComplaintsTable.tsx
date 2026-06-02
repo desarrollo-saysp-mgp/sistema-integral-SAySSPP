@@ -254,10 +254,10 @@ export function ComplaintsTable({
   const canEditComplaint = !isReadOnly && !isServiciosPublicosUser;
 
   const canSendWhatsApp =
-    !isServiciosPublicosUser &&
-    (profile?.role === "Admin" ||
-      profile?.role === "Reclamos" ||
-      profile?.role === "ReclamosZyV");
+    isServiciosPublicosUser ||
+    profile?.role === "Admin" ||
+    profile?.role === "Reclamos" ||
+    profile?.role === "ReclamosZyV";
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
