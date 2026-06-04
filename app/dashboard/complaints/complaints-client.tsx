@@ -25,12 +25,23 @@ const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
 const ZONE_OPTIONS = Array.from({ length: 16 }, (_, i) => String(i + 1));
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 const SERVICIOS_PUBLICOS_KEYWORDS = [
   "barrido",
   "riego",
   "motonivelacion",
   "canales y desagues",
+];
+
+const GIRSU_KEYWORDS = [
+  "rec. domiciliaria",
+  "rec domiciliaria",
+  "rec. especial",
+  "rec especial",
+  "inspeccion",
+  "rec. contenedores",
+  "rec contenedores",
 ];
 
 
@@ -161,6 +172,17 @@ const isServiciosPublicosServiceName = (serviceName: unknown) => {
 const isServiciosPublicosComplaint = (complaint: ComplaintWithDetails) =>
   isServiciosPublicosServiceName(complaint.service?.name);
 
+const isGirsuServiceName = (serviceName: unknown) => {
+  const normalizedServiceName = normalizeText(serviceName);
+
+  return GIRSU_KEYWORDS.some((keyword) =>
+    normalizedServiceName.includes(keyword)
+  );
+};
+
+const isGirsuComplaint = (complaint: ComplaintWithDetails) =>
+  isGirsuServiceName(complaint.service?.name);
+
 const isGeneralComplaint = (complaint: ComplaintWithDetails) =>
   complaint.form_variant === "general" ||
   complaint.form_variant === "import_excel" ||
@@ -198,7 +220,9 @@ export default function ComplaintsClient() {
   const isServiciosPublicosUser =
     normalizeText(profile?.email) === SERVICIOS_PUBLICOS_EMAIL;
 
-  const canCreateComplaints = !isServiciosPublicosUser;
+  const isGirsuUser = normalizeText(profile?.email) === normalizeText(GIRSU_EMAIL);
+
+  const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
   const getParam = useCallback(
     (key: string, fallback = "") => searchParams.get(key) || fallback,
@@ -374,12 +398,18 @@ export default function ComplaintsClient() {
           );
         }
 
+        if (isGirsuUser) {
+          activeServices = activeServices.filter((service: Service) =>
+            isGirsuServiceName(service.name)
+          );
+        }
+
         setServices(activeServices);
       }
     } catch (error) {
       console.error("Error fetching services:", error);
     }
-  }, [isZyvView, isArboladoView, isServiciosPublicosUser]);
+  }, [isZyvView, isArboladoView, isServiciosPublicosUser, isGirsuUser]);
 
   const fetchComplaints = useCallback(
     async (showLoader = true) => {
@@ -525,8 +555,13 @@ export default function ComplaintsClient() {
       sourceComplaints = complaints.filter(isServiciosPublicosComplaint);
     }
 
+    if (isGirsuUser) {
+      sourceComplaints = complaints.filter(isGirsuComplaint);
+    }
+
     if (
       !isServiciosPublicosUser &&
+      !isGirsuUser &&
       !isArboladoView &&
       !isZyvView &&
       isAdminUser &&
@@ -590,6 +625,7 @@ export default function ComplaintsClient() {
     isArboladoView,
     isZyvView,
     isServiciosPublicosUser,
+    isGirsuUser,
     isAdminUser,
     variantFilter,
     searchTerm,

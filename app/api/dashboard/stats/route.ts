@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 const normalizeName = (value?: string | null) =>
   (value || "")
@@ -20,6 +21,20 @@ const isServiciosPublicosService = (serviceName?: string | null) => {
     name.includes("riego") ||
     name.includes("motonivelacion") ||
     name.includes("canales y desagues")
+  );
+};
+
+const isGirsuService = (serviceName?: string | null) => {
+  const name = normalizeName(serviceName);
+
+  return (
+    name.includes("rec. domiciliaria") ||
+    name.includes("rec domiciliaria") ||
+    name.includes("rec. especial") ||
+    name.includes("rec especial") ||
+    name.includes("inspeccion") ||
+    name.includes("rec. contenedores") ||
+    name.includes("rec contenedores")
   );
 };
 
@@ -52,11 +67,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userEmail = (currentUser.email || user.email || "").toLowerCase();
+    const userEmail = normalizeName(currentUser.email || user.email || "");
 
     const isServiciosPublicosUser =
-      userEmail === SERVICIOS_PUBLICOS_EMAIL ||
+      userEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL) ||
       scope === "servicios-publicos";
+
+    const isGirsuUser = userEmail === normalizeName(GIRSU_EMAIL) || scope === "girsu";
 
     const { data: serviceRoles } = await supabase
       .from("services")
@@ -80,6 +97,11 @@ export async function GET(request: NextRequest) {
         ?.filter((service) => isServiciosPublicosService(service.name))
         .map((service) => service.id) ?? [];
 
+    const girsuServiceIds =
+      serviceRoles
+        ?.filter((service) => isGirsuService(service.name))
+        .map((service) => service.id) ?? [];
+
     const applyRoleFilter = <T>(query: T): T => {
       if (isServiciosPublicosUser) {
         if (!serviciosPublicosServiceIds.length) {
@@ -87,6 +109,14 @@ export async function GET(request: NextRequest) {
         }
 
         return (query as any).in("service_id", serviciosPublicosServiceIds);
+      }
+
+      if (isGirsuUser) {
+        if (!girsuServiceIds.length) {
+          return (query as any).eq("service_id", -1);
+        }
+
+        return (query as any).in("service_id", girsuServiceIds);
       }
 
       if (currentUser.role === "ReclamosArbolado") {

@@ -47,6 +47,13 @@ interface DashboardStats {
 }
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
+
+const normalizeName = (value?: string | null) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 const formatDate = (dateString: string) => {
   if (!dateString) return "-";
@@ -147,8 +154,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
+  const normalizedProfileEmail = normalizeName(profile?.email);
+
   const isServiciosPublicosUser =
-    profile?.email?.toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
+    normalizedProfileEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL);
+
+  const isGirsuUser = normalizedProfileEmail === normalizeName(GIRSU_EMAIL);
 
   const fetchStats = useCallback(
     async (showLoader = true) => {
@@ -159,7 +170,9 @@ export default function DashboardPage() {
       try {
         const url = isServiciosPublicosUser
           ? "/api/dashboard/stats?scope=servicios-publicos"
-          : "/api/dashboard/stats";
+          : isGirsuUser
+            ? "/api/dashboard/stats?scope=girsu"
+            : "/api/dashboard/stats";
 
         const response = await fetch(url, {
           cache: "no-store",
@@ -181,7 +194,7 @@ export default function DashboardPage() {
         }
       }
     },
-    [isServiciosPublicosUser],
+    [isServiciosPublicosUser, isGirsuUser],
   );
 
   useEffect(() => {
@@ -249,12 +262,14 @@ export default function DashboardPage() {
           <p className="mt-2 text-base text-muted-foreground">
             {isServiciosPublicosUser
               ? "Seguimiento de reclamos de Servicios Públicos"
-              : "Resumen general del sistema de reclamos"}
+              : isGirsuUser
+                ? "Seguimiento de reclamos GIRSU"
+                : "Resumen general del sistema de reclamos"}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {!isServiciosPublicosUser && (
+          {!isServiciosPublicosUser && !isGirsuUser && (
             <Button
               onClick={() => navigateWithLoading("/dashboard/complaints/new")}
               className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
@@ -310,7 +325,9 @@ export default function DashboardPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               {isServiciosPublicosUser
                 ? "Reclamos de servicios públicos"
-                : "Reclamos registrados"}
+                : isGirsuUser
+                  ? "Reclamos GIRSU"
+                  : "Reclamos registrados"}
             </p>
           </CardContent>
         </Card>

@@ -38,10 +38,17 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
   },
 };
 
+const GIRSU_EMAILS = [
+  "direcciongirsupico@gmail.com",
+  "direccióngirsupico@gmail.com",
+];
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "");
 
 const normalizeModule = (value: unknown) =>
@@ -73,6 +80,9 @@ export default async function AccesosPage() {
 
   const allowedRoles = ["admin", "adminlectura"];
   const userRole = normalizeText(profile.role);
+  const userEmail = normalizeText(profile.email || user.email);
+
+  const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
 
   const rawModules: string[] = Array.isArray(profile.modules)
     ? profile.modules
@@ -95,14 +105,17 @@ export default async function AccesosPage() {
   /*
     Si la cuenta es admin o adminlectura, le mostramos sí o sí
     el Tablero General, aunque en modules no tenga general_dashboard.
+
+    Si la cuenta es GIRSU, también le mostramos el Tablero General,
+    pero sin darle acceso a Administración.
   */
-  if (hasAllowedRole && !alreadyHasDashboard) {
+  if ((hasAllowedRole || isGirsuUser) && !alreadyHasDashboard) {
     accesses.push(MODULE_CONFIG.general_dashboard);
   }
 
   const filteredAccesses = accesses.filter((item) => {
     if (item.key === "general_dashboard") {
-      return hasAllowedRole;
+      return hasAllowedRole || isGirsuUser;
     }
 
     return true;
@@ -143,23 +156,34 @@ export default async function AccesosPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredAccesses.map((item) => (
-            <Card key={item.key} className="rounded-2xl">
-              <CardHeader>
-                <CardTitle>{item.title}</CardTitle>
-              </CardHeader>
+          {filteredAccesses.map((item) => {
+            const displayItem =
+              isGirsuUser && item.key === "complaints"
+                ? {
+                    ...item,
+                    title: "Reclamos GIRSU",
+                    description: "Seguimiento de reclamos del área GIRSU.",
+                  }
+                : item;
 
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {item.description}
-                </p>
+            return (
+              <Card key={displayItem.key} className="rounded-2xl">
+                <CardHeader>
+                  <CardTitle>{displayItem.title}</CardTitle>
+                </CardHeader>
 
-                <Button asChild className="w-full">
-                  <Link href={item.href}>Ingresar</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {displayItem.description}
+                  </p>
+
+                  <Button asChild className="w-full">
+                    <Link href={displayItem.href}>Ingresar</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

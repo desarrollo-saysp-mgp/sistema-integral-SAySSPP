@@ -44,6 +44,7 @@ import { useUser } from "@/hooks/useUser";
 
 const ITEMS_PER_PAGE = 20;
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 const parseLocalDate = (dateStr: string): Date => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -243,7 +244,12 @@ export function ComplaintsTable({
   const router = useRouter();
   const { profile } = useUser();
 
-  const isReadOnly = profile?.role === "AdminLectura";
+  const isGirsuUser =
+    String(profile?.email || "")
+      .trim()
+      .toLowerCase() === GIRSU_EMAIL;
+
+  const isReadOnly = profile?.role === "AdminLectura" || isGirsuUser;
   const isArboladoUser = profile?.role === "ReclamosArbolado";
   const isZyVUser = profile?.role === "ReclamosZyV";
   const isServiciosPublicosUser =
@@ -251,12 +257,12 @@ export function ComplaintsTable({
       .trim()
       .toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
 
-  const canEditComplaint = !isReadOnly && !isServiciosPublicosUser;
+  const canEditComplaint = !isReadOnly && !isServiciosPublicosUser && !isGirsuUser;
 
   const canSendWhatsApp =
     isServiciosPublicosUser ||
     profile?.role === "Admin" ||
-    profile?.role === "Reclamos" ||
+    (profile?.role === "Reclamos" && !isGirsuUser) ||
     profile?.role === "ReclamosZyV";
 
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);

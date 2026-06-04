@@ -52,6 +52,9 @@ const normalizeServiceText = (value: unknown) =>
     .toLowerCase()
     .trim();
 
+const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
+
 const isServiciosPublicosAllowedService = (serviceName: unknown) => {
   const normalized = normalizeServiceText(serviceName);
 
@@ -60,6 +63,20 @@ const isServiciosPublicosAllowedService = (serviceName: unknown) => {
     normalized.includes("riego") ||
     normalized.includes("motonivelacion") ||
     normalized.includes("canales y desagues")
+  );
+};
+
+const isGirsuAllowedService = (serviceName: unknown) => {
+  const normalized = normalizeServiceText(serviceName);
+
+  return (
+    normalized.includes("rec. domiciliaria") ||
+    normalized.includes("rec domiciliaria") ||
+    normalized.includes("rec. especial") ||
+    normalized.includes("rec especial") ||
+    normalized.includes("inspeccion") ||
+    normalized.includes("rec. contenedores") ||
+    normalized.includes("rec contenedores")
   );
 };
 
@@ -79,6 +96,23 @@ export async function GET(
     if (authError || !authUser) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
+
+    const { data: currentUser, error: userError } = await supabase
+      .from("users")
+      .select("role, email")
+      .eq("id", authUser.id)
+      .single();
+
+    if (userError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo validar el usuario" },
+        { status: 500 },
+      );
+    }
+
+    const currentUserEmail = String(currentUser.email || authUser.email || "")
+      .trim()
+      .toLowerCase();
 
     const complaintId = parseInt(id);
 
@@ -114,6 +148,26 @@ export async function GET(
       return NextResponse.json(
         { error: "Reclamo no encontrado" },
         { status: 404 },
+      );
+    }
+
+    if (
+      currentUserEmail === SERVICIOS_PUBLICOS_EMAIL &&
+      !isServiciosPublicosAllowedService(complaint.service?.name)
+    ) {
+      return NextResponse.json(
+        { error: "No tenés permisos para ver este reclamo" },
+        { status: 403 },
+      );
+    }
+
+    if (
+      currentUserEmail === GIRSU_EMAIL &&
+      !isGirsuAllowedService(complaint.service?.name)
+    ) {
+      return NextResponse.json(
+        { error: "No tenés permisos para ver este reclamo" },
+        { status: 403 },
       );
     }
 
@@ -257,9 +311,12 @@ export async function PATCH(
     const formVariant =
       body.form_variant || currentComplaint.form_variant || "general";
 
-    const isServiciosPublicosUser =
-      String(currentUser.email || "").toLowerCase() ===
-      "adm.serviciospublicos.mgp@gmail.com";
+    const currentUserEmail = String(currentUser.email || "")
+      .trim()
+      .toLowerCase();
+
+    const isServiciosPublicosUser = currentUserEmail === SERVICIOS_PUBLICOS_EMAIL;
+    const isGirsuUser = currentUserEmail === GIRSU_EMAIL;
 
     const hasSPTrackingFields =
       hasOwn(body, "sp_seen") ||
@@ -279,6 +336,13 @@ export async function PATCH(
           { status: 403 },
         );
       }
+    }
+
+    if (isGirsuUser) {
+      return NextResponse.json(
+        { error: "Esta cuenta solo puede consultar reclamos GIRSU" },
+        { status: 403 },
+      );
     }
 
     const updateData: ComplaintUpdate = {};

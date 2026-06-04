@@ -5,12 +5,22 @@ import { Card, CardContent } from "@/components/ui/card";
 const POWERBI_GENERAL_DASHBOARD_URL =
   "https://app.powerbi.com/view?r=eyJrIjoiOGU4ZTg5ZDEtZjZhNC00NmY4LThhZGItNmI2ZTBlMDQyZTg3IiwidCI6IjE3OGFiOTM5LWUyZTQtNGVhYy1iMGNlLWVhOTdlNWM0MjlmYSJ9";
 
+const POWERBI_GIRSU_DASHBOARD_URL =
+  "https://app.powerbi.com/view?r=eyJrIjoiZDc0NzRlYzItMDdkNy00NzBjLWFhMzQtOWE3YjQ4NDY3MTNmIiwidCI6IjE3OGFiOTM5LWUyZTQtNGVhYy1iMGNlLWVhOTdlNWM0MjlmYSJ9";
+
 const ALLOWED_ROLES = ["admin", "adminlectura"];
+
+const GIRSU_EMAILS = [
+  "direcciongirsupico@gmail.com",
+  "direccióngirsupico@gmail.com",
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "");
 
 const normalizeModule = (value: unknown) =>
@@ -32,7 +42,7 @@ export default async function TableroGeneralPage() {
 
   const { data: profile, error } = await supabase
     .from("users")
-    .select("role, modules")
+    .select("role, email, modules")
     .eq("id", user.id)
     .single();
 
@@ -41,6 +51,9 @@ export default async function TableroGeneralPage() {
   }
 
   const userRole = normalizeText(profile.role);
+  const userEmail = normalizeText(profile.email || user.email);
+
+  const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
 
   const modules: string[] = Array.isArray(profile.modules)
     ? profile.modules.map((module) => normalizeModule(module))
@@ -56,28 +69,38 @@ export default async function TableroGeneralPage() {
     modules.includes("power_bi");
 
   /*
-    IMPORTANTE:
-    - Si es admin o adminlectura, entra.
-    - Si no es admin, solamente entraría si tiene el módulo asignado.
+    Permisos:
+    - Admin/AdminLectura: ven Tablero General.
+    - Usuarios con módulo de tablero: ven Tablero General.
+    - Cuenta GIRSU: entra y ve Tablero GIRSU.
   */
-  if (!hasAllowedRole && !hasDashboardModule) {
+  if (!hasAllowedRole && !hasDashboardModule && !isGirsuUser) {
     redirect("/dashboard/accesos");
   }
+
+  const dashboardTitle = isGirsuUser ? "Tablero GIRSU" : "Tablero General";
+
+  const dashboardDescription = isGirsuUser
+    ? "Visualización tablero Power BI del área GIRSU."
+    : "Visualización tablero Power BI.";
+
+  const dashboardUrl = isGirsuUser
+    ? POWERBI_GIRSU_DASHBOARD_URL
+    : POWERBI_GENERAL_DASHBOARD_URL;
 
   return (
     <div className="container mx-auto space-y-6 p-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Tablero General</h1>
-        <p className="text-muted-foreground">
-          Visualización tablero Power BI.
-        </p>
+        <h1 className="text-3xl font-bold">{dashboardTitle}</h1>
+
+        <p className="text-muted-foreground">{dashboardDescription}</p>
       </div>
 
       <Card className="overflow-hidden rounded-2xl">
         <CardContent className="p-0">
           <iframe
-            title="Tablero General"
-            src={POWERBI_GENERAL_DASHBOARD_URL}
+            title={dashboardTitle}
+            src={dashboardUrl}
             className="h-[78vh] w-full border-0"
             frameBorder="0"
             allowFullScreen

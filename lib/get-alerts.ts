@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 type AlertSeverity = "high" | "medium" | "low";
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 export type RelatedComplaintAlert = {
   id: number;
@@ -82,6 +83,20 @@ function isServiciosPublicosService(serviceName?: string | null) {
   );
 }
 
+function isGirsuService(serviceName?: string | null) {
+  const name = normalizeName(serviceName);
+
+  return (
+    name.includes("rec. domiciliaria") ||
+    name.includes("rec domiciliaria") ||
+    name.includes("rec. especial") ||
+    name.includes("rec especial") ||
+    name.includes("inspeccion") ||
+    name.includes("rec. contenedores") ||
+    name.includes("rec contenedores")
+  );
+}
+
 export async function getAlerts() {
   const supabase = await createClient();
 
@@ -106,19 +121,24 @@ export async function getAlerts() {
       userProfile?.email?.toLowerCase() ?? user?.email?.toLowerCase() ?? "";
   }
 
+  const normalizedCurrentUserEmail = normalizeName(currentUserEmail);
+
   const isServiciosPublicosUser =
-    currentUserEmail === SERVICIOS_PUBLICOS_EMAIL;
+    normalizedCurrentUserEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL);
+
+  const isGirsuUser = normalizedCurrentUserEmail === normalizeName(GIRSU_EMAIL);
 
   const isArboladoUser = currentUserRole === "ReclamosArbolado";
   const isZyvUser = currentUserRole === "ReclamosZyV";
   const isGeneralClaimsUser =
-    currentUserRole === "Reclamos" && !isServiciosPublicosUser;
+    currentUserRole === "Reclamos" && !isServiciosPublicosUser && !isGirsuUser;
 
   let arboladoServiceIds: number[] = [];
   let zyvServiceIds: number[] = [];
   let serviciosPublicosServiceIds: number[] = [];
+  let girsuServiceIds: number[] = [];
 
-  if (isArboladoUser || isZyvUser || isServiciosPublicosUser) {
+  if (isArboladoUser || isZyvUser || isServiciosPublicosUser || isGirsuUser) {
     const { data: roleServices, error: roleServicesError } = await supabase
       .from("services")
       .select("id, name");
@@ -145,6 +165,11 @@ export async function getAlerts() {
         ?.filter((service) => isServiciosPublicosService(service.name))
         .map((service) => service.id) ?? [];
 
+    girsuServiceIds =
+      roleServices
+        ?.filter((service) => isGirsuService(service.name))
+        .map((service) => service.id) ?? [];
+
     if (isArboladoUser && arboladoServiceIds.length === 0) {
       return {
         total: 0,
@@ -165,6 +190,13 @@ export async function getAlerts() {
         alerts: [],
       };
     }
+
+    if (isGirsuUser && girsuServiceIds.length === 0) {
+      return {
+        total: 0,
+        alerts: [],
+      };
+    }
   }
 
   const applyUserScope = <T>(query: T): T => {
@@ -173,6 +205,10 @@ export async function getAlerts() {
         "service_id",
         serviciosPublicosServiceIds,
       ) as T;
+    }
+
+    if (isGirsuUser) {
+      return (query as any).in("service_id", girsuServiceIds) as T;
     }
 
     if (isArboladoUser) {
@@ -340,7 +376,7 @@ export async function getAlerts() {
     Solo aplica a reclamos generales comunes.
     No aplica para Arbolado, ZyV ni Servicios Públicos.
   */
-  if (!isArboladoUser && !isZyvUser && !isServiciosPublicosUser) {
+  if (!isArboladoUser && !isZyvUser && !isServiciosPublicosUser && !isGirsuUser) {
     const openStatuses = ["Pendiente", "En proceso", "Derivado"];
 
     const allowedZoneAlertServices = ["Rec. Domiciliaria", "Rec. Especial"];

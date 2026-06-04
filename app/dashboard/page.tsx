@@ -1,6 +1,19 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+const GIRSU_EMAILS = [
+  "direcciongirsupico@gmail.com",
+  "direccióngirsupico@gmail.com",
+];
+
+const normalizeText = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "");
+
 function getModuleRoute(moduleKey: string) {
   switch (moduleKey) {
     case "complaints":
@@ -27,7 +40,7 @@ export default async function DashboardRouter() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("role, modules, default_module")
+    .select("role, email, modules, default_module")
     .eq("id", user.id)
     .single();
 
@@ -38,31 +51,42 @@ export default async function DashboardRouter() {
   const modules = Array.isArray(profile.modules) ? profile.modules : [];
   const defaultModule = profile.default_module;
 
-  // 1. Admins siempre van a accesos
+  const userEmail = normalizeText(profile.email || user.email);
+
+  const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
+
+  // 1. GIRSU debe entrar a la pantalla de accesos,
+  // porque tiene Reclamos GIRSU + Tablero General.
+  // No entra directo al home de reclamos.
+  if (isGirsuUser) {
+    redirect("/dashboard/accesos");
+  }
+
+  // 2. Admins siempre van a accesos
   if (profile.role === "Admin" || profile.role === "AdminLectura") {
     redirect("/dashboard/accesos");
   }
 
-  // 2. Si tiene módulo por defecto, entra ahí
+  // 3. Si tiene módulo por defecto, entra ahí
   if (defaultModule) {
     redirect(getModuleRoute(defaultModule));
   }
 
-  // 3. Si tiene un solo módulo, entra directo
+  // 4. Si tiene un solo módulo, entra directo
   if (modules.length === 1) {
     redirect(getModuleRoute(modules[0]));
   }
 
-  // 4. Si tiene varios módulos, mostrar accesos
+  // 5. Si tiene varios módulos, mostrar accesos
   if (modules.length > 1) {
     redirect("/dashboard/accesos");
   }
 
-  // 5. Fallback temporal por role
+  // 6. Fallback temporal por role
   if (profile.role === "Reclamos") {
     redirect("/dashboard/complaints/home");
   }
 
-  // 6. Último fallback
+  // 7. Último fallback
   redirect("/dashboard/accesos");
 }
