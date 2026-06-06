@@ -74,7 +74,7 @@ export default function LoginPage() {
             <Card className="rounded-3xl border border-white/60 bg-white shadow-[0_40px_120px_rgba(0,0,0,0.25)] backdrop-blur-sm">
               <CardHeader className="space-y-3 px-8 pt-10 text-center sm:px-10">
                 <CardTitle className="text-4xl font-bold text-[#373737]">
-                  PRUEBA - TEST DEPLOY 2 - Sistema Integral SAySSPP
+                  Sistema Integral SAySSPP
                 </CardTitle>
 
                 <CardDescription className="text-base text-slate-500">
