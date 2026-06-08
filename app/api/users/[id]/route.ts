@@ -9,7 +9,19 @@ type SupportedRole =
   | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
-  | "FC_SECTOR";
+  | "FC_SECTOR"
+  | "Taller";
+
+const VALID_ROLES: SupportedRole[] = [
+  "Admin",
+  "Reclamos",
+  "ReclamosArbolado",
+  "ReclamosZyV",
+  "AdminLectura",
+  "FC_RRHH",
+  "FC_SECTOR",
+  "Taller",
+];
 
 function getRoleConfig(role: SupportedRole, email?: string) {
   const normalizedEmail = (email || "").trim().toLowerCase();
@@ -80,6 +92,7 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         default_module: "complaints",
         fc_sectors: [],
       };
+
     case "FC_RRHH":
       return {
         modules: ["purchase_requests", "rrhh"],
@@ -112,6 +125,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         fc_sectors: sectorMap[normalizedEmail] ?? [],
       };
     }
+
+    case "Taller":
+      return {
+        modules: ["work_orders"],
+        is_readonly: false,
+        default_module: "work_orders",
+        fc_sectors: [],
+      };
 
     default:
       return {
@@ -166,6 +187,7 @@ export async function GET(
           { status: 404 },
         );
       }
+
       console.error("Error fetching user:", error);
       return NextResponse.json(
         { error: "Error al cargar usuario" },
@@ -221,20 +243,11 @@ export async function PATCH(
       password?: string;
     };
 
-    if (
-      role &&
-      role !== "Admin" &&
-      role !== "Reclamos" &&
-      role !== "ReclamosArbolado" &&
-      role !== "ReclamosZyV" &&
-      role !== "AdminLectura" &&
-      role !== "FC_RRHH" &&
-      role !== "FC_SECTOR"
-    ) {
+    if (role && !VALID_ROLES.includes(role)) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "AdminLectura", "FC_RRHH" o "FC_SECTOR"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR" o "Taller"',
         },
         { status: 400 },
       );
@@ -269,12 +282,15 @@ export async function PATCH(
     }
 
     const userUpdate: UserUpdate = {};
+
     if (full_name) userUpdate.full_name = full_name;
     if (email) userUpdate.email = email;
 
     if (role) {
       userUpdate.role = role;
+
       const config = getRoleConfig(role, email);
+
       userUpdate.modules = config.modules;
       userUpdate.is_readonly = config.is_readonly;
       userUpdate.default_module = config.default_module;

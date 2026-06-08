@@ -81,7 +81,10 @@ export function UserForm({
   }, [user, open]);
 
   const handleChange = (field: keyof FormState, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value as never }));
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value as never,
+    }));
 
     if (errors[field]) {
       setErrors((prev) => {
@@ -212,20 +215,21 @@ export function UserForm({
               <SelectTrigger id="role">
                 <SelectValue placeholder="Seleccione un rol" />
               </SelectTrigger>
+
               <SelectContent>
                 <SelectItem value="Admin">Admin</SelectItem>
                 <SelectItem value="Reclamos">Reclamos</SelectItem>
                 <SelectItem value="ReclamosArbolado">
                   Reclamos Arbolado
                 </SelectItem>
-                <SelectItem value="ReclamosZyV">
-                  Reclamos ZyV
-                </SelectItem>
+                <SelectItem value="ReclamosZyV">Reclamos ZyV</SelectItem>
                 <SelectItem value="AdminLectura">Admin Lectura</SelectItem>
                 <SelectItem value="FC_RRHH">FC + RRHH</SelectItem>
                 <SelectItem value="FC_SECTOR">FC Sector</SelectItem>
+                <SelectItem value="Taller">Taller</SelectItem>
               </SelectContent>
             </Select>
+
             {errors.role && (
               <p className="text-sm text-red-500">{errors.role}</p>
             )}
@@ -291,6 +295,7 @@ export function UserForm({
             >
               Cancelar
             </Button>
+
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
                 ? isEditing

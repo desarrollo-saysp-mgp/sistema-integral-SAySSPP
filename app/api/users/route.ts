@@ -8,7 +8,19 @@ type SupportedRole =
   | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
-  | "FC_SECTOR";
+  | "FC_SECTOR"
+  | "Taller";
+
+const VALID_ROLES: SupportedRole[] = [
+  "Admin",
+  "Reclamos",
+  "ReclamosArbolado",
+  "ReclamosZyV",
+  "AdminLectura",
+  "FC_RRHH",
+  "FC_SECTOR",
+  "Taller",
+];
 
 function getRoleConfig(role: SupportedRole, email?: string) {
   const normalizedEmail = (email || "").trim().toLowerCase();
@@ -112,6 +124,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         fc_sectors: sectorMap[normalizedEmail] ?? [],
       };
     }
+
+    case "Taller":
+      return {
+        modules: ["work_orders"],
+        is_readonly: false,
+        default_module: "work_orders",
+        fc_sectors: [],
+      };
 
     default:
       return {
@@ -237,19 +257,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      role !== "Admin" &&
-      role !== "Reclamos" &&
-      role !== "ReclamosArbolado" &&
-      role !== "ReclamosZyV" &&
-      role !== "AdminLectura" &&
-      role !== "FC_RRHH" &&
-      role !== "FC_SECTOR"
-    ) {
+    if (!VALID_ROLES.includes(role)) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "AdminLectura", "FC_RRHH" o "FC_SECTOR"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR" o "Taller"',
         },
         { status: 400 },
       );

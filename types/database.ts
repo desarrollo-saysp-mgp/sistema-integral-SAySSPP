@@ -7,13 +7,14 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-          | "Admin"
-          | "Reclamos"
-          | "ReclamosArbolado"
-          | "ReclamosZyV"
-          | "AdminLectura"
-          | "FC_RRHH"
-          | "FC_SECTOR";
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "ReclamosZyV"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR"
+            | "Taller";
           modules: string[] | null;
           is_readonly: boolean | null;
           default_module: string | null;
@@ -26,13 +27,14 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-          | "Admin"
-          | "Reclamos"
-          | "ReclamosArbolado"
-          | "ReclamosZyV"
-          | "AdminLectura"
-          | "FC_RRHH"
-          | "FC_SECTOR";
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "ReclamosZyV"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR"
+            | "Taller";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -45,13 +47,14 @@ export interface Database {
           full_name?: string;
           email?: string;
           role?:
-          | "Admin"
-          | "Reclamos"
-          | "ReclamosArbolado"
-          | "ReclamosZyV"
-          | "AdminLectura"
-          | "FC_RRHH"
-          | "FC_SECTOR";
+            | "Admin"
+            | "Reclamos"
+            | "ReclamosArbolado"
+            | "ReclamosZyV"
+            | "AdminLectura"
+            | "FC_RRHH"
+            | "FC_SECTOR"
+            | "Taller";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -79,11 +82,11 @@ export interface Database {
           zone: string | null;
           since_when: string | null;
           contact_method:
-          | "Presencial"
-          | "Telefono"
-          | "Email"
-          | "WhatsApp"
-          | null;
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
           details: string | null;
           status: "En proceso" | "Resuelto" | "No resuelto";
           referred: boolean;
@@ -111,11 +114,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-          | "Presencial"
-          | "Telefono"
-          | "Email"
-          | "WhatsApp"
-          | null;
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
@@ -143,11 +146,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-          | "Presencial"
-          | "Telefono"
-          | "Email"
-          | "WhatsApp"
-          | null;
+            | "Presencial"
+            | "Telefono"
+            | "Email"
+            | "WhatsApp"
+            | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
@@ -240,6 +243,87 @@ export interface Database {
           updated_at?: string;
         };
       };
+
+      work_orders: {
+        Row: {
+          id: string;
+          order_number: string | null;
+          entry_date: string | null;
+          requesting_area: string | null;
+          failure_report: string | null;
+          repair_type: string | null;
+          vehicle_code: string | null;
+          criticality: string | null;
+          failure_type: string | null;
+          failure_location: string | null;
+          requires_spare_part: string | null;
+          vehicle: string | null;
+          license_plate: string | null;
+          exit_date: string | null;
+          spare_part_code: string | null;
+          units: number | null;
+          provider: string | null;
+          amount: number | null;
+          observations: string | null;
+          driver: string | null;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_number?: string | null;
+          entry_date?: string | null;
+          requesting_area?: string | null;
+          failure_report?: string | null;
+          repair_type?: string | null;
+          vehicle_code?: string | null;
+          criticality?: string | null;
+          failure_type?: string | null;
+          failure_location?: string | null;
+          requires_spare_part?: string | null;
+          vehicle?: string | null;
+          license_plate?: string | null;
+          exit_date?: string | null;
+          spare_part_code?: string | null;
+          units?: number | null;
+          provider?: string | null;
+          amount?: number | null;
+          observations?: string | null;
+          driver?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_number?: string | null;
+          entry_date?: string | null;
+          requesting_area?: string | null;
+          failure_report?: string | null;
+          repair_type?: string | null;
+          vehicle_code?: string | null;
+          criticality?: string | null;
+          failure_type?: string | null;
+          failure_location?: string | null;
+          requires_spare_part?: string | null;
+          vehicle?: string | null;
+          license_plate?: string | null;
+          exit_date?: string | null;
+          spare_part_code?: string | null;
+          units?: number | null;
+          provider?: string | null;
+          amount?: number | null;
+          observations?: string | null;
+          driver?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
 
     Views: {
@@ -285,6 +369,12 @@ export type Cause = Database["public"]["Tables"]["causes"]["Row"];
 export type CauseInsert = Database["public"]["Tables"]["causes"]["Insert"];
 export type CauseUpdate = Database["public"]["Tables"]["causes"]["Update"];
 
+export type WorkOrder = Database["public"]["Tables"]["work_orders"]["Row"];
+export type WorkOrderInsert =
+  Database["public"]["Tables"]["work_orders"]["Insert"];
+export type WorkOrderUpdate =
+  Database["public"]["Tables"]["work_orders"]["Update"];
+
 export type ComplaintWithDetails = Complaint & {
   service: Service | null;
   cause: Cause | null;
@@ -297,6 +387,7 @@ export type ComplaintHistoryWithUser = ComplaintHistory & {
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";
 export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp";
+
 export type UserRole =
   | "Admin"
   | "Reclamos"
@@ -304,4 +395,5 @@ export type UserRole =
   | "ReclamosZyV"
   | "AdminLectura"
   | "FC_RRHH"
-  | "FC_SECTOR";
+  | "FC_SECTOR"
+  | "Taller";
