@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { PlusCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { User, UserFormData } from "@/types";
+import type { User, UserFormData, UserRole } from "@/types";
 
 export default function UsersPage() {
   const {
@@ -94,6 +94,7 @@ export default function UsersPage() {
 
   const handleFormClose = (open: boolean) => {
     setIsFormOpen(open);
+
     if (!open) {
       setSelectedUser(null);
     }
@@ -105,12 +106,7 @@ export default function UsersPage() {
 
   const handleRoleFilter = (role: string | undefined) => {
     setFilters({
-      role: role as
-        | "Admin"
-        | "Reclamos"
-        | "AdminLectura"
-        | "FC_RRHH"
-        | undefined,
+      role: role as UserRole | undefined,
     });
   };
 
@@ -121,10 +117,12 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold tracking-tight">
             Gestión de Usuarios
           </h1>
-          <p className="text-muted-foreground mt-2">
+
+          <p className="mt-2 text-muted-foreground">
             Administra los usuarios del sistema y sus roles
           </p>
         </div>
+
         <Button onClick={handleNewUser}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Nuevo usuario
@@ -146,6 +144,7 @@ export default function UsersPage() {
             Lista de todos los usuarios registrados con sus roles y permisos
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <UserTable
             users={users}
@@ -169,11 +168,13 @@ export default function UsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">
             <h2 className="text-lg font-semibold">Confirmar eliminación</h2>
+
             <p className="mt-2 text-sm text-muted-foreground">
               ¿Estás seguro de que deseas eliminar al usuario{" "}
               <span className="font-semibold">{userToDelete.full_name}</span>?
               Esta acción no se puede deshacer.
             </p>
+
             <div className="mt-6 flex justify-end gap-3">
               <Button
                 variant="outline"
@@ -185,6 +186,7 @@ export default function UsersPage() {
               >
                 Cancelar
               </Button>
+
               <Button
                 variant="destructive"
                 onClick={confirmDelete}

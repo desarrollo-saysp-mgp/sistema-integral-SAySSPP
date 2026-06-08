@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type ModuleKey = "complaints" | "purchase_requests" | "general_dashboard";
+type ModuleKey =
+  | "complaints"
+  | "purchase_requests"
+  | "general_dashboard"
+  | "work_orders";
 
 type AccessItem = {
   key: ModuleKey;
@@ -34,6 +38,13 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     title: "Tablero General",
     description: "Visualización tablero Power BI.",
     href: "/dashboard/tablero-general",
+    available: true,
+  },
+  work_orders: {
+    key: "work_orders",
+    title: "Órdenes de Trabajo",
+    description: "Carga y seguimiento de órdenes de trabajo del taller.",
+    href: "/dashboard/taller/ordenes-trabajo",
     available: true,
   },
 };
@@ -83,6 +94,7 @@ export default async function AccesosPage() {
   const userEmail = normalizeText(profile.email || user.email);
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
+  const isTallerUser = userRole === "taller";
 
   const rawModules: string[] = Array.isArray(profile.modules)
     ? profile.modules
@@ -99,7 +111,7 @@ export default async function AccesosPage() {
   const accesses = [...baseAccesses];
 
   const alreadyHasDashboard = accesses.some(
-    (item) => item.key === "general_dashboard"
+    (item) => item.key === "general_dashboard",
   );
 
   /*
@@ -108,12 +120,19 @@ export default async function AccesosPage() {
 
     Si la cuenta es GIRSU, también le mostramos el Tablero General,
     pero sin darle acceso a Administración.
+
+    Si la cuenta es Taller, no agregamos nada extra:
+    solo verá lo que tenga en modules, en este caso work_orders.
   */
   if ((hasAllowedRole || isGirsuUser) && !alreadyHasDashboard) {
     accesses.push(MODULE_CONFIG.general_dashboard);
   }
 
   const filteredAccesses = accesses.filter((item) => {
+    if (isTallerUser) {
+      return item.key === "work_orders";
+    }
+
     if (item.key === "general_dashboard") {
       return hasAllowedRole || isGirsuUser;
     }
