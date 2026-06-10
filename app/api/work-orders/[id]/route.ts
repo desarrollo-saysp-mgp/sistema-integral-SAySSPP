@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import type { WorkOrderInsert } from "@/types";
+import type { WorkOrderUpdate } from "@/types";
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -23,8 +23,12 @@ const canAccessWorkOrders = (profile: {
   );
 };
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     const {
@@ -44,43 +48,27 @@ export async function GET(request: NextRequest) {
 
     if (profileError || !profile || !canAccessWorkOrders(profile)) {
       return NextResponse.json(
-        { error: "No autorizado para ver órdenes de trabajo" },
+        { error: "No autorizado para ver esta orden de trabajo" },
         { status: 403 },
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search");
-    const status = searchParams.get("status");
-
-    let query = supabase
+    const { data, error } = await supabase
       .from("work_orders")
       .select("*")
-      .order("created_at", { ascending: false });
+      .eq("id", id)
+      .single();
 
-    if (search) {
-      query = query.or(
-        `order_number.ilike.%${search}%,vehicle_code.ilike.%${search}%,vehicle.ilike.%${search}%,license_plate.ilike.%${search}%,driver.ilike.%${search}%`,
-      );
-    }
-
-    if (status && status !== "Todos") {
-      query = query.eq("status", status);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching work orders:", error);
+    if (error || !data) {
       return NextResponse.json(
-        { error: "Error al cargar órdenes de trabajo" },
-        { status: 500 },
+        { error: "Orden de trabajo no encontrada" },
+        { status: 404 },
       );
     }
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("Unexpected error in GET /api/work-orders:", error);
+    console.error("Unexpected error in GET /api/work-orders/[id]:", error);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
@@ -88,8 +76,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     const {
@@ -109,14 +101,14 @@ export async function POST(request: NextRequest) {
 
     if (profileError || !profile || !canAccessWorkOrders(profile)) {
       return NextResponse.json(
-        { error: "No autorizado para crear órdenes de trabajo" },
+        { error: "No autorizado para editar esta orden de trabajo" },
         { status: 403 },
       );
     }
 
     const body = await request.json();
 
-    const payload: WorkOrderInsert = {
+    const payload: WorkOrderUpdate = {
       order_number: body.order_number || null,
       entry_date: body.entry_date || null,
       requesting_area: body.requesting_area || null,
@@ -132,35 +124,108 @@ export async function POST(request: NextRequest) {
       exit_date: body.exit_date || null,
       spare_part_detail: body.spare_part_detail || null,
       spare_part_code: body.spare_part_code || null,
-      units: body.units ? Number(body.units) : null,
+      units:
+        body.units !== null && body.units !== undefined && body.units !== ""
+          ? Number(body.units)
+          : null,
       provider: body.provider || null,
-      amount: body.amount ? Number(body.amount) : null,
+      amount:
+        body.amount !== null && body.amount !== undefined && body.amount !== ""
+          ? Number(body.amount)
+          : null,
       observations: body.observations || null,
       driver: body.driver || null,
-      status: body.status || "Iniciado",
-      created_by: user.id,
+      status: body.status || null,
     };
 
     const { data, error } = await supabase
       .from("work_orders")
-      .insert(payload)
+      .update(payload)
+      .eq("id", id)
       .select("*")
       .single();
 
-    if (error) {
-      console.error("Error creating work order:", error);
+    if (error || !data) {
+      console.error("Error updating work order:", error);
       return NextResponse.json(
-        { error: "Error al crear orden de trabajo" },
+        { error: "Error al actualizar orden de trabajo" },
         { status: 500 },
       );
     }
 
-    return NextResponse.json(
-      { data, message: "Orden de trabajo creada correctamente" },
-      { status: 201 },
-    );
+    return NextResponse.json({
+      data,
+      message: "Orden de trabajo actualizada correctamente",
+    });
   } catch (error) {
-    console.error("Unexpected error in POST /api/work-orders:", error);
+    console.error("Unexpected error in PATCH /api/work-orders/[id]:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role, modules")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile || !canAccessWorkOrders(profile)) {
+      return NextResponse.json(
+        { error: "No autorizado para eliminar esta orden de trabajo" },
+        { status: 403 },
+      );
+    }
+
+    const { data: deletedRows, error } = await supabase
+      .from("work_orders")
+      .delete()
+      .eq("id", id)
+      .select("id");
+
+    if (error) {
+      console.error("Error deleting work order:", error);
+      return NextResponse.json(
+        { error: "Error al eliminar orden de trabajo" },
+        { status: 500 },
+      );
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se eliminó ninguna orden. Revisá las políticas RLS de Supabase.",
+        },
+        { status: 403 },
+      );
+    }
+
+    return NextResponse.json({
+      data: null,
+      message: "Orden de trabajo eliminada correctamente",
+    });
+  } catch (error) {
+    console.error("Unexpected error in DELETE /api/work-orders/[id]:", error);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
