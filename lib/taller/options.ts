@@ -44,225 +44,241 @@ export const LOCALIZACION_FALLA_OPTIONS = [
 ] as const;
 
 export const CRITICIDAD_OPTIONS = [
-  "C",
-  "--",
-  "A"
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11",
+  "12",
+  "13",
+  "14",
+  "--"
 ] as const;
 
 export const VEHICLE_OPTIONS = [
+  {
+    "code": "S.P.1",
+    "vehicle": "Ford F100",
+    "licensePlate": "USA005",
+    "vehicleType": "Camioneta",
+    "criticality": ""
+  },
   {
     "code": "S.P.2",
     "vehicle": "VW Saveiro",
     "licensePlate": "TIF143",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": "4"
   },
   {
     "code": "S.P.4",
     "vehicle": "Chevrolet C10 Pick Up",
     "licensePlate": "WWE612",
     "vehicleType": "Camioneta",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "S.P.5",
     "vehicle": "Renault Duster Oroch",
     "licensePlate": "AB290UX",
     "vehicleType": "Auto",
-    "criticality": "C"
+    "criticality": "5"
   },
   {
     "code": "S.P.6",
     "vehicle": "Chevrolet Silverado",
     "licensePlate": "BZU572",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "S.P.7",
     "vehicle": "Ford F100",
     "licensePlate": "UJA028",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": "6"
   },
   {
     "code": "S.P.8",
     "vehicle": "Toyota Hilux 4*4 Doble Cab.",
     "licensePlate": "KHB108",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "S.P.9",
     "vehicle": "Fiat Strada Trekking",
     "licensePlate": "ODU636",
     "vehicleType": "Auto",
-    "criticality": "C"
+    "criticality": "5"
   },
   {
     "code": "S.P.10",
     "vehicle": "Micro Omnibus M.B. 1418",
     "licensePlate": "GIC069",
     "vehicleType": "Minibus",
-    "criticality": "C"
+    "criticality": "5"
   },
   {
     "code": "S.P.11",
     "vehicle": "VW Saveiro",
     "licensePlate": "STS068",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": "5"
   },
   {
     "code": "S.P.12",
     "vehicle": "Ford F100",
     "licensePlate": "TFM419",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "P.C.1",
     "vehicle": "Mercedes Benz 1114",
     "licensePlate": "UNU471",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "P.C.2",
     "vehicle": "Mercedes Benz Atron 1624/45CD",
     "licensePlate": "OAB542",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": "13"
   },
   {
     "code": "P.C.3",
     "vehicle": "Ford 7000",
     "licensePlate": "XFT689",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "P.C.4",
     "vehicle": "Porta Contenedor VW 17230",
     "licensePlate": "AD132NI",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": "11"
   },
   {
     "code": "P.C.5",
     "vehicle": "Porta Contenedor Iveco 170E28",
     "licensePlate": "AF163BS",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": "10"
   },
   {
     "code": "P.C.6",
     "vehicle": "Porta Contenedor Iveco 170E28",
     "licensePlate": "AF163BR",
     "vehicleType": "Camion portacontenedor",
-    "criticality": "A"
+    "criticality": "10"
   },
   {
     "code": "R.D.1",
     "vehicle": "Recolector Ford 7000",
     "licensePlate": "XFX600",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.D.2",
     "vehicle": "Mercedes Benz Atron 1624/45CD",
     "licensePlate": "OAB543",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "9"
   },
   {
     "code": "R.D.3",
     "vehicle": "Recolector VW 17220",
     "licensePlate": "HCW881",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "13"
   },
   {
     "code": "R.D.4",
     "vehicle": "Recolector VW 17220",
     "licensePlate": "HCW882",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "9"
   },
   {
     "code": "R.D.5",
     "vehicle": "Recolector VW 17220",
     "licensePlate": "NDK046",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "R.D.6",
     "vehicle": "Recolector VW 17220",
     "licensePlate": "HCW883",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "10"
   },
   {
     "code": "R.D.7",
     "vehicle": "Recolector VW 17230",
     "licensePlate": "AB904MN",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "10"
   },
   {
     "code": "R.D.8",
     "vehicle": "Iveco 170E28",
     "licensePlate": "AE405AC",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "9"
   },
   {
     "code": "R.D.9",
     "vehicle": "Iveco 170E28",
     "licensePlate": "AE405AB",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "9"
   },
   {
     "code": "R.D.10",
     "vehicle": "Recolector VW 17280",
     "licensePlate": "AG952MM",
     "vehicleType": "Camión recolector",
-    "criticality": "A"
+    "criticality": "8"
   },
   {
     "code": "R.E. P.C.1",
     "vehicle": "Pala JCB Deutz",
     "licensePlate": "BLS045",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. P.C.2",
     "vehicle": "Pala JCB Deutz",
     "licensePlate": "BXI010",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. P.C.4",
     "vehicle": "Pala Michigan R50C-ll",
     "licensePlate": "ECC044",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "14"
   },
   {
     "code": "R.E. P.C.5",
     "vehicle": "Pala Yineng YN938G",
     "licensePlate": "DHC083",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "14"
   },
   {
     "code": "R.E. P.C.6",
-    "vehicle": "Pala Cargadora Klia CA 200",
+    "vehicle": "Pala Cargadora Klia  CA 200",
     "licensePlate": "MGP001",
     "vehicleType": "Pala cargadora",
     "criticality": ""
@@ -279,371 +295,371 @@ export const VEHICLE_OPTIONS = [
     "vehicle": "Topadora M.F. D600",
     "licensePlate": "MGP054",
     "vehicleType": "Topadora",
-    "criticality": ""
+    "criticality": "--"
   },
   {
     "code": "R.E. P.C.11",
     "vehicle": "Pala Michigan R45 C-IV",
     "licensePlate": "FCL40",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "14"
   },
   {
     "code": "R.E. P.C.12",
     "vehicle": "Pala Michigan R45 C-IV",
     "licensePlate": "FCL41",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "A.6",
     "vehicle": "Pala cargadora New Holand L318",
     "licensePlate": "EHB073",
     "vehicleType": "Mini Pala cargadora",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "B.P2",
     "vehicle": "Mini pala cargadora Bobcat",
     "licensePlate": "FAC47",
     "vehicleType": "Mini Pala cargadora",
-    "criticality": "C"
+    "criticality": "13"
   },
   {
     "code": "B.P3",
     "vehicle": "Mini pala cargadora Bobcat",
     "licensePlate": "FAC48",
     "vehicleType": "Mini Pala cargadora",
-    "criticality": "C"
+    "criticality": "12"
   },
   {
     "code": "B.P4",
     "vehicle": "Pala Michigan R45 C-IV",
     "licensePlate": "FCL42",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. P.C.3",
     "vehicle": "Pala Yineng YN917",
     "licensePlate": "CWV092",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. P.C.8",
     "vehicle": "Pala Cargadora Caterpillar 930-T",
     "licensePlate": "MGP080",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "--"
   },
   {
     "code": "B.2",
     "vehicle": "Volcador Ford 7000",
     "licensePlate": "TJN736",
     "vehicleType": "Camión volcador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "B.3",
     "vehicle": "Volcador Ford 7000",
     "licensePlate": "XFX605",
     "vehicleType": "Camión volcador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "B.4",
     "vehicle": "Volcador Ford 7000",
     "licensePlate": "XFX608",
     "vehicleType": "Camión volcador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "B.5",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU925",
     "vehicleType": "Camión volcador",
-    "criticality": "C"
+    "criticality": "10"
   },
   {
     "code": "B.6",
     "vehicle": "Barredora VW 17280",
     "licensePlate": "AB564HJ",
     "vehicleType": "Camión barredor",
-    "criticality": "C"
+    "criticality": "--"
   },
   {
     "code": "B.7",
-    "vehicle": "Volcador Iveco 170E28",
+    "vehicle": "Volcador Iveco  170E28",
     "licensePlate": "AH618GH",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. V.8",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU929",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "BT.1",
     "vehicle": "Tractor M.F.1175",
     "licensePlate": "POI040",
     "vehicleType": "Tractor",
-    "criticality": "C"
+    "criticality": "--"
   },
   {
     "code": "BT.2",
     "vehicle": "Tractor Massey Ferguson 2625",
     "licensePlate": "EQP065",
     "vehicleType": "Tractor",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "B.C1",
     "vehicle": "Carro (Acoplado al Tractor B.T2)",
     "licensePlate": "MGP059",
     "vehicleType": "Acoplado carretón",
-    "criticality": ""
+    "criticality": "--"
   },
   {
     "code": "R.E. V.2",
     "vehicle": "Volcador VW. 17230",
     "licensePlate": "AD765XX",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "R.E. V.3",
     "vehicle": "Volcador Iveco 170E28",
     "licensePlate": "AE405AD",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "11"
   },
   {
     "code": "R.E. V.5",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU926",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "R.E. V.6",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU927",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "R.E. V.7",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU928",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "13"
   },
   {
     "code": "R.E. V.9",
     "vehicle": "Volc.Mercedes Benz 1215",
     "licensePlate": "AFU930",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "14"
   },
   {
     "code": "R.E. V.10",
     "vehicle": "Volcador VW. 13180",
     "licensePlate": "HCW884",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "12"
   },
   {
     "code": "R.E. V.11",
     "vehicle": "Volcador VW. 13180",
     "licensePlate": "HCW885",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "11"
   },
   {
     "code": "R.E. V.12",
     "vehicle": "Volcador Iveco 170E28",
     "licensePlate": "AH304PS",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "9"
   },
   {
     "code": "R.E. V.13",
     "vehicle": "Volcador Iveco 170E28",
     "licensePlate": "AH304PT",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "10"
   },
   {
     "code": "R.E. V.14",
     "vehicle": "Volcador Iveco 170E28",
     "licensePlate": "AH618GI",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "8"
   },
   {
     "code": "M.C. V.1",
     "vehicle": "Volcador VW. 17280",
     "licensePlate": "AG952MO",
     "vehicleType": "Camión volcador",
-    "criticality": "A"
+    "criticality": "--"
   },
   {
     "code": "M.C. P.R.1",
     "vehicle": "Retro Pala JCB",
     "licensePlate": "FAC53",
     "vehicleType": "Retroexcavadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "M.C.1",
     "vehicle": "Motoniveladora \"Komatsu\" GD511A1",
     "licensePlate": "BLS046",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "M.C.2",
     "vehicle": "Motoniveladora \"Komatsu\" GD511A1",
     "licensePlate": "BLS047",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": "13"
   },
   {
     "code": "M.C.3",
     "vehicle": "Motoniveladora \"Huber Warco\" 140S",
     "licensePlate": "MGP053",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": "--"
   },
   {
     "code": "M.C.4",
     "vehicle": "Motoniveladora \"SEM\" 919",
     "licensePlate": "DPE060",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "M.C.5",
     "vehicle": "Motoniveladora \"Huber Warco\" 165S",
     "licensePlate": "MGP081",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": "--"
   },
   {
     "code": "M.C.6",
     "vehicle": "Motoniveladora Sany STG190C-8S",
     "licensePlate": "FCL49",
     "vehicleType": "Motoniveladora",
-    "criticality": "A"
+    "criticality": "--"
   },
   {
     "code": "A.P.U.V.1",
     "vehicle": "Volcador Grúa Vw 17190",
     "licensePlate": "AB904NS",
     "vehicleType": "Camión volcador",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.1",
     "vehicle": "Chevrolet (camión regador)",
     "licensePlate": "XFX607",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.P.U.2",
     "vehicle": "Renault Master 2.3",
     "licensePlate": "AB826ZI",
     "vehicleType": "Furgon",
-    "criticality": "C"
+    "criticality": "5"
   },
   {
     "code": "A.P.U.3",
-    "vehicle": "Tractor Tai Shan",
+    "vehicle": "Tractor  Tai  Shan",
     "licensePlate": "POI091",
     "vehicleType": "Tractor",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.4",
-    "vehicle": "Tractor Tai Shan",
+    "vehicle": "Tractor  Tai  Shan",
     "licensePlate": "PAT092",
     "vehicleType": "Tractor",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.5",
     "vehicle": "Renault Oroch",
     "licensePlate": "AA757YG",
     "vehicleType": "Auto",
-    "criticality": "C"
+    "criticality": "4"
   },
   {
     "code": "A.P.U.6",
     "vehicle": "Cuatriciclo Motomel Rojo",
     "licensePlate": "JUI693 (056)",
     "vehicleType": "Cuatriciclo",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.7",
-    "vehicle": "Tractor Deutz Verde",
+    "vehicle": "Tractor Deutz  Verde",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.P.U.8",
     "vehicle": "Tractor Massey Ferguson 1185",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.P.U.9",
     "vehicle": "Tractor Yard Machine by MTD",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.10",
     "vehicle": "Gilera Smash",
     "licensePlate": "A001FLP",
     "vehicleType": "Motocicleta",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.11",
-    "vehicle": "Tractor Tai Shan",
+    "vehicle": "Tractor  Tai  Shan",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.12",
     "vehicle": "Tractor Yard Machine by MTD",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.13",
-    "vehicle": "Desmalezador Z Beast",
+    "vehicle": "Desmalezador Z  Beast",
     "licensePlate": "",
     "vehicleType": "Desmalezador",
-    "criticality": "--"
+    "criticality": ""
   },
   {
     "code": "A.P.U.14",
     "vehicle": "Ford 150 cabina simple",
     "licensePlate": "SYE917",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.P.U.16",
@@ -671,196 +687,196 @@ export const VEHICLE_OPTIONS = [
     "vehicle": "Tractor Massey Ferguson 1185",
     "licensePlate": "",
     "vehicleType": "Tractor",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.1",
     "vehicle": "Excavadora Sany 010-SY215C",
     "licensePlate": "EGR033",
     "vehicleType": "Excavadora",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "A.2",
     "vehicle": "Autoelevadora Doosan B15NS",
     "licensePlate": "EGR032",
     "vehicleType": "Autoelevador",
-    "criticality": "A"
+    "criticality": ""
   },
   {
     "code": "A.3",
     "vehicle": "Pala Cargadora Ensign YX638",
     "licensePlate": "EHB066",
     "vehicleType": "Pala cargadora",
-    "criticality": "A"
+    "criticality": "13"
   },
   {
     "code": "A.4",
     "vehicle": "Carretón \"Cometto\" A 1223",
     "licensePlate": "AE715FQ",
     "vehicleType": "Acoplado carretón",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.5",
     "vehicle": "Camión Iveco 150E21",
     "licensePlate": "AE746RJ",
     "vehicleType": "Camión recolector",
-    "criticality": "C"
+    "criticality": "8"
   },
   {
     "code": "A.6",
     "vehicle": "Pala cargadora New Holland L318",
     "licensePlate": "EHB073",
     "vehicleType": "Mini Pala cargadora",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "A.7",
     "vehicle": "Iveco Daily 49.12 vidriada",
     "licensePlate": "FER734",
     "vehicleType": "Furgon",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "G.A.1",
     "vehicle": "Renault Kangoo",
     "licensePlate": "KZJ435",
     "vehicleType": "Camioneta",
-    "criticality": "C"
+    "criticality": "--"
   },
   {
     "code": "G.A.2",
     "vehicle": "Mondial",
     "licensePlate": "A174KTV",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "G.A.3",
     "vehicle": "Gilera Smash",
     "licensePlate": "A001FLR",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "G.A.4",
     "vehicle": "Renault Master 2.3",
     "licensePlate": "AB826ZT",
     "vehicleType": "Furgon",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "G.A.5",
     "vehicle": "Mondial",
     "licensePlate": "",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "Z.V.1",
     "vehicle": "Gilera Smash",
     "licensePlate": "A001FLQ",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "Z.V.2",
     "vehicle": "Chevrolet S10 LTS 2.8 TD",
     "licensePlate": "LOS863",
     "vehicleType": "Camioneta",
-    "criticality": "--"
+    "criticality": "4"
   },
   {
     "code": "R.3",
     "vehicle": "Chevrolet",
     "licensePlate": "XGA020",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "R.4",
     "vehicle": "Dodge DP800",
     "licensePlate": "XFT687",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "9"
   },
   {
     "code": "R.5",
     "vehicle": "Dodge DP800",
     "licensePlate": "XFX604",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "7"
   },
   {
     "code": "R.6",
     "vehicle": "Chevrolet 610",
     "licensePlate": "XFT688",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "R.7",
     "vehicle": "Dodge 800",
     "licensePlate": "XGA025",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "7"
   },
   {
     "code": "R.8",
     "vehicle": "Ford F6000",
     "licensePlate": "XIW169",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "6"
   },
   {
     "code": "R.9",
     "vehicle": "Ford 7000",
     "licensePlate": "VVF545",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "R.10",
     "vehicle": "Volkswagen 13180",
     "licensePlate": "NDK045",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "8"
   },
   {
     "code": "R.11",
     "vehicle": "Volkswagen 17280",
     "licensePlate": "AG952MN",
     "vehicleType": "Camión regador",
-    "criticality": "C"
+    "criticality": "4"
   },
   {
     "code": "I 1",
     "vehicle": "Corven Mirage 110 c.c.",
     "licensePlate": "HLB572",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "I 2",
     "vehicle": "Corven Mirage 110 c.c.",
     "licensePlate": "HLB573",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "I 3",
     "vehicle": "Corven Mirage 110 c.c.",
     "licensePlate": "HLB574",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   },
   {
     "code": "I 4",
     "vehicle": "Corven Mirage 110 c.c.",
     "licensePlate": "HLB575",
     "vehicleType": "Motocicleta",
-    "criticality": "C"
+    "criticality": ""
   }
 ] as const;
 

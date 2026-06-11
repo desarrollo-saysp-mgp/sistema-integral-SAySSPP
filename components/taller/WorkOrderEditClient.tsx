@@ -28,7 +28,6 @@ import jsPDF from "jspdf";
 import autoTable, { type CellHookData } from "jspdf-autotable";
 import {
   AREA_SOLICITANTE_OPTIONS,
-  CRITICIDAD_OPTIONS,
   DRIVER_OPTIONS,
   FAILURE_REPORT_OPTIONS,
   LOCALIZACION_FALLA_OPTIONS,
@@ -98,33 +97,95 @@ const getUniqueOptions = (options: readonly string[]) => {
     });
 };
 
-const getInitialFormData = (order: WorkOrder): WorkOrderFormData => ({
-  order_number: order.order_number || "",
-  entry_date: order.entry_date || "",
-  requesting_area: order.requesting_area || "",
-  failure_report: order.failure_report || "",
-  repair_type: order.repair_type || "",
-  vehicle_code: order.vehicle_code || "",
-  criticality: order.criticality || "",
-  failure_type: order.failure_type || "",
-  failure_location: order.failure_location || "",
-  requires_spare_part: order.requires_spare_part || "",
-  vehicle: order.vehicle || "",
-  license_plate: order.license_plate || "",
-  exit_date: order.exit_date || "",
-  spare_part_detail: order.spare_part_detail || "",
-  spare_part_code: order.spare_part_code || "",
-  units:
-    order.units === null || order.units === undefined ? "" : String(order.units),
-  provider: order.provider || "",
-  amount:
-    order.amount === null || order.amount === undefined
-      ? ""
-      : String(order.amount),
-  observations: order.observations || "",
-  driver: order.driver || "",
-  status: order.status || "",
-});
+const getCriticalityValue = (value?: string | number | null) => {
+  const cleanValue = String(value ?? "").trim();
+
+  return cleanValue || "--";
+};
+
+const getCriticalityClass = (criticality?: string | number | null) => {
+  const value = Number(criticality);
+
+  if (!Number.isFinite(value)) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+
+  if (value >= 13) {
+    return "border-red-200 bg-red-100 text-red-800";
+  }
+
+  if (value >= 10) {
+    return "border-yellow-200 bg-yellow-100 text-yellow-800";
+  }
+
+  return "border-green-200 bg-green-100 text-green-800";
+};
+
+const getVehicleMatchFromOrder = (order: WorkOrder) => {
+  if (order.vehicle_code) {
+    const byCode = VEHICLE_OPTIONS.find(
+      (item) => normalizeText(item.code) === normalizeText(order.vehicle_code || ""),
+    );
+
+    if (byCode) return byCode;
+  }
+
+  if (order.vehicle) {
+    const byVehicle = VEHICLE_OPTIONS.find(
+      (item) => normalizeText(item.vehicle) === normalizeText(order.vehicle || ""),
+    );
+
+    if (byVehicle) return byVehicle;
+  }
+
+  if (order.license_plate) {
+    const byLicensePlate = VEHICLE_OPTIONS.find(
+      (item) =>
+        normalizeText(item.licensePlate || "") ===
+        normalizeText(order.license_plate || ""),
+    );
+
+    if (byLicensePlate) return byLicensePlate;
+  }
+
+  return null;
+};
+
+const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
+  const matchedVehicle = getVehicleMatchFromOrder(order);
+
+  return {
+    order_number: order.order_number || "",
+    entry_date: order.entry_date || "",
+    requesting_area: order.requesting_area || "",
+    failure_report: order.failure_report || "",
+    repair_type: order.repair_type || "",
+    vehicle_code: order.vehicle_code || matchedVehicle?.code || "",
+    criticality: getCriticalityValue(
+      order.criticality || matchedVehicle?.criticality,
+    ),
+    failure_type: order.failure_type || "",
+    failure_location: order.failure_location || "",
+    requires_spare_part: order.requires_spare_part || "",
+    vehicle: order.vehicle || matchedVehicle?.vehicle || "",
+    license_plate: order.license_plate || matchedVehicle?.licensePlate || "",
+    exit_date: order.exit_date || "",
+    spare_part_detail: order.spare_part_detail || "",
+    spare_part_code: order.spare_part_code || "",
+    units:
+      order.units === null || order.units === undefined
+        ? ""
+        : String(order.units),
+    provider: order.provider || "",
+    amount:
+      order.amount === null || order.amount === undefined
+        ? ""
+        : String(order.amount),
+    observations: order.observations || "",
+    driver: order.driver || "",
+    status: order.status || "",
+  };
+};
 
 export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
   const router = useRouter();
@@ -173,7 +234,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
       vehicle_code: value,
       vehicle: selectedVehicle?.vehicle ?? prev.vehicle,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: selectedVehicle?.criticality ?? prev.criticality,
+      criticality: getCriticalityValue(selectedVehicle?.criticality),
     }));
   };
 
@@ -187,7 +248,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
       vehicle: value,
       vehicle_code: selectedVehicle?.code ?? prev.vehicle_code,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: selectedVehicle?.criticality ?? prev.criticality,
+      criticality: getCriticalityValue(selectedVehicle?.criticality),
     }));
   };
 
@@ -458,6 +519,31 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
         columnStyles: {
           0: { cellWidth: 55, fontStyle: "bold" },
           1: { cellWidth: 123 },
+        },
+        didParseCell: (data: CellHookData) => {
+          if (
+            data.section === "body" &&
+            data.row.index === 3 &&
+            data.column.index === 1
+          ) {
+            const value = Number(formData.criticality);
+
+            if (!Number.isFinite(value)) {
+              data.cell.styles.fillColor = [241, 245, 249];
+              data.cell.styles.textColor = [51, 65, 85];
+            } else if (value >= 13) {
+              data.cell.styles.fillColor = [254, 226, 226];
+              data.cell.styles.textColor = [153, 27, 27];
+            } else if (value >= 10) {
+              data.cell.styles.fillColor = [254, 249, 195];
+              data.cell.styles.textColor = [133, 77, 14];
+            } else {
+              data.cell.styles.fillColor = [220, 252, 231];
+              data.cell.styles.textColor = [22, 101, 52];
+            }
+
+            data.cell.styles.fontStyle = "bold";
+          }
         },
       });
 
@@ -781,13 +867,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <ComboField
-                label="Criticidad"
-                value={formData.criticality}
-                onChange={(value) => handleChange("criticality", value)}
-                options={CRITICIDAD_OPTIONS}
-                placeholder="Seleccione o escriba"
-              />
+              <CriticalityField value={formData.criticality} />
 
               <ComboField
                 label="Tipo de falla"
@@ -981,11 +1061,11 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
               </p>
               <p>
                 <span className="font-medium">Vehículo:</span>{" "}
-                {order.vehicle || "-"}
+                {formData.vehicle || "-"}
               </p>
               <p>
                 <span className="font-medium">Dominio:</span>{" "}
-                {order.license_plate || "-"}
+                {formData.license_plate || "-"}
               </p>
             </div>
 
@@ -1041,6 +1121,24 @@ function Field({
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function CriticalityField({ value }: { value: string }) {
+  const criticality = getCriticalityValue(value);
+
+  return (
+    <div className="space-y-2">
+      <Label>Criticidad</Label>
+
+      <div
+        className={`flex h-10 items-center rounded-md border px-3 text-sm font-semibold ${getCriticalityClass(
+          criticality,
+        )}`}
+      >
+        {criticality}
+      </div>
     </div>
   );
 }

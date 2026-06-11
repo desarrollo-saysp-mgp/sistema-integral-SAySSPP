@@ -12,11 +12,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Check, ChevronDown, Loader2, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Loader2,
+  Mic,
+  MicOff,
+  Save,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AREA_SOLICITANTE_OPTIONS,
-  CRITICIDAD_OPTIONS,
   DRIVER_OPTIONS,
   FAILURE_REPORT_OPTIONS,
   LOCALIZACION_FALLA_OPTIONS,
@@ -53,6 +60,43 @@ type WorkOrderFormData = {
   status: string;
 };
 
+type SpeechRecognitionAlternativeLike = {
+  transcript: string;
+};
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionAlternativeLike | undefined;
+};
+
+type SpeechRecognitionResultListLike = {
+  length: number;
+  [index: number]: SpeechRecognitionResultLike;
+};
+
+type SpeechRecognitionEventLike = {
+  results: SpeechRecognitionResultListLike;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error?: string;
+};
+
+type SpeechRecognitionInstance = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
 const initialFormData: WorkOrderFormData = {
   order_number: "",
   entry_date: "",
@@ -60,7 +104,7 @@ const initialFormData: WorkOrderFormData = {
   failure_report: "",
   repair_type: "",
   vehicle_code: "",
-  criticality: "",
+  criticality: "--",
   failure_type: "",
   failure_location: "",
   requires_spare_part: "",
@@ -103,11 +147,64 @@ const getUniqueOptions = (options: readonly string[]) => {
     });
 };
 
+const getCriticalityValue = (value?: string | number | null) => {
+  const cleanValue = String(value ?? "").trim();
+
+  return cleanValue || "--";
+};
+
+const getCriticalityClass = (criticality?: string | number | null) => {
+  const value = Number(criticality);
+
+  if (!Number.isFinite(value)) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+
+  if (value >= 13) {
+    return "border-red-200 bg-red-100 text-red-800";
+  }
+
+  if (value >= 10) {
+    return "border-yellow-200 bg-yellow-100 text-yellow-800";
+  }
+
+  return "border-green-200 bg-green-100 text-green-800";
+};
+
+const getSpeechRecognitionConstructor = () => {
+  if (typeof window === "undefined") return null;
+
+  const browserWindow = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+
+  return (
+    browserWindow.SpeechRecognition ??
+    browserWindow.webkitSpeechRecognition ??
+    null
+  );
+};
+
 export function WorkOrderCreateClient() {
   const router = useRouter();
 
   const [formData, setFormData] = useState<WorkOrderFormData>(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const baseObservationTextRef = useRef("");
+
+  useEffect(() => {
+    setVoiceSupported(Boolean(getSpeechRecognitionConstructor()));
+
+    return () => {
+      recognitionRef.current?.abort();
+      recognitionRef.current = null;
+    };
+  }, []);
 
   const vehicleCodeOptions = useMemo(
     () => getUniqueOptions(VEHICLE_OPTIONS.map((item) => item.code)),
@@ -146,7 +243,7 @@ export function WorkOrderCreateClient() {
       vehicle_code: value,
       vehicle: selectedVehicle?.vehicle ?? prev.vehicle,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: selectedVehicle?.criticality ?? prev.criticality,
+      criticality: getCriticalityValue(selectedVehicle?.criticality),
     }));
   };
 
@@ -160,7 +257,7 @@ export function WorkOrderCreateClient() {
       vehicle: value,
       vehicle_code: selectedVehicle?.code ?? prev.vehicle_code,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: selectedVehicle?.criticality ?? prev.criticality,
+      criticality: getCriticalityValue(selectedVehicle?.criticality),
     }));
   };
 
@@ -194,6 +291,86 @@ export function WorkOrderCreateClient() {
     );
   };
 
+  const startVoiceDictation = () => {
+    const SpeechRecognitionConstructor = getSpeechRecognitionConstructor();
+
+    if (!SpeechRecognitionConstructor) {
+      setVoiceSupported(false);
+      toast.error(
+        "Tu navegador no permite dictado por voz. Probá con Chrome o escribí la observación manualmente.",
+      );
+      return;
+    }
+
+    recognitionRef.current?.abort();
+
+    const recognition = new SpeechRecognitionConstructor();
+
+    recognition.lang = "es-AR";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    baseObservationTextRef.current = formData.observations.trim();
+
+    recognition.onresult = (event) => {
+      let finalTranscript = "";
+      let interimTranscript = "";
+
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = result[0]?.transcript?.trim() || "";
+
+        if (!transcript) continue;
+
+        if (result.isFinal) {
+          finalTranscript += `${transcript} `;
+        } else {
+          interimTranscript += `${transcript} `;
+        }
+      }
+
+      const parts = [
+        baseObservationTextRef.current,
+        finalTranscript.trim(),
+        interimTranscript.trim(),
+      ].filter(Boolean);
+
+      handleChange("observations", parts.join("\n"));
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Error en dictado por voz:", event.error);
+
+      if (event.error === "not-allowed") {
+        toast.error(
+          "No se habilitó el micrófono. Revisá los permisos del navegador.",
+        );
+      } else {
+        toast.error("No se pudo usar el dictado por voz.");
+      }
+
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      baseObservationTextRef.current = "";
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+    toast.success("Dictado activado. Hablá para completar Observaciones.");
+  };
+
+  const stopVoiceDictation = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    toast.success("Dictado detenido");
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -202,6 +379,8 @@ export function WorkOrderCreateClient() {
       return;
     }
 
+    recognitionRef.current?.stop();
+    setIsListening(false);
     setSaving(true);
 
     try {
@@ -349,13 +528,7 @@ export function WorkOrderCreateClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <ComboField
-              label="Criticidad"
-              value={formData.criticality}
-              onChange={(value) => handleChange("criticality", value)}
-              options={CRITICIDAD_OPTIONS}
-              placeholder="Seleccione o escriba"
-            />
+            <CriticalityField value={formData.criticality} />
 
             <ComboField
               label="Tipo de falla"
@@ -466,17 +639,53 @@ export function WorkOrderCreateClient() {
         </CardHeader>
 
         <CardContent className="pt-0">
-          <Field label="Detalle / observaciones">
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label htmlFor="observations">Detalle / observaciones</Label>
+
+              <Button
+                type="button"
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                onClick={isListening ? stopVoiceDictation : startVoiceDictation}
+                disabled={!voiceSupported || saving}
+                className="w-full gap-2 sm:w-auto"
+                title={
+                  voiceSupported
+                    ? "Dictar observaciones por voz"
+                    : "Tu navegador no permite dictado por voz"
+                }
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="h-4 w-4" />
+                    Detener dictado
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4" />
+                    Dictar por voz
+                  </>
+                )}
+              </Button>
+            </div>
+
             <textarea
+              id="observations"
               value={formData.observations}
               onChange={(event) =>
                 handleChange("observations", event.target.value)
               }
               rows={5}
-              placeholder="Escribí observaciones de la orden de trabajo..."
+              placeholder="Escribí observaciones de la orden de trabajo o usá el dictado por voz..."
               className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
-          </Field>
+
+            <p className="text-xs text-muted-foreground">
+              Opcional: podés escribir manualmente o usar el micrófono para
+              completar solo este campo.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -492,7 +701,11 @@ export function WorkOrderCreateClient() {
             Cancelar
           </Button>
 
-          <Button type="submit" disabled={saving} className="w-full gap-2 sm:w-auto">
+          <Button
+            type="submit"
+            disabled={saving}
+            className="w-full gap-2 sm:w-auto"
+          >
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -522,6 +735,24 @@ function Field({
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function CriticalityField({ value }: { value: string }) {
+  const criticality = getCriticalityValue(value);
+
+  return (
+    <div className="space-y-2">
+      <Label>Criticidad</Label>
+
+      <div
+        className={`flex h-10 items-center rounded-md border px-3 text-sm font-semibold ${getCriticalityClass(
+          criticality,
+        )}`}
+      >
+        {criticality}
+      </div>
     </div>
   );
 }
@@ -633,8 +864,9 @@ function ComboField({
                     key={option}
                     type="button"
                     onClick={() => handleSelect(option)}
-                    className={`flex min-h-9 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${isSelected ? "bg-muted" : ""
-                      }`}
+                    className={`flex min-h-9 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                      isSelected ? "bg-muted" : ""
+                    }`}
                   >
                     <span className="break-words leading-snug">{option}</span>
 
