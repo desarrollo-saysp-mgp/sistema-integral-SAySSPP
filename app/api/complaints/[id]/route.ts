@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ComplaintUpdate, ComplaintHistoryInsert } from "@/types";
 import { obtenerLatLon } from "@/lib/geocoding";
 
+type ComplaintUpdateWithArboladoNumber = ComplaintUpdate & {
+  arbolado_number?: number | null;
+};
+
 const validatePhone = (phone: string): boolean => {
   if (!phone || !phone.trim()) return true;
   const digitsOnly = /^\d+$/;
@@ -315,7 +319,8 @@ export async function PATCH(
       .trim()
       .toLowerCase();
 
-    const isServiciosPublicosUser = currentUserEmail === SERVICIOS_PUBLICOS_EMAIL;
+    const isServiciosPublicosUser =
+      currentUserEmail === SERVICIOS_PUBLICOS_EMAIL;
     const isGirsuUser = currentUserEmail === GIRSU_EMAIL;
 
     const hasSPTrackingFields =
@@ -345,7 +350,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: ComplaintUpdate = {};
+    const updateData: ComplaintUpdateWithArboladoNumber = {};
 
     const hasResolutionDate =
       hasOwn(body, "resolution_date") || hasOwn(body, "resolutionDate");
@@ -364,7 +369,9 @@ export async function PATCH(
         "sp_resolution_date",
       ]);
 
-      const invalidKeys = Object.keys(body).filter((key) => !allowedKeys.has(key));
+      const invalidKeys = Object.keys(body).filter(
+        (key) => !allowedKeys.has(key),
+      );
 
       if (invalidKeys.length > 0) {
         return NextResponse.json(
@@ -495,6 +502,21 @@ export async function PATCH(
     }
 
     if (formVariant === "arbolado") {
+      if (body.arbolado_number !== undefined) {
+        const rawArboladoNumber = String(body.arbolado_number || "").trim();
+
+        if (rawArboladoNumber && !/^\d+$/.test(rawArboladoNumber)) {
+          return NextResponse.json(
+            { error: "El número de reclamo de Arbolado debe ser numérico" },
+            { status: 400 },
+          );
+        }
+
+        updateData.arbolado_number = rawArboladoNumber
+          ? Number(rawArboladoNumber)
+          : null;
+      }
+
       if (body.contact_method !== undefined) {
         updateData.contact_method = body.contact_method
           ? body.contact_method.trim()
@@ -629,7 +651,9 @@ export async function PATCH(
       }
     }
 
-    const updateKeys = Object.keys(updateData) as (keyof ComplaintUpdate)[];
+    const updateKeys = Object.keys(
+      updateData,
+    ) as (keyof ComplaintUpdateWithArboladoNumber)[];
 
     if (updateKeys.length === 0) {
       return NextResponse.json(

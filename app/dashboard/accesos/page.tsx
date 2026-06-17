@@ -54,6 +54,8 @@ const GIRSU_EMAILS = [
   "direccióngirsupico@gmail.com",
 ];
 
+const ARBOLADO_EMAILS = ["arqbelliardolucas@gmail.com"];
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -94,6 +96,7 @@ export default async function AccesosPage() {
   const userEmail = normalizeText(profile.email || user.email);
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
+  const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
   const isTallerUser = userRole === "taller";
 
   const rawModules: string[] = Array.isArray(profile.modules)
@@ -115,16 +118,15 @@ export default async function AccesosPage() {
   );
 
   /*
-    Si la cuenta es admin o adminlectura, le mostramos sí o sí
-    el Tablero General, aunque en modules no tenga general_dashboard.
-
-    Si la cuenta es GIRSU, también le mostramos el Tablero General,
-    pero sin darle acceso a Administración.
-
-    Si la cuenta es Taller, no agregamos nada extra:
-    solo verá lo que tenga en modules, en este caso work_orders.
+    Admin/AdminLectura: ven Tablero General.
+    GIRSU: ve Tablero GIRSU.
+    Arbolado: ve Tablero Arbolado.
+    Taller: solo work_orders.
   */
-  if ((hasAllowedRole || isGirsuUser) && !alreadyHasDashboard) {
+  if (
+    (hasAllowedRole || isGirsuUser || isArboladoUser) &&
+    !alreadyHasDashboard
+  ) {
     accesses.push(MODULE_CONFIG.general_dashboard);
   }
 
@@ -133,8 +135,12 @@ export default async function AccesosPage() {
       return item.key === "work_orders";
     }
 
+    if (isGirsuUser || isArboladoUser) {
+      return item.key === "complaints" || item.key === "general_dashboard";
+    }
+
     if (item.key === "general_dashboard") {
-      return hasAllowedRole || isGirsuUser;
+      return hasAllowedRole;
     }
 
     return true;
@@ -183,7 +189,27 @@ export default async function AccesosPage() {
                     title: "Reclamos GIRSU",
                     description: "Seguimiento de reclamos del área GIRSU.",
                   }
-                : item;
+                : isArboladoUser && item.key === "complaints"
+                  ? {
+                      ...item,
+                      title: "Reclamos Arbolado",
+                      description:
+                        "Seguimiento de reclamos correspondientes al área de Arbolado.",
+                    }
+                  : isGirsuUser && item.key === "general_dashboard"
+                    ? {
+                        ...item,
+                        title: "Tablero GIRSU",
+                        description: "Visualización tablero Power BI de GIRSU.",
+                      }
+                    : isArboladoUser && item.key === "general_dashboard"
+                      ? {
+                          ...item,
+                          title: "Tablero Arbolado",
+                          description:
+                            "Visualización tablero Power BI de Arbolado.",
+                        }
+                      : item;
 
             return (
               <Card key={displayItem.key} className="rounded-2xl">

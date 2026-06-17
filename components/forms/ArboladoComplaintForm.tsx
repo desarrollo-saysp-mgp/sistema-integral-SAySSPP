@@ -92,6 +92,7 @@ type ComplaintExtraData = {
 };
 
 export interface ArboladoComplaintFormData {
+  arbolado_number: string;
   complaint_date: string;
   complainant_name: string;
   address: string;
@@ -139,6 +140,11 @@ export function ArboladoComplaintForm({
   const extra = getExtraData(complaint);
 
   const [formData, setFormData] = useState<ArboladoComplaintFormData>({
+    arbolado_number:
+      complaint?.arbolado_number === null ||
+      complaint?.arbolado_number === undefined
+        ? ""
+        : String(complaint.arbolado_number),
     complaint_date: complaint?.complaint_date || today,
     complainant_name: complaint?.complainant_name || "",
     address: complaint?.address || "",
@@ -148,7 +154,9 @@ export function ArboladoComplaintForm({
       (typeof extra.department === "string"
         ? extra.department
         : "Arbolado") as ArboladoDepartment,
-    level: (typeof extra.level === "string" ? extra.level : "") as ArboladoLevel | "",
+    level: (typeof extra.level === "string"
+      ? extra.level
+      : "") as ArboladoLevel | "",
     description_type:
       (typeof extra.description_type === "string"
         ? extra.description_type
@@ -236,6 +244,13 @@ export function ArboladoComplaintForm({
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof ArboladoComplaintFormData, string>> =
       {};
+
+    if (
+      formData.arbolado_number.trim() &&
+      !/^\d+$/.test(formData.arbolado_number.trim())
+    ) {
+      newErrors.arbolado_number = "El número de reclamo debe ser numérico";
+    }
 
     if (!formData.complaint_date) {
       newErrors.complaint_date = "La fecha de reclamo es requerida";
@@ -341,6 +356,7 @@ export function ArboladoComplaintForm({
     try {
       const result = await onSubmit({
         ...formData,
+        arbolado_number: formData.arbolado_number.trim(),
         complainant_name: formData.complainant_name.trim(),
         address: formData.address.trim(),
         street_number: formData.street_number.trim(),
@@ -366,21 +382,45 @@ export function ArboladoComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Información Básica</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
-          <div className="space-y-2">
-            <Label htmlFor="complaint_date">
-              Fecha de Reclamo <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="complaint_date"
-              type="date"
-              value={formData.complaint_date}
-              onChange={(e) => handleChange("complaint_date", e.target.value)}
-              max={today}
-            />
-            {errors.complaint_date && (
-              <p className="text-sm text-red-500">{errors.complaint_date}</p>
-            )}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="arbolado_number">N° Reclamo Arbolado</Label>
+              <Input
+                id="arbolado_number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={formData.arbolado_number}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "");
+                  handleChange("arbolado_number", value);
+                }}
+                placeholder="Ej: 356"
+              />
+              {errors.arbolado_number && (
+                <p className="text-sm text-red-500">
+                  {errors.arbolado_number}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="complaint_date">
+                Fecha de Reclamo <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="complaint_date"
+                type="date"
+                value={formData.complaint_date}
+                onChange={(e) => handleChange("complaint_date", e.target.value)}
+                max={today}
+              />
+              {errors.complaint_date && (
+                <p className="text-sm text-red-500">{errors.complaint_date}</p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -389,6 +429,7 @@ export function ArboladoComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Datos del Reclamante</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="complainant_name">Nombre y Apellido</Label>
@@ -504,6 +545,7 @@ export function ArboladoComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Datos del Área</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
@@ -648,6 +690,7 @@ export function ArboladoComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Seguimiento</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="status">

@@ -19,6 +19,7 @@ import {
   ChevronDown,
   FileText,
   Loader2,
+  Plus,
   Save,
   Trash2,
   X,
@@ -34,11 +35,12 @@ import {
   PROVIDER_OPTIONS,
   REPAIR_TYPE_OPTIONS,
   REQUIRES_SPARE_PART_OPTIONS,
-  SPARE_PART_OPTIONS,
   STATUS_OPTIONS,
   TIPO_FALLA_OPTIONS,
   VEHICLE_OPTIONS,
 } from "@/lib/taller/options";
+
+type AmountCurrency = "ARS" | "USD";
 
 type WorkOrderFormData = {
   order_number: string;
@@ -59,6 +61,7 @@ type WorkOrderFormData = {
   units: string;
   provider: string;
   amount: string;
+  amount_currency: AmountCurrency;
   observations: string;
   driver: string;
   status: string;
@@ -70,6 +73,7 @@ type PdfStatusColors = {
 };
 
 const WORK_ORDERS_REGISTER_PATH = "/dashboard/taller/ordenes-trabajo";
+const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
 
 const normalizeText = (value: string) =>
   value
@@ -121,10 +125,58 @@ const getCriticalityClass = (criticality?: string | number | null) => {
   return "border-green-200 bg-green-100 text-green-800";
 };
 
+const cleanTextValue = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+};
+
+const hasRealValue = (value?: string | number | null) => {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+};
+
+const getAmountCurrencyFromObservations = (
+  observations?: string | null,
+): AmountCurrency => {
+  const match = String(observations || "").match(
+    /\[\[amount_currency:(ARS|USD)\]\]/,
+  );
+
+  if (match?.[1] === "USD") return "USD";
+
+  return "ARS";
+};
+
+const cleanObservations = (value?: string | null) => {
+  return String(value || "").replace(CURRENCY_MARKER_REGEX, "").trim();
+};
+
+const buildObservationsWithCurrency = (
+  observations: string,
+  currency: AmountCurrency,
+) => {
+  const cleanedObservations = cleanObservations(observations);
+
+  return [cleanedObservations, `[[amount_currency:${currency}]]`]
+    .filter(Boolean)
+    .join("\n");
+};
+
+const formatProviders = (value?: string | null) => {
+  const providers = String(value || "")
+    .split("|")
+    .map((provider) => provider.trim())
+    .filter(Boolean);
+
+  if (providers.length === 0) return "-";
+
+  return providers.join(", ");
+};
+
 const getVehicleMatchFromOrder = (order: WorkOrder) => {
   if (order.vehicle_code) {
     const byCode = VEHICLE_OPTIONS.find(
-      (item) => normalizeText(item.code) === normalizeText(order.vehicle_code || ""),
+      (item) =>
+        normalizeText(item.code) === normalizeText(order.vehicle_code || ""),
     );
 
     if (byCode) return byCode;
@@ -132,7 +184,8 @@ const getVehicleMatchFromOrder = (order: WorkOrder) => {
 
   if (order.vehicle) {
     const byVehicle = VEHICLE_OPTIONS.find(
-      (item) => normalizeText(item.vehicle) === normalizeText(order.vehicle || ""),
+      (item) =>
+        normalizeText(item.vehicle) === normalizeText(order.vehicle || ""),
     );
 
     if (byVehicle) return byVehicle;
@@ -181,7 +234,8 @@ const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
       order.amount === null || order.amount === undefined
         ? ""
         : String(order.amount),
-    observations: order.observations || "",
+    amount_currency: getAmountCurrencyFromObservations(order.observations),
+    observations: cleanObservations(order.observations),
     driver: order.driver || "",
     status: order.status || "",
   };
@@ -197,6 +251,9 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
   const [deleting, setDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const shouldShowLegacySparePartCode = hasRealValue(order.spare_part_code);
+  const shouldShowLegacyUnits = hasRealValue(order.units);
+
   const vehicleCodeOptions = useMemo(
     () => getUniqueOptions(VEHICLE_OPTIONS.map((item) => item.code)),
     [],
@@ -207,20 +264,21 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     [],
   );
 
-  const sparePartDetailOptions = useMemo(
-    () => getUniqueOptions(SPARE_PART_OPTIONS.map((item) => item.detail)),
-    [],
-  );
-
-  const sparePartCodeOptions = useMemo(
-    () => getUniqueOptions(SPARE_PART_OPTIONS.map((item) => item.code)),
-    [],
-  );
+  const providerOptions = useMemo(() => getUniqueOptions(PROVIDER_OPTIONS), []);
 
   const handleChange = (field: keyof WorkOrderFormData, value: string) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+  const handleCurrencyChange = (value: string) => {
+    if (value !== "ARS" && value !== "USD") return;
+
+    setFormData((prev) => ({
+      ...prev,
+      amount_currency: value,
     }));
   };
 
@@ -252,34 +310,13 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     }));
   };
 
-  const handleSparePartDetailChange = (value: string) => {
-    const selectedPart = SPARE_PART_OPTIONS.find(
-      (item) => normalizeText(item.detail) === normalizeText(value),
-    );
-
-    setFormData((prev) => ({
-      ...prev,
-      spare_part_detail: value,
-      spare_part_code: selectedPart?.code ?? prev.spare_part_code,
-    }));
-  };
-
-  const handleSparePartCodeChange = (value: string) => {
-    const selectedPart = SPARE_PART_OPTIONS.find(
-      (item) => normalizeText(item.code) === normalizeText(value),
-    );
-
-    setFormData((prev) => ({
-      ...prev,
-      spare_part_code: value,
-      spare_part_detail: selectedPart?.detail ?? prev.spare_part_detail,
-    }));
-  };
-
   const hasAtLeastOneValue = () => {
-    return Object.values(formData).some(
-      (value) => String(value || "").trim() !== "",
-    );
+    return Object.entries(formData).some(([key, value]) => {
+      if (key === "criticality") return value !== "--";
+      if (key === "amount_currency") return false;
+
+      return String(value || "").trim() !== "";
+    });
   };
 
   const formatDateForPDF = (dateString?: string | null) => {
@@ -298,7 +335,10 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     return dateString;
   };
 
-  const formatMoneyForPDF = (value?: string | number | null) => {
+  const formatMoneyForPDF = (
+    value?: string | number | null,
+    currency: AmountCurrency = formData.amount_currency,
+  ) => {
     if (value === null || value === undefined || value === "") return "-";
 
     const numberValue = Number(value);
@@ -307,7 +347,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
 
     return numberValue.toLocaleString("es-AR", {
       style: "currency",
-      currency: "ARS",
+      currency,
     });
   };
 
@@ -386,6 +426,27 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     ).lastAutoTable?.finalY;
 
     return typeof finalY === "number" ? finalY : 55;
+  };
+
+  const getSparePartPdfRows = () => {
+    const rows: string[][] = [
+      ["Requiere repuesto", cleanPdfValue(formData.requires_spare_part)],
+      ["Detalle de repuesto", cleanPdfValue(formData.spare_part_detail)],
+    ];
+
+    if (shouldShowLegacySparePartCode) {
+      rows.push(["Código de repuesto", cleanPdfValue(formData.spare_part_code)]);
+    }
+
+    if (shouldShowLegacyUnits) {
+      rows.push(["Unidades", cleanPdfValue(formData.units)]);
+    }
+
+    rows.push(["Proveedor/es", formatProviders(formData.provider)]);
+    rows.push(["Moneda", formData.amount_currency]);
+    rows.push(["Monto", formatMoneyForPDF(formData.amount)]);
+
+    return rows;
   };
 
   const handleExportPDF = async () => {
@@ -550,14 +611,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
       autoTable(doc, {
         startY: getLastAutoTableY(doc) + 8,
         head: [["Repuestos y proveedor", ""]],
-        body: [
-          ["Requiere repuesto", cleanPdfValue(formData.requires_spare_part)],
-          ["Detalle de repuesto", cleanPdfValue(formData.spare_part_detail)],
-          ["Código de repuesto", cleanPdfValue(formData.spare_part_code)],
-          ["Unidades", cleanPdfValue(formData.units)],
-          ["Proveedor", cleanPdfValue(formData.provider)],
-          ["Monto", formatMoneyForPDF(formData.amount)],
-        ],
+        body: getSparePartPdfRows(),
         theme: "grid",
         margin: { left: 14, right: 14 },
         styles: {
@@ -673,8 +727,18 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
         },
         body: JSON.stringify({
           ...formData,
-          units: formData.units ? Number(formData.units) : null,
+          spare_part_code: shouldShowLegacySparePartCode
+            ? formData.spare_part_code || null
+            : null,
+          units:
+            shouldShowLegacyUnits && formData.units
+              ? Number(formData.units)
+              : null,
           amount: formData.amount ? Number(formData.amount) : null,
+          observations: buildObservationsWithCurrency(
+            formData.observations,
+            formData.amount_currency,
+          ),
         }),
       });
 
@@ -906,7 +970,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
           </CardHeader>
 
           <CardContent className="space-y-6 pt-0">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <ComboField
                 label="Requiere repuesto"
                 value={formData.requires_spare_part}
@@ -917,43 +981,66 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
                 placeholder="SI / NO"
               />
 
-              <ComboField
-                label="Detalle de repuesto"
-                value={formData.spare_part_detail}
-                onChange={handleSparePartDetailChange}
-                options={sparePartDetailOptions}
-                placeholder="Ej: BATERIA 12*110"
-              />
-
-              <ComboField
-                label="Código de repuesto"
-                value={formData.spare_part_code}
-                onChange={handleSparePartCodeChange}
-                options={sparePartCodeOptions}
-                placeholder="Ej: BAT12101"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <Field label="Unidades">
+              <Field label="Detalle de repuesto">
                 <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.units}
+                  value={formData.spare_part_detail}
                   onChange={(event) =>
-                    handleChange("units", event.target.value)
+                    handleChange("spare_part_detail", event.target.value)
                   }
-                  placeholder="0"
+                  placeholder="Ej: Batería, filtro, manguera..."
                 />
               </Field>
+            </div>
 
-              <ComboField
-                label="Proveedor"
+            {(shouldShowLegacySparePartCode || shouldShowLegacyUnits) && (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {shouldShowLegacySparePartCode && (
+                  <Field label="Código de repuesto anterior">
+                    <Input
+                      value={formData.spare_part_code}
+                      onChange={(event) =>
+                        handleChange("spare_part_code", event.target.value)
+                      }
+                      placeholder="Código de repuesto anterior"
+                    />
+                  </Field>
+                )}
+
+                {shouldShowLegacyUnits && (
+                  <Field label="Unidades anteriores">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.units}
+                      onChange={(event) =>
+                        handleChange("units", event.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <MultiProviderField
+                label="Proveedor/es"
                 value={formData.provider}
                 onChange={(value) => handleChange("provider", value)}
-                options={PROVIDER_OPTIONS}
-                placeholder="Proveedor"
+                options={providerOptions}
+                placeholder="Seleccione o escriba un proveedor"
               />
+
+              <Field label="Moneda">
+                <select
+                  value={formData.amount_currency}
+                  onChange={(event) => handleCurrencyChange(event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="ARS">Pesos argentinos (ARS)</option>
+                  <option value="USD">Dólares (USD)</option>
+                </select>
+              </Field>
 
               <Field label="Monto">
                 <Input
@@ -963,7 +1050,9 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
                   onChange={(event) =>
                     handleChange("amount", event.target.value)
                   }
-                  placeholder="0"
+                  placeholder={
+                    formData.amount_currency === "USD" ? "Ej: 120" : "Ej: 150000"
+                  }
                 />
               </Field>
             </div>
@@ -995,6 +1084,8 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
                 className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </Field>
+
+
           </CardContent>
         </Card>
 
@@ -1139,6 +1230,220 @@ function CriticalityField({ value }: { value: string }) {
       >
         {criticality}
       </div>
+    </div>
+  );
+}
+
+function MultiProviderField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly string[];
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const providers = useMemo(() => {
+    return String(value || "")
+      .split("|")
+      .map((provider) => provider.trim())
+      .filter(Boolean);
+  }, [value]);
+
+  const addProvider = (providerValue: string) => {
+    const cleanProvider = providerValue.trim();
+
+    if (!cleanProvider) return;
+
+    const exists = providers.some(
+      (provider) => normalizeText(provider) === normalizeText(cleanProvider),
+    );
+
+    if (exists) {
+      setDraft("");
+      return;
+    }
+
+    onChange([...providers, cleanProvider].join(" | "));
+    setDraft("");
+  };
+
+  const removeProvider = (providerValue: string) => {
+    onChange(
+      providers
+        .filter(
+          (provider) =>
+            normalizeText(provider) !== normalizeText(providerValue),
+        )
+        .join(" | "),
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+
+      <div className="space-y-2">
+        {providers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {providers.map((provider) => (
+              <span
+                key={provider}
+                className="inline-flex items-center gap-1 rounded-full border bg-muted px-3 py-1 text-xs font-medium"
+              >
+                {provider}
+
+                <button
+                  type="button"
+                  onClick={() => removeProvider(provider)}
+                  className="rounded-full text-muted-foreground hover:text-destructive"
+                  aria-label={`Quitar proveedor ${provider}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <ComboInput
+              value={draft}
+              onChange={setDraft}
+              onSelect={addProvider}
+              options={options}
+              placeholder={placeholder}
+            />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => addProvider(draft)}
+            className="h-10 shrink-0 gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar
+          </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Podés agregar uno o varios proveedores.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ComboInput({
+  value,
+  onChange,
+  onSelect,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (value: string) => void;
+  options: readonly string[];
+  placeholder?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const uniqueOptions = useMemo(() => getUniqueOptions(options), [options]);
+
+  const visibleOptions = useMemo(() => {
+    const query = normalizeText(value);
+
+    if (!query) {
+      return uniqueOptions;
+    }
+
+    return uniqueOptions.filter((option) =>
+      normalizeText(option).includes(query),
+    );
+  }, [uniqueOptions, value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Input
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSelect(value);
+              setIsOpen(false);
+            }
+          }}
+          placeholder={placeholder}
+          autoComplete="off"
+          className="h-10 pr-10"
+        />
+
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          aria-label="Abrir proveedores"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[80] mt-1 max-h-[260px] w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+          {visibleOptions.length > 0 ? (
+            visibleOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  onSelect(option);
+                  setIsOpen(false);
+                }}
+                className="flex min-h-9 w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <span className="break-words leading-snug">{option}</span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">
+              No se encontraron opciones
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

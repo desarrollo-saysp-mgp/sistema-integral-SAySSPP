@@ -6,6 +6,8 @@ const GIRSU_EMAILS = [
   "direccióngirsupico@gmail.com",
 ];
 
+const ARBOLADO_EMAILS = ["arqbelliardolucas@gmail.com"];
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -22,6 +24,10 @@ function getModuleRoute(moduleKey: string) {
       return "/dashboard/solicitud-compra";
     case "rrhh":
       return "/dashboard/rrhh";
+    case "general_dashboard":
+      return "/dashboard/tablero-general";
+    case "work_orders":
+      return "/dashboard/taller/ordenes-trabajo";
     default:
       return "/dashboard/accesos";
   }
@@ -54,39 +60,43 @@ export default async function DashboardRouter() {
   const userEmail = normalizeText(profile.email || user.email);
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
+  const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
 
-  // 1. GIRSU debe entrar a la pantalla de accesos,
-  // porque tiene Reclamos GIRSU + Tablero General.
-  // No entra directo al home de reclamos.
-  if (isGirsuUser) {
+  // GIRSU y Arbolado deben entrar a Accesos porque tienen:
+  // Reclamos propio + Tablero propio.
+  if (isGirsuUser || isArboladoUser) {
     redirect("/dashboard/accesos");
   }
 
-  // 2. Admins siempre van a accesos
+  // Admins siempre van a accesos
   if (profile.role === "Admin" || profile.role === "AdminLectura") {
     redirect("/dashboard/accesos");
   }
 
-  // 3. Si tiene módulo por defecto, entra ahí
+  // Si tiene módulo por defecto, entra ahí
   if (defaultModule) {
     redirect(getModuleRoute(defaultModule));
   }
 
-  // 4. Si tiene un solo módulo, entra directo
+  // Si tiene un solo módulo, entra directo
   if (modules.length === 1) {
     redirect(getModuleRoute(modules[0]));
   }
 
-  // 5. Si tiene varios módulos, mostrar accesos
+  // Si tiene varios módulos, mostrar accesos
   if (modules.length > 1) {
     redirect("/dashboard/accesos");
   }
 
-  // 6. Fallback temporal por role
-  if (profile.role === "Reclamos") {
+  // Fallback temporal por role
+  if (
+    profile.role === "Reclamos" ||
+    profile.role === "ReclamosArbolado" ||
+    profile.role === "ReclamosZyV"
+  ) {
     redirect("/dashboard/complaints/home");
   }
 
-  // 7. Último fallback
+  // Último fallback
   redirect("/dashboard/accesos");
 }
