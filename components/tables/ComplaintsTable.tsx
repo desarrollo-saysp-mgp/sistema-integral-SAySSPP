@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -58,14 +59,6 @@ const formatLocalDate = (dateStr: string): string => {
     month: "2-digit",
     year: "numeric",
   });
-};
-
-const getTodayLocalDate = (): string => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 };
 
 type ComplaintWithDetails = Complaint & {
@@ -257,7 +250,8 @@ export function ComplaintsTable({
       .trim()
       .toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
 
-  const canEditComplaint = !isReadOnly && !isServiciosPublicosUser && !isGirsuUser;
+  const canEditComplaint =
+    !isReadOnly && !isServiciosPublicosUser && !isGirsuUser;
 
   const canSendWhatsApp =
     isServiciosPublicosUser ||
@@ -274,9 +268,9 @@ export function ComplaintsTable({
     Record<number, string | null>
   >({});
 
-  const [statusOverrides, setStatusOverrides] = useState<
-    Record<number, string>
-  >({});
+  const [statusOverrides, setStatusOverrides] = useState<Record<number, string>>(
+    {},
+  );
 
   const [resolutionModalComplaint, setResolutionModalComplaint] =
     useState<ComplaintWithDetails | null>(null);
@@ -290,9 +284,24 @@ export function ComplaintsTable({
     [],
   );
   const [sortOption, setSortOption] = useState<SortOption>("fecha_desc");
+  const [arboladoNumberFilter, setArboladoNumberFilter] = useState("");
+
+  const filteredComplaints = useMemo(() => {
+    if (!isArboladoUser) return complaints;
+
+    const numberFilter = arboladoNumberFilter.trim();
+
+    if (!numberFilter) return complaints;
+
+    return complaints.filter((complaint) =>
+      String(getVisibleComplaintNumber(complaint))
+        .toLowerCase()
+        .includes(numberFilter.toLowerCase()),
+    );
+  }, [complaints, isArboladoUser, arboladoNumberFilter]);
 
   const sortedComplaints = useMemo(() => {
-    return [...complaints].sort((a, b) => {
+    return [...filteredComplaints].sort((a, b) => {
       const dateA = getComplaintDateForSort(a);
       const dateB = getComplaintDateForSort(b);
       const numberA = getComplaintNumberForSort(a);
@@ -320,7 +329,7 @@ export function ComplaintsTable({
 
       return 0;
     });
-  }, [complaints, sortOption]);
+  }, [filteredComplaints, sortOption]);
 
   const totalPages = Math.max(
     1,
@@ -639,6 +648,10 @@ export function ComplaintsTable({
   };
 
   const getVisibleRangeText = () => {
+    if (sortedComplaints.length === 0) {
+      return { start: 0, end: 0 };
+    }
+
     const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
     const end = Math.min(currentPage * ITEMS_PER_PAGE, sortedComplaints.length);
     return { start, end };
@@ -997,40 +1010,40 @@ export function ComplaintsTable({
         },
         columnStyles: isArboladoUser
           ? {
-            0: { cellWidth: 12 },
-            1: { cellWidth: 18 },
-            2: { cellWidth: 26 },
-            3: { cellWidth: 65 },
-            4: { cellWidth: 25 },
-            5: { cellWidth: 18 },
-            6: { cellWidth: 34 },
-            7: { cellWidth: 20 },
-            8: { cellWidth: 28 },
-            9: { cellWidth: 18 },
-          }
+              0: { cellWidth: 12 },
+              1: { cellWidth: 18 },
+              2: { cellWidth: 26 },
+              3: { cellWidth: 65 },
+              4: { cellWidth: 25 },
+              5: { cellWidth: 18 },
+              6: { cellWidth: 34 },
+              7: { cellWidth: 20 },
+              8: { cellWidth: 28 },
+              9: { cellWidth: 18 },
+            }
           : isZyVUser
             ? {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 20 },
-              2: { cellWidth: 32 },
-              3: { cellWidth: 56 },
-              4: { cellWidth: 28 },
-              5: { cellWidth: 38 },
-              6: { cellWidth: 22 },
-              7: { cellWidth: 22 },
-              8: { cellWidth: 22 },
-            }
+                0: { cellWidth: 12 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 32 },
+                3: { cellWidth: 56 },
+                4: { cellWidth: 28 },
+                5: { cellWidth: 38 },
+                6: { cellWidth: 22 },
+                7: { cellWidth: 22 },
+                8: { cellWidth: 22 },
+              }
             : {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 20 },
-              2: { cellWidth: 35 },
-              3: { cellWidth: 55 },
-              4: { cellWidth: 35 },
-              5: { cellWidth: 38 },
-              6: { cellWidth: 26 },
-              7: { cellWidth: 24 },
-              8: { cellWidth: 22 },
-            },
+                0: { cellWidth: 12 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 55 },
+                4: { cellWidth: 35 },
+                5: { cellWidth: 38 },
+                6: { cellWidth: 26 },
+                7: { cellWidth: 24 },
+                8: { cellWidth: 22 },
+              },
         didParseCell: (data: CellHookData) => {
           const statusColumnIndex = isArboladoUser ? 9 : 8;
 
@@ -1077,22 +1090,35 @@ export function ComplaintsTable({
     }
   };
 
-  if (sortedComplaints.length === 0) {
-    return (
-      <div className="py-12 text-center">
-        <p className="text-muted-foreground">
-          No se encontraron reclamos que coincidan con los filtros.
-        </p>
-      </div>
-    );
-  }
-
   const { start, end } = getVisibleRangeText();
   const pageNumbers = getPageNumbers();
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
+        {isArboladoUser && (
+          <div className="flex w-full flex-col gap-1 sm:w-[260px]">
+            <Label htmlFor="arbolado-number-filter" className="text-xs">
+              Filtrar por N° Reclamo
+            </Label>
+
+            <Input
+              id="arbolado-number-filter"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={arboladoNumberFilter}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, "");
+                setArboladoNumberFilter(value);
+                setCurrentPage(1);
+              }}
+              placeholder="Ej: 356"
+              className="h-10 rounded-xl"
+            />
+          </div>
+        )}
+
         <Select
           value={sortOption}
           onValueChange={(value) => {
@@ -1167,342 +1193,45 @@ export function ComplaintsTable({
         </p>
       )}
 
-      <div className="space-y-3 md:hidden">
-        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-          <div>
-            <p className="text-sm font-semibold">Reclamos visibles</p>
-            <p className="text-xs text-muted-foreground">
-              Selección de la página actual
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Todos</span>
-            <Checkbox
-              checked={
-                allVisibleSelected
-                  ? true
-                  : someVisibleSelected
-                    ? "indeterminate"
-                    : false
-              }
-              onCheckedChange={(checked) =>
-                toggleVisibleSelection(checked === true)
-              }
-              aria-label="Seleccionar reclamos visibles"
-            />
-          </div>
+      {sortedComplaints.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card py-12 text-center shadow-sm">
+          <p className="text-muted-foreground">
+            No se encontraron reclamos que coincidan con los filtros.
+          </p>
         </div>
+      ) : (
+        <>
+          <div className="space-y-3 md:hidden">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+              <div>
+                <p className="text-sm font-semibold">Reclamos visibles</p>
+                <p className="text-xs text-muted-foreground">
+                  Selección de la página actual
+                </p>
+              </div>
 
-        {paginatedComplaints.map((complaint) => {
-          const isUpdating = updatingStatus === complaint.id;
-          const isSelected = selectedComplaintIds.includes(complaint.id);
-          const complaintStatus = getComplaintStatus(complaint);
-
-          const resolutionDateOverride = Object.prototype.hasOwnProperty.call(
-            resolutionDateOverrides,
-            complaint.id,
-          )
-            ? resolutionDateOverrides[complaint.id]
-            : undefined;
-
-          const display = getComplaintDisplayData(
-            complaint,
-            resolutionDateOverride,
-          );
-
-          const hasResolutionDate = display.resolutionDateLabel !== "-";
-          const isUpdatingResolution = updatingResolutionDate === complaint.id;
-
-          const statusControl =
-            onStatusChange && !isReadOnly ? (
-              <Select
-                value={complaintStatus}
-                onValueChange={(value) =>
-                  handleStatusChange(complaint.id, value)
-                }
-                disabled={isUpdating}
-              >
-                <SelectTrigger
-                  className={`h-9 w-full ${getStatusColor(
-                    complaintStatus,
-                  )} ${isUpdating ? "opacity-80" : ""}`}
-                >
-                  {isUpdating ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Guardando...</span>
-                    </div>
-                  ) : (
-                    <SelectValue />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="En proceso">En proceso</SelectItem>
-                  <SelectItem value="Resuelto">Resuelto</SelectItem>
-                  <SelectItem value="No resuelto">No resuelto</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Badge className={getStatusColor(complaintStatus)}>
-                {complaintStatus}
-              </Badge>
-            );
-
-          return (
-            <div
-              key={complaint.id}
-              className="rounded-xl border border-border bg-card p-4 shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-3 border-b pb-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Reclamo
-                  </p>
-                  <p className="text-lg font-bold leading-tight">
-                    N° {getVisibleComplaintNumber(complaint)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDate(complaint.complaint_date)}
-                  </p>
-                </div>
-
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Todos</span>
                 <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={(checked) =>
-                    toggleComplaintSelection(complaint.id, checked === true)
+                  checked={
+                    allVisibleSelected
+                      ? true
+                      : someVisibleSelected
+                        ? "indeterminate"
+                        : false
                   }
-                  aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
-                    complaint,
-                  )}`}
+                  onCheckedChange={(checked) =>
+                    toggleVisibleSelection(checked === true)
+                  }
+                  aria-label="Seleccionar reclamos visibles"
                 />
               </div>
-
-              <div className="mt-3 space-y-2 text-sm">
-                <div>
-                  <span className="font-semibold">Nombre: </span>
-                  <span>{complaint.complainant_name ?? "-"}</span>
-                </div>
-
-                <div>
-                  <span className="font-semibold">Dirección: </span>
-                  <span>{display.addressLabel}</span>
-                </div>
-
-                {isArboladoUser ? (
-                  <>
-                    <div>
-                      <span className="font-semibold">Descripción: </span>
-                      <span>{display.descriptionLabel}</span>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Fecha resolución: </span>
-                      <span>{display.resolutionDateLabel}</span>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Agente: </span>
-                      <span>{display.agentLabel}</span>
-                    </div>
-                  </>
-                ) : isZyVUser ? (
-                  <>
-                    <div>
-                      <span className="font-semibold">Servicio: </span>
-                      <span>{display.serviceLabel}</span>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Causa: </span>
-                      <span>{display.causeLabel}</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="font-semibold">Zona: </span>
-                        <span>{display.zoneLabel}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold">Desde: </span>
-                        <span>{display.sinceWhenLabel}</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <span className="font-semibold">Servicio: </span>
-                      <span>{display.serviceLabel}</span>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Causa: </span>
-                      <span>{display.causeLabel}</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="font-semibold">Zona: </span>
-                        <span>{display.zoneLabel}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold">Desde: </span>
-                        <span>{display.sinceWhenLabel}</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Fecha resolución: </span>
-                      <span>{display.resolutionDateLabel}</span>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold">Cargado por: </span>
-                      <span>
-                        {complaint.loaded_by_user?.full_name ??
-                          "Usuario no disponible"}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div>{statusControl}</div>
-
-                <div className="flex items-center justify-end gap-2 border-t pt-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleView(complaint.id)}
-                    title="Ver reclamo"
-                    className="gap-2"
-                  >
-                    <Eye className="h-4 w-4" />
-                    Ver
-                  </Button>
-
-                  {!isArboladoUser && !isZyVUser && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openResolutionDateModal(complaint)}
-                      title={
-                        hasResolutionDate
-                          ? "Editar fecha de resolución"
-                          : "Cargar fecha de resolución"
-                      }
-                      disabled={isReadOnly || isUpdatingResolution}
-                      className="gap-2"
-                    >
-                      {isUpdatingResolution ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CalendarCheck
-                          className={`h-4 w-4 ${hasResolutionDate
-                            ? "text-emerald-600"
-                            : "text-muted-foreground"
-                            }`}
-                        />
-                      )}
-                      Fecha
-                    </Button>
-                  )}
-
-                  {canEditComplaint && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(complaint.id)}
-                      title="Editar reclamo"
-                      className="gap-2"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Editar
-                    </Button>
-                  )}
-                </div>
-              </div>
             </div>
-          );
-        })}
-      </div>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[52px] text-center">
-                <div className="flex justify-center">
-                  <Checkbox
-                    checked={
-                      allVisibleSelected
-                        ? true
-                        : someVisibleSelected
-                          ? "indeterminate"
-                          : false
-                    }
-                    onCheckedChange={(checked) =>
-                      toggleVisibleSelection(checked === true)
-                    }
-                    aria-label="Seleccionar reclamos visibles"
-                  />
-                </div>
-              </TableHead>
-
-              {isArboladoUser ? (
-                <>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Dirección</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead>Fecha resolución</TableHead>
-                  <TableHead>Agente</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
-                </>
-              ) : isZyVUser ? (
-                <>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Dirección</TableHead>
-                  <TableHead>Servicio</TableHead>
-                  <TableHead>Causa</TableHead>
-                  <TableHead>Zona</TableHead>
-                  <TableHead>Desde</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
-                </>
-              ) : (
-                <>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Servicio</TableHead>
-                  <TableHead>Causa</TableHead>
-                  <TableHead>Zona</TableHead>
-                  <TableHead>Desde Cuándo</TableHead>
-                  {isServiciosPublicosUser && <TableHead>Visto</TableHead>}
-                  <TableHead>Fecha resolución</TableHead>
-                  {isServiciosPublicosUser && <TableHead>Observaciones</TableHead>}
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Cargado por</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
-                </>
-              )}
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {paginatedComplaints.map((complaint, index) => {
-              const isEvenRow = index % 2 === 0;
+            {paginatedComplaints.map((complaint) => {
               const isUpdating = updatingStatus === complaint.id;
               const isSelected = selectedComplaintIds.includes(complaint.id);
               const complaintStatus = getComplaintStatus(complaint);
-              const spTrackingData = getSPTrackingData(complaint);
 
               const resolutionDateOverride =
                 Object.prototype.hasOwnProperty.call(
@@ -1521,7 +1250,7 @@ export function ComplaintsTable({
               const isUpdatingResolution =
                 updatingResolutionDate === complaint.id;
 
-              const statusCell =
+              const statusControl =
                 onStatusChange && !isReadOnly ? (
                   <Select
                     value={complaintStatus}
@@ -1531,7 +1260,7 @@ export function ComplaintsTable({
                     disabled={isUpdating}
                   >
                     <SelectTrigger
-                      className={`w-[150px] ${getStatusColor(
+                      className={`h-9 w-full ${getStatusColor(
                         complaintStatus,
                       )} ${isUpdating ? "opacity-80" : ""}`}
                     >
@@ -1556,253 +1285,584 @@ export function ComplaintsTable({
                   </Badge>
                 );
 
-              const actionsCell = (
-                <div className="flex justify-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleView(complaint.id)}
-                    title="Ver reclamo"
-                    className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+              return (
+                <div
+                  key={complaint.id}
+                  className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3 border-b pb-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Reclamo
+                      </p>
+                      <p className="text-lg font-bold leading-tight">
+                        N° {getVisibleComplaintNumber(complaint)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(complaint.complaint_date)}
+                      </p>
+                    </div>
 
-                  {!isArboladoUser && !isZyVUser && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openResolutionDateModal(complaint)}
-                      title={
-                        hasResolutionDate
-                          ? "Editar fecha de resolución"
-                          : "Cargar fecha de resolución"
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) =>
+                        toggleComplaintSelection(
+                          complaint.id,
+                          checked === true,
+                        )
                       }
-                      disabled={isReadOnly || isUpdatingResolution}
-                      className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                    >
-                      {isUpdatingResolution ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CalendarCheck
-                          className={`h-4 w-4 ${hasResolutionDate
-                            ? "text-emerald-600"
-                            : "text-muted-foreground"
-                            }`}
-                        />
-                      )}
-                    </Button>
-                  )}
+                      aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
+                        complaint,
+                      )}`}
+                    />
+                  </div>
 
-                  {canEditComplaint && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(complaint.id)}
-                      title="Editar reclamo"
-                      className="transition-all hover:bg-accent hover:text-primary active:scale-95"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div>
+                      <span className="font-semibold">Nombre: </span>
+                      <span>{complaint.complainant_name ?? "-"}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Dirección: </span>
+                      <span>{display.addressLabel}</span>
+                    </div>
+
+                    {isArboladoUser ? (
+                      <>
+                        <div>
+                          <span className="font-semibold">Descripción: </span>
+                          <span>{display.descriptionLabel}</span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">
+                            Fecha resolución:{" "}
+                          </span>
+                          <span>{display.resolutionDateLabel}</span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">Agente: </span>
+                          <span>{display.agentLabel}</span>
+                        </div>
+                      </>
+                    ) : isZyVUser ? (
+                      <>
+                        <div>
+                          <span className="font-semibold">Servicio: </span>
+                          <span>{display.serviceLabel}</span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">Causa: </span>
+                          <span>{display.causeLabel}</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold">Zona: </span>
+                            <span>{display.zoneLabel}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold">Desde: </span>
+                            <span>{display.sinceWhenLabel}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="font-semibold">Servicio: </span>
+                          <span>{display.serviceLabel}</span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">Causa: </span>
+                          <span>{display.causeLabel}</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold">Zona: </span>
+                            <span>{display.zoneLabel}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold">Desde: </span>
+                            <span>{display.sinceWhenLabel}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">
+                            Fecha resolución:{" "}
+                          </span>
+                          <span>{display.resolutionDateLabel}</span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold">Cargado por: </span>
+                          <span>
+                            {complaint.loaded_by_user?.full_name ??
+                              "Usuario no disponible"}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div>{statusControl}</div>
+
+                    <div className="flex items-center justify-end gap-2 border-t pt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleView(complaint.id)}
+                        title="Ver reclamo"
+                        className="gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        Ver
+                      </Button>
+
+                      {!isArboladoUser && !isZyVUser && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openResolutionDateModal(complaint)}
+                          title={
+                            hasResolutionDate
+                              ? "Editar fecha de resolución"
+                              : "Cargar fecha de resolución"
+                          }
+                          disabled={isReadOnly || isUpdatingResolution}
+                          className="gap-2"
+                        >
+                          {isUpdatingResolution ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CalendarCheck
+                              className={`h-4 w-4 ${
+                                hasResolutionDate
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          )}
+                          Fecha
+                        </Button>
+                      )}
+
+                      {canEditComplaint && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(complaint.id)}
+                          title="Editar reclamo"
+                          className="gap-2"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Editar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
+            })}
+          </div>
 
-              return (
-                <TableRow
-                  key={complaint.id}
-                  className={
-                    isEvenRow
-                      ? "bg-background transition-colors hover:bg-accent/40"
-                      : "bg-muted/25 transition-colors hover:bg-accent/40"
-                  }
-                >
-                  <TableCell className="text-center">
+          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="w-[52px] text-center">
                     <div className="flex justify-center">
                       <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          toggleComplaintSelection(
-                            complaint.id,
-                            checked === true,
-                          )
+                        checked={
+                          allVisibleSelected
+                            ? true
+                            : someVisibleSelected
+                              ? "indeterminate"
+                              : false
                         }
-                        aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
-                          complaint,
-                        )}`}
+                        onCheckedChange={(checked) =>
+                          toggleVisibleSelection(checked === true)
+                        }
+                        aria-label="Seleccionar reclamos visibles"
                       />
                     </div>
-                  </TableCell>
+                  </TableHead>
 
                   {isArboladoUser ? (
                     <>
-                      <TableCell className="font-medium">
-                        {getVisibleComplaintNumber(complaint)}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(complaint.complaint_date)}
-                      </TableCell>
-                      <TableCell className="max-w-[220px] whitespace-normal break-words">
-                        {complaint.complainant_name ?? "-"}
-                      </TableCell>
-                      <TableCell>{display.addressLabel}</TableCell>
-                      <TableCell>{display.descriptionLabel}</TableCell>
-                      <TableCell>{display.resolutionDateLabel}</TableCell>
-                      <TableCell>{display.agentLabel}</TableCell>
-                      <TableCell>{statusCell}</TableCell>
-                      <TableCell>{actionsCell}</TableCell>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Dirección</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Fecha resolución</TableHead>
+                      <TableHead>Agente</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
                     </>
                   ) : isZyVUser ? (
                     <>
-                      <TableCell className="font-medium">
-                        {getVisibleComplaintNumber(complaint)}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(complaint.complaint_date)}
-                      </TableCell>
-                      <TableCell className="max-w-[220px] whitespace-normal break-words">
-                        {complaint.complainant_name ?? "-"}
-                      </TableCell>
-                      <TableCell>{display.addressLabel}</TableCell>
-                      <TableCell>{display.serviceLabel}</TableCell>
-                      <TableCell>{display.causeLabel}</TableCell>
-                      <TableCell>{display.zoneLabel}</TableCell>
-                      <TableCell>{display.sinceWhenLabel}</TableCell>
-                      <TableCell>{statusCell}</TableCell>
-                      <TableCell>{actionsCell}</TableCell>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Dirección</TableHead>
+                      <TableHead>Servicio</TableHead>
+                      <TableHead>Causa</TableHead>
+                      <TableHead>Zona</TableHead>
+                      <TableHead>Desde</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableCell className="font-medium">
-                        {complaint.complaint_number ?? "-"}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(complaint.complaint_date)}
-                      </TableCell>
-                      <TableCell className="max-w-[220px] whitespace-normal break-words">
-                        {complaint.complainant_name ?? "-"}
-                      </TableCell>
-                      <TableCell>{display.serviceLabel}</TableCell>
-                      <TableCell>{display.causeLabel}</TableCell>
-                      <TableCell>{display.zoneLabel}</TableCell>
-                      <TableCell>{display.sinceWhenLabel}</TableCell>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Servicio</TableHead>
+                      <TableHead>Causa</TableHead>
+                      <TableHead>Zona</TableHead>
+                      <TableHead>Desde Cuándo</TableHead>
+                      {isServiciosPublicosUser && <TableHead>Visto</TableHead>}
+                      <TableHead>Fecha resolución</TableHead>
                       {isServiciosPublicosUser && (
-                        <TableCell>
-                          {spTrackingData.seen ? (
-                            <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                              Visto
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
+                        <TableHead>Observaciones</TableHead>
                       )}
-                      <TableCell>{display.resolutionDateLabel}</TableCell>
-                      {isServiciosPublicosUser && (
-                        <TableCell className="max-w-[220px] whitespace-normal break-words">
-                          {spTrackingData.observations || "-"}
-                        </TableCell>
-                      )}
-                      <TableCell>{statusCell}</TableCell>
-                      <TableCell>
-                        {complaint.loaded_by_user?.full_name ??
-                          "Usuario no disponible"}
-                      </TableCell>
-                      <TableCell>{actionsCell}</TableCell>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Cargado por</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
                     </>
                   )}
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+              </TableHeader>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-muted-foreground">
-          Mostrando <span className="font-medium text-foreground">{start}</span>{" "}
-          a <span className="font-medium text-foreground">{end}</span> de{" "}
-          <span className="font-medium text-foreground">
-            {sortedComplaints.length}
-          </span>{" "}
-          reclamos
-        </p>
+              <TableBody>
+                {paginatedComplaints.map((complaint, index) => {
+                  const isEvenRow = index % 2 === 0;
+                  const isUpdating = updatingStatus === complaint.id;
+                  const isSelected = selectedComplaintIds.includes(
+                    complaint.id,
+                  );
+                  const complaintStatus = getComplaintStatus(complaint);
+                  const spTrackingData = getSPTrackingData(complaint);
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Anterior
-          </Button>
+                  const resolutionDateOverride =
+                    Object.prototype.hasOwnProperty.call(
+                      resolutionDateOverrides,
+                      complaint.id,
+                    )
+                      ? resolutionDateOverrides[complaint.id]
+                      : undefined;
 
-          {pageNumbers[0] > 1 && (
-            <>
+                  const display = getComplaintDisplayData(
+                    complaint,
+                    resolutionDateOverride,
+                  );
+
+                  const hasResolutionDate = display.resolutionDateLabel !== "-";
+                  const isUpdatingResolution =
+                    updatingResolutionDate === complaint.id;
+
+                  const statusCell =
+                    onStatusChange && !isReadOnly ? (
+                      <Select
+                        value={complaintStatus}
+                        onValueChange={(value) =>
+                          handleStatusChange(complaint.id, value)
+                        }
+                        disabled={isUpdating}
+                      >
+                        <SelectTrigger
+                          className={`w-[150px] ${getStatusColor(
+                            complaintStatus,
+                          )} ${isUpdating ? "opacity-80" : ""}`}
+                        >
+                          {isUpdating ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Guardando...</span>
+                            </div>
+                          ) : (
+                            <SelectValue />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="En proceso">
+                            En proceso
+                          </SelectItem>
+                          <SelectItem value="Resuelto">Resuelto</SelectItem>
+                          <SelectItem value="No resuelto">
+                            No resuelto
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge className={getStatusColor(complaintStatus)}>
+                        {complaintStatus}
+                      </Badge>
+                    );
+
+                  const actionsCell = (
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(complaint.id)}
+                        title="Ver reclamo"
+                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+
+                      {!isArboladoUser && !isZyVUser && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openResolutionDateModal(complaint)}
+                          title={
+                            hasResolutionDate
+                              ? "Editar fecha de resolución"
+                              : "Cargar fecha de resolución"
+                          }
+                          disabled={isReadOnly || isUpdatingResolution}
+                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                        >
+                          {isUpdatingResolution ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CalendarCheck
+                              className={`h-4 w-4 ${
+                                hasResolutionDate
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          )}
+                        </Button>
+                      )}
+
+                      {canEditComplaint && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(complaint.id)}
+                          title="Editar reclamo"
+                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+
+                  return (
+                    <TableRow
+                      key={complaint.id}
+                      className={
+                        isEvenRow
+                          ? "bg-background transition-colors hover:bg-accent/40"
+                          : "bg-muted/25 transition-colors hover:bg-accent/40"
+                      }
+                    >
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) =>
+                              toggleComplaintSelection(
+                                complaint.id,
+                                checked === true,
+                              )
+                            }
+                            aria-label={`Seleccionar reclamo ${getVisibleComplaintNumber(
+                              complaint,
+                            )}`}
+                          />
+                        </div>
+                      </TableCell>
+
+                      {isArboladoUser ? (
+                        <>
+                          <TableCell className="font-medium">
+                            {getVisibleComplaintNumber(complaint)}
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(complaint.complaint_date)}
+                          </TableCell>
+                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                            {complaint.complainant_name ?? "-"}
+                          </TableCell>
+                          <TableCell>{display.addressLabel}</TableCell>
+                          <TableCell>{display.descriptionLabel}</TableCell>
+                          <TableCell>{display.resolutionDateLabel}</TableCell>
+                          <TableCell>{display.agentLabel}</TableCell>
+                          <TableCell>{statusCell}</TableCell>
+                          <TableCell>{actionsCell}</TableCell>
+                        </>
+                      ) : isZyVUser ? (
+                        <>
+                          <TableCell className="font-medium">
+                            {getVisibleComplaintNumber(complaint)}
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(complaint.complaint_date)}
+                          </TableCell>
+                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                            {complaint.complainant_name ?? "-"}
+                          </TableCell>
+                          <TableCell>{display.addressLabel}</TableCell>
+                          <TableCell>{display.serviceLabel}</TableCell>
+                          <TableCell>{display.causeLabel}</TableCell>
+                          <TableCell>{display.zoneLabel}</TableCell>
+                          <TableCell>{display.sinceWhenLabel}</TableCell>
+                          <TableCell>{statusCell}</TableCell>
+                          <TableCell>{actionsCell}</TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="font-medium">
+                            {complaint.complaint_number ?? "-"}
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(complaint.complaint_date)}
+                          </TableCell>
+                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                            {complaint.complainant_name ?? "-"}
+                          </TableCell>
+                          <TableCell>{display.serviceLabel}</TableCell>
+                          <TableCell>{display.causeLabel}</TableCell>
+                          <TableCell>{display.zoneLabel}</TableCell>
+                          <TableCell>{display.sinceWhenLabel}</TableCell>
+                          {isServiciosPublicosUser && (
+                            <TableCell>
+                              {spTrackingData.seen ? (
+                                <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                  Visto
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          )}
+                          <TableCell>{display.resolutionDateLabel}</TableCell>
+                          {isServiciosPublicosUser && (
+                            <TableCell className="max-w-[220px] whitespace-normal break-words">
+                              {spTrackingData.observations || "-"}
+                            </TableCell>
+                          )}
+                          <TableCell>{statusCell}</TableCell>
+                          <TableCell>
+                            {complaint.loaded_by_user?.full_name ??
+                              "Usuario no disponible"}
+                          </TableCell>
+                          <TableCell>{actionsCell}</TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Mostrando{" "}
+              <span className="font-medium text-foreground">{start}</span> a{" "}
+              <span className="font-medium text-foreground">{end}</span> de{" "}
+              <span className="font-medium text-foreground">
+                {sortedComplaints.length}
+              </span>{" "}
+              reclamos
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
-                variant={currentPage === 1 ? "default" : "outline"}
+                variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(1)}
-                className="min-w-9"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="gap-1"
               >
-                1
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
               </Button>
-              {pageNumbers[0] > 2 && (
-                <span className="px-1 text-sm text-muted-foreground">...</span>
-              )}
-            </>
-          )}
 
-          {pageNumbers.map((page) => (
-            <Button
-              key={page}
-              type="button"
-              variant={currentPage === page ? "default" : "outline"}
-              size="sm"
-              onClick={() => setCurrentPage(page)}
-              className="min-w-9"
-            >
-              {page}
-            </Button>
-          ))}
-
-          {pageNumbers[pageNumbers.length - 1] < totalPages && (
-            <>
-              {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
-                <span className="px-1 text-sm text-muted-foreground">...</span>
+              {pageNumbers[0] > 1 && (
+                <>
+                  <Button
+                    type="button"
+                    variant={currentPage === 1 ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    className="min-w-9"
+                  >
+                    1
+                  </Button>
+                  {pageNumbers[0] > 2 && (
+                    <span className="px-1 text-sm text-muted-foreground">
+                      ...
+                    </span>
+                  )}
+                </>
               )}
+
+              {pageNumbers.map((page) => (
+                <Button
+                  key={page}
+                  type="button"
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(page)}
+                  className="min-w-9"
+                >
+                  {page}
+                </Button>
+              ))}
+
+              {pageNumbers[pageNumbers.length - 1] < totalPages && (
+                <>
+                  {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
+                    <span className="px-1 text-sm text-muted-foreground">
+                      ...
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={currentPage === totalPages ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="min-w-9"
+                  >
+                    {totalPages}
+                  </Button>
+                </>
+              )}
+
               <Button
                 type="button"
-                variant={currentPage === totalPages ? "default" : "outline"}
+                variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(totalPages)}
-                className="min-w-9"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                disabled={currentPage === totalPages}
+                className="gap-1"
               >
-                {totalPages}
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            </>
-          )}
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-            }
-            disabled={currentPage === totalPages}
-            className="gap-1"
-          >
-            Siguiente
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {resolutionModalComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -1875,9 +1935,7 @@ export function ComplaintsTable({
                 type="button"
                 variant="outline"
                 onClick={clearResolutionDate}
-                disabled={
-                  updatingResolutionDate === resolutionModalComplaint.id
-                }
+                disabled={updatingResolutionDate === resolutionModalComplaint.id}
               >
                 Quitar
               </Button>

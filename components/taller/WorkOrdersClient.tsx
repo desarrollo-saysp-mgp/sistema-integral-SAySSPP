@@ -45,6 +45,7 @@ import { VEHICLE_OPTIONS } from "@/lib/taller/options";
 
 const ALL_VALUE = "Todos";
 const ITEMS_PER_PAGE = 15;
+const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
 
 const statusOptions = [
   "INICIADO",
@@ -54,6 +55,8 @@ const statusOptions = [
   "TALLER TERCERIZADO",
   "CERRADO",
 ];
+
+type AmountCurrency = "ARS" | "USD";
 
 type PdfStatusColors = {
   fillColor: [number, number, number];
@@ -93,6 +96,48 @@ const getLicensePlateLabel = (order: WorkOrder) => {
   return matchedVehicle?.licensePlate || "-";
 };
 
+const getAmountCurrency = (order: WorkOrder): AmountCurrency => {
+  const observations = String(order.observations || "");
+  const match = observations.match(/\[\[amount_currency:(ARS|USD)\]\]/);
+
+  if (match?.[1] === "USD") return "USD";
+
+  return "ARS";
+};
+
+const cleanObservations = (value?: string | null) => {
+  const cleaned = String(value || "").replace(CURRENCY_MARKER_REGEX, "").trim();
+
+  return cleaned || "-";
+};
+
+const formatProviders = (value?: string | null) => {
+  const providers = String(value || "")
+    .split("|")
+    .map((provider) => provider.trim())
+    .filter(Boolean);
+
+  if (providers.length === 0) return "-";
+
+  return providers.join(", ");
+};
+
+const formatMoney = (
+  value?: number | null,
+  currency: AmountCurrency = "ARS",
+) => {
+  if (value === null || value === undefined) return "-";
+
+  return value.toLocaleString("es-AR", {
+    style: "currency",
+    currency,
+  });
+};
+
+const formatOrderMoney = (order: WorkOrder) => {
+  return formatMoney(order.amount, getAmountCurrency(order));
+};
+
 const getUniqueOptions = (values: Array<string | null | undefined>) => {
   const seen = new Set<string>();
 
@@ -125,6 +170,16 @@ const isDateInRange = (
   if (dateTo && dateValue > dateTo) return false;
 
   return true;
+};
+
+const getDateTimeValue = (dateString?: string | null) => {
+  if (!dateString) return 0;
+
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  if (!year || !month || !day) return 0;
+
+  return new Date(year, month - 1, day).getTime();
 };
 
 export function WorkOrdersClient() {
@@ -195,9 +250,12 @@ export function WorkOrdersClient() {
   const filteredWorkOrders = useMemo(() => {
     const normalizedSearch = normalizeText(search);
 
-    return workOrders.filter((order) => {
+    const filtered = workOrders.filter((order) => {
       const vehicleLabel = getVehicleLabel(order);
       const licensePlateLabel = getLicensePlateLabel(order);
+      const cleanObservationLabel = cleanObservations(order.observations);
+      const providerLabel = formatProviders(order.provider);
+      const amountLabel = formatOrderMoney(order);
 
       const matchesSearch =
         !normalizedSearch ||
@@ -207,12 +265,13 @@ export function WorkOrdersClient() {
         normalizeText(licensePlateLabel).includes(normalizedSearch) ||
         normalizeText(order.driver).includes(normalizedSearch) ||
         normalizeText(order.provider).includes(normalizedSearch) ||
-        normalizeText(order.observations).includes(normalizedSearch) ||
+        normalizeText(providerLabel).includes(normalizedSearch) ||
+        normalizeText(cleanObservationLabel).includes(normalizedSearch) ||
+        normalizeText(amountLabel).includes(normalizedSearch) ||
         normalizeText(order.failure_report).includes(normalizedSearch) ||
         normalizeText(order.failure_type).includes(normalizedSearch) ||
         normalizeText(order.failure_location).includes(normalizedSearch) ||
         normalizeText(order.repair_type).includes(normalizedSearch) ||
-        normalizeText(order.spare_part_code).includes(normalizedSearch) ||
         normalizeText(order.spare_part_detail).includes(normalizedSearch);
 
       const matchesArea =
@@ -255,6 +314,28 @@ export function WorkOrdersClient() {
         matchesFailureType &&
         matchesDriver &&
         matchesDate
+      );
+    });
+
+    return filtered.sort((a, b) => {
+      const dateA = getDateTimeValue(a.entry_date);
+      const dateB = getDateTimeValue(b.entry_date);
+
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      const orderNumberA = Number(a.order_number);
+      const orderNumberB = Number(b.order_number);
+
+      if (Number.isFinite(orderNumberA) && Number.isFinite(orderNumberB)) {
+        return orderNumberB - orderNumberA;
+      }
+
+      return String(b.order_number || "").localeCompare(
+        String(a.order_number || ""),
+        "es",
+        { numeric: true },
       );
     });
   }, [
@@ -390,15 +471,6 @@ export function WorkOrdersClient() {
     }
 
     return dateString;
-  };
-
-  const formatMoney = (value?: number | null) => {
-    if (value === null || value === undefined) return "-";
-
-    return value.toLocaleString("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    });
   };
 
   const getStatusBadgeClass = (status?: string | null) => {
@@ -542,13 +614,11 @@ export function WorkOrdersClient() {
       partes.push(`Tipo de reparación: *${order.repair_type || "-"}*`);
       partes.push(`Requiere repuesto: *${order.requires_spare_part || "-"}*`);
       partes.push(`Detalle repuesto: *${order.spare_part_detail || "-"}*`);
-      partes.push(`Código repuesto: *${order.spare_part_code || "-"}*`);
-      partes.push(`Unidades: *${order.units ?? "-"}*`);
-      partes.push(`Proveedor: *${order.provider || "-"}*`);
-      partes.push(`Monto: *${formatMoney(order.amount)}*`);
+      partes.push(`Proveedor/es: *${formatProviders(order.provider)}*`);
+      partes.push(`Monto: *${formatOrderMoney(order)}*`);
       partes.push(`Chofer: *${order.driver || "-"}*`);
       partes.push(`Estado: *${order.status || "-"}*`);
-      partes.push(`Observaciones: *${order.observations || "-"}*`);
+      partes.push(`Observaciones: *${cleanObservations(order.observations)}*`);
       partes.push("");
     });
 
@@ -582,15 +652,15 @@ export function WorkOrdersClient() {
         "Localización de falla": order.failure_location || "-",
         "Reporte de falla": order.failure_report || "-",
         "Tipo de reparación": order.repair_type || "-",
-        Observaciones: order.observations || "-",
         "Requiere repuesto": order.requires_spare_part || "-",
         "Detalle de repuesto": order.spare_part_detail || "-",
-        "Código de repuesto": order.spare_part_code || "-",
-        Unidades: order.units ?? "-",
-        Proveedor: order.provider || "-",
+        "Proveedor/es": formatProviders(order.provider),
+        Moneda: getAmountCurrency(order),
         Monto: order.amount ?? "-",
+        "Monto formateado": formatOrderMoney(order),
         Chofer: order.driver || "-",
         Estado: order.status || "-",
+        Observaciones: cleanObservations(order.observations),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(formattedData);
@@ -670,8 +740,8 @@ export function WorkOrdersClient() {
         getLicensePlateLabel(order),
         order.failure_type || "-",
         order.repair_type || "-",
-        order.provider || "-",
-        formatMoney(order.amount),
+        formatProviders(order.provider),
+        formatOrderMoney(order),
         order.status || "-",
       ]);
 
@@ -687,7 +757,7 @@ export function WorkOrdersClient() {
             "Dominio",
             "Falla",
             "Reparación",
-            "Proveedor",
+            "Proveedor/es",
             "Monto",
             "Estado",
           ],
@@ -828,7 +898,7 @@ export function WorkOrdersClient() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por OT, vehículo, dominio, chofer, proveedor, falla..."
+                  placeholder="Buscar por OT, vehículo, dominio, chofer, proveedor, falla, monto..."
                   className="h-9 rounded-xl pl-9"
                 />
               </div>
@@ -1078,12 +1148,17 @@ export function WorkOrdersClient() {
                             value={order.repair_type || "-"}
                           />
 
-                          <Info label="Chofer" value={order.driver || "-"} />
+                          <Info
+                            label="Proveedor/es"
+                            value={formatProviders(order.provider)}
+                          />
 
                           <Info
                             label="Monto"
-                            value={formatMoney(order.amount)}
+                            value={formatOrderMoney(order)}
                           />
+
+                          <Info label="Chofer" value={order.driver || "-"} />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -1174,7 +1249,7 @@ export function WorkOrdersClient() {
                       </th>
 
                       <th className="px-3 py-3 text-left font-semibold">
-                        Proveedor
+                        Proveedor/es
                       </th>
 
                       <th className="px-3 py-3 text-left font-semibold">
@@ -1253,11 +1328,11 @@ export function WorkOrdersClient() {
                           </td>
 
                           <td className="px-3 py-3">
-                            {order.provider || "-"}
+                            {formatProviders(order.provider)}
                           </td>
 
                           <td className="px-3 py-3">
-                            {formatMoney(order.amount)}
+                            {formatOrderMoney(order)}
                           </td>
 
                           <td className="px-3 py-3">

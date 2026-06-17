@@ -181,23 +181,23 @@ export async function GET(request: NextRequest) {
     const safeComplaints =
       currentUser.role === "ReclamosArbolado"
         ? allComplaints.filter(
-            (c) =>
-              c.form_variant === "arbolado" ||
-              arboladoServiceIds.includes(c.service_id),
-          )
+          (c) =>
+            c.form_variant === "arbolado" ||
+            arboladoServiceIds.includes(c.service_id),
+        )
         : currentUser.role === "ReclamosZyV"
           ? allComplaints.filter(
-              (c) =>
-                c.form_variant === "zyv" ||
-                zyvServiceIds.includes(c.service_id),
-            )
+            (c) =>
+              c.form_variant === "zyv" ||
+              zyvServiceIds.includes(c.service_id),
+          )
           : currentUser.role === "Reclamos"
             ? allComplaints.filter(
-                (c) =>
-                  c.form_variant === "general" ||
-                  c.form_variant === "import_excel" ||
-                  c.form_variant == null,
-              )
+              (c) =>
+                c.form_variant === "general" ||
+                c.form_variant === "import_excel" ||
+                c.form_variant == null,
+            )
             : allComplaints;
 
     return NextResponse.json({ data: safeComplaints });
@@ -428,8 +428,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (formVariant === "arbolado") {
+      const rawArboladoNumber = String(body.arbolado_number || "").trim();
+
+      if (rawArboladoNumber && !/^\d+$/.test(rawArboladoNumber)) {
+        return NextResponse.json(
+          { error: "El número de reclamo de Arbolado debe ser numérico" },
+          { status: 400 },
+        );
+      }
+
       complaintData = {
         ...complaintData,
+        arbolado_number: rawArboladoNumber ? Number(rawArboladoNumber) : null,
         details: body.description_type?.trim() || null,
         contact_method: body.contact_method?.trim() || null,
         extra_data: {
