@@ -680,10 +680,7 @@ export function WorkOrderCreateClient() {
               className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
 
-            <p className="text-xs text-muted-foreground">
-              La moneda del monto se guarda automáticamente junto con la OT sin
-              modificar la base de datos.
-            </p>
+
           </div>
         </CardContent>
       </Card>

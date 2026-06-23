@@ -40,6 +40,7 @@ export const LOCALIZACION_FALLA_OPTIONS = [
   "Sist. hidráulico de transmisión",
   "Suspensión",
   "Transmisión",
+  "Service",
   "NO ESPECIFICA"
 ] as const;
 
