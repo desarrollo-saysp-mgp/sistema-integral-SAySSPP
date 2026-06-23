@@ -734,7 +734,7 @@ export default function ComplaintsClient() {
     <>
       <PageLoader show={loading} />
 
-      <div className="container mx-auto space-y-6 p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Reclamos</h1>
