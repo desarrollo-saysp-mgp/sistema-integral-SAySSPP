@@ -7,14 +7,14 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "ReclamosZyV"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR"
-            | "Taller";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "ReclamosZyV"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR"
+          | "Taller";
           modules: string[] | null;
           is_readonly: boolean | null;
           default_module: string | null;
@@ -27,14 +27,14 @@ export interface Database {
           full_name: string;
           email: string;
           role:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "ReclamosZyV"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR"
-            | "Taller";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "ReclamosZyV"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR"
+          | "Taller";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -47,14 +47,14 @@ export interface Database {
           full_name?: string;
           email?: string;
           role?:
-            | "Admin"
-            | "Reclamos"
-            | "ReclamosArbolado"
-            | "ReclamosZyV"
-            | "AdminLectura"
-            | "FC_RRHH"
-            | "FC_SECTOR"
-            | "Taller";
+          | "Admin"
+          | "Reclamos"
+          | "ReclamosArbolado"
+          | "ReclamosZyV"
+          | "AdminLectura"
+          | "FC_RRHH"
+          | "FC_SECTOR"
+          | "Taller";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -82,11 +82,11 @@ export interface Database {
           zone: string | null;
           since_when: string | null;
           contact_method:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details: string | null;
           status: "En proceso" | "Resuelto" | "No resuelto";
           referred: boolean;
@@ -114,11 +114,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
@@ -146,11 +146,11 @@ export interface Database {
           zone?: string | null;
           since_when?: string | null;
           contact_method?:
-            | "Presencial"
-            | "Telefono"
-            | "Email"
-            | "WhatsApp"
-            | null;
+          | "Presencial"
+          | "Telefono"
+          | "Email"
+          | "WhatsApp"
+          | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
           referred?: boolean;
@@ -270,6 +270,9 @@ export interface Database {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          workshop_entry_date: string | null;
+          closed_date: string | null;
+          year_month: string | null;
           spare_part_detail: string | null;
         };
         Insert: {
@@ -297,6 +300,9 @@ export interface Database {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          workshop_entry_date?: string | null;
+          closed_date?: string | null;
+          year_month?: string | null;
           spare_part_detail?: string | null;
         };
         Update: {
@@ -324,6 +330,9 @@ export interface Database {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          workshop_entry_date?: string | null;
+          closed_date?: string | null;
+          year_month?: string | null;
           spare_part_detail?: string | null;
         };
       };
