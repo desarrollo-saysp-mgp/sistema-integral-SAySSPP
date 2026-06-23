@@ -1383,10 +1383,13 @@ export function ComplaintsTable({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="font-semibold">Zona: </span>
-                            <span>{display.zoneLabel}</span>
-                          </div>
+                          {!isServiciosPublicosUser && (
+                            <div>
+                              <span className="font-semibold">Zona: </span>
+                              <span>{display.zoneLabel}</span>
+                            </div>
+                          )}
+
                           <div>
                             <span className="font-semibold">Desde: </span>
                             <span>{display.sinceWhenLabel}</span>
@@ -1400,13 +1403,15 @@ export function ComplaintsTable({
                           <span>{display.resolutionDateLabel}</span>
                         </div>
 
-                        <div>
-                          <span className="font-semibold">Cargado por: </span>
-                          <span>
-                            {complaint.loaded_by_user?.full_name ??
-                              "Usuario no disponible"}
-                          </span>
-                        </div>
+                        {!isServiciosPublicosUser && (
+                          <div>
+                            <span className="font-semibold">Cargado por: </span>
+                            <span>
+                              {complaint.loaded_by_user?.full_name ??
+                                "Usuario no disponible"}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1527,7 +1532,11 @@ export function ComplaintsTable({
                       <TableHead>Nombre</TableHead>
                       <TableHead>Servicio</TableHead>
                       <TableHead>Causa</TableHead>
-                      <TableHead>Zona</TableHead>
+                      {isServiciosPublicosUser ? (
+                        <TableHead>Dirección</TableHead>
+                      ) : (
+                        <TableHead>Zona</TableHead>
+                      )}
                       <TableHead>Desde Cuándo</TableHead>
                       {isServiciosPublicosUser && <TableHead>Visto</TableHead>}
                       <TableHead>Fecha resolución</TableHead>
@@ -1535,7 +1544,9 @@ export function ComplaintsTable({
                         <TableHead>Observaciones</TableHead>
                       )}
                       <TableHead>Estado</TableHead>
-                      <TableHead>Cargado por</TableHead>
+                      {!isServiciosPublicosUser && (
+                        <TableHead>Cargado por</TableHead>
+                      )}
                       <TableHead className="text-center">Acciones</TableHead>
                     </>
                   )}
@@ -1737,7 +1748,13 @@ export function ComplaintsTable({
                           </TableCell>
                           <TableCell>{display.serviceLabel}</TableCell>
                           <TableCell>{display.causeLabel}</TableCell>
-                          <TableCell>{display.zoneLabel}</TableCell>
+                          {isServiciosPublicosUser ? (
+                            <TableCell className="max-w-[240px] whitespace-normal break-words">
+                              {display.addressLabel}
+                            </TableCell>
+                          ) : (
+                            <TableCell>{display.zoneLabel}</TableCell>
+                          )}
                           <TableCell>{display.sinceWhenLabel}</TableCell>
                           {isServiciosPublicosUser && (
                             <TableCell>
@@ -1757,10 +1774,12 @@ export function ComplaintsTable({
                             </TableCell>
                           )}
                           <TableCell>{statusCell}</TableCell>
-                          <TableCell>
-                            {complaint.loaded_by_user?.full_name ??
-                              "Usuario no disponible"}
-                          </TableCell>
+                          {!isServiciosPublicosUser && (
+                            <TableCell>
+                              {complaint.loaded_by_user?.full_name ??
+                                "Usuario no disponible"}
+                            </TableCell>
+                          )}
                           <TableCell>{actionsCell}</TableCell>
                         </>
                       )}
