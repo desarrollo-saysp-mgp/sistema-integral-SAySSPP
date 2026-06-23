@@ -153,7 +153,7 @@ const getUniqueOptions = (values: Array<string | null | undefined>) => {
       seen.add(normalized);
       return true;
     })
-    .sort((a, b) => a.localeCompare(b, "es"));
+    .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
 };
 
 const isDateInRange = (
@@ -193,6 +193,7 @@ export function WorkOrdersClient() {
   const [dateToFilter, setDateToFilter] = useState("");
   const [repairTypeFilter, setRepairTypeFilter] = useState(ALL_VALUE);
   const [vehicleFilter, setVehicleFilter] = useState(ALL_VALUE);
+  const [vehicleCodeFilter, setVehicleCodeFilter] = useState(ALL_VALUE);
   const [failureTypeFilter, setFailureTypeFilter] = useState(ALL_VALUE);
   const [driverFilter, setDriverFilter] = useState(ALL_VALUE);
 
@@ -237,6 +238,10 @@ export function WorkOrdersClient() {
 
   const vehicleOptions = useMemo(() => {
     return getUniqueOptions(workOrders.map((order) => getVehicleLabel(order)));
+  }, [workOrders]);
+
+  const vehicleCodeOptions = useMemo(() => {
+    return getUniqueOptions(workOrders.map((order) => order.vehicle_code));
   }, [workOrders]);
 
   const failureTypeOptions = useMemo(() => {
@@ -288,8 +293,11 @@ export function WorkOrdersClient() {
 
       const matchesVehicle =
         vehicleFilter === ALL_VALUE ||
-        normalizeText(vehicleLabel) === normalizeText(vehicleFilter) ||
-        normalizeText(order.vehicle_code) === normalizeText(vehicleFilter);
+        normalizeText(vehicleLabel) === normalizeText(vehicleFilter);
+
+      const matchesVehicleCode =
+        vehicleCodeFilter === ALL_VALUE ||
+        normalizeText(order.vehicle_code) === normalizeText(vehicleCodeFilter);
 
       const matchesFailureType =
         failureTypeFilter === ALL_VALUE ||
@@ -311,6 +319,7 @@ export function WorkOrdersClient() {
         matchesStatus &&
         matchesRepairType &&
         matchesVehicle &&
+        matchesVehicleCode &&
         matchesFailureType &&
         matchesDriver &&
         matchesDate
@@ -347,6 +356,7 @@ export function WorkOrdersClient() {
     dateToFilter,
     repairTypeFilter,
     vehicleFilter,
+    vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
   ]);
@@ -366,6 +376,7 @@ export function WorkOrdersClient() {
     dateToFilter,
     repairTypeFilter,
     vehicleFilter,
+    vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
   ]);
@@ -421,6 +432,7 @@ export function WorkOrdersClient() {
     dateToFilter ||
     repairTypeFilter !== ALL_VALUE ||
     vehicleFilter !== ALL_VALUE ||
+    vehicleCodeFilter !== ALL_VALUE ||
     failureTypeFilter !== ALL_VALUE ||
     driverFilter !== ALL_VALUE;
 
@@ -432,6 +444,7 @@ export function WorkOrdersClient() {
     setDateToFilter("");
     setRepairTypeFilter(ALL_VALUE);
     setVehicleFilter(ALL_VALUE);
+    setVehicleCodeFilter(ALL_VALUE);
     setFailureTypeFilter(ALL_VALUE);
     setDriverFilter(ALL_VALUE);
     setSelectedOrderIds([]);
@@ -844,7 +857,7 @@ export function WorkOrdersClient() {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 px-0 sm:space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Registro de OT</h2>
@@ -853,7 +866,7 @@ export function WorkOrdersClient() {
           </p>
         </div>
 
-        <Button asChild className="h-9 gap-2 rounded-xl">
+        <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">
           <Link href="/dashboard/taller/ordenes-trabajo/nueva">
             <PlusCircle className="h-4 w-4" />
             Cargar nueva OT
@@ -861,8 +874,8 @@ export function WorkOrdersClient() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader className="space-y-3 pb-3">
+      <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
+        <CardHeader className="space-y-3 px-3 pb-3 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Órdenes cargadas</CardTitle>
@@ -877,8 +890,8 @@ export function WorkOrdersClient() {
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-card p-3 shadow-sm">
-            <div className="mb-3 flex items-center gap-2 border-b pb-2">
+          <div className="rounded-xl border bg-card p-2.5 shadow-sm sm:rounded-2xl sm:p-3">
+            <div className="mb-2 flex items-center gap-2 border-b pb-2">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <Filter className="h-4 w-4 text-primary" />
               </div>
@@ -886,87 +899,116 @@ export function WorkOrdersClient() {
               <div>
                 <p className="text-sm font-semibold leading-none">Filtros</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Filtrá por área, estado, fecha, vehículo, falla y chofer.
+                  Filtrá por área, estado, fecha, vehículo, código, falla y chofer.
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:items-end">
+                <div className="space-y-1 md:col-span-2 xl:col-span-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Buscar
+                  </p>
 
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por OT, vehículo, dominio, chofer, proveedor, falla, monto..."
-                  className="h-9 rounded-xl pl-9"
-                />
-              </div>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <FilterSelect
-                  value={areaFilter}
-                  onValueChange={setAreaFilter}
-                  placeholder="Área"
-                  options={areaOptions}
-                />
+                    <Input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="OT, código, dominio, chofer..."
+                      className="h-9 rounded-xl pl-9"
+                    />
+                  </div>
+                </div>
 
-                <FilterSelect
-                  value={statusFilter}
-                  onValueChange={setStatusFilter}
-                  placeholder="Estado"
-                  options={statusOptions}
-                />
+                <div className="xl:col-span-1">
+                  <FilterSelect
+                    value={areaFilter}
+                    onValueChange={setAreaFilter}
+                    placeholder="Área"
+                    options={areaOptions}
+                  />
+                </div>
 
-                <FilterSelect
-                  value={repairTypeFilter}
-                  onValueChange={setRepairTypeFilter}
-                  placeholder="Tipo de reparación"
-                  options={repairTypeOptions}
-                />
+                <div className="xl:col-span-1">
+                  <FilterSelect
+                    value={statusFilter}
+                    onValueChange={setStatusFilter}
+                    placeholder="Estado"
+                    options={statusOptions}
+                  />
+                </div>
 
-                <FilterSelect
-                  value={vehicleFilter}
-                  onValueChange={setVehicleFilter}
-                  placeholder="Vehículo"
-                  options={vehicleOptions}
-                />
+                <div className="xl:col-span-2">
+                  <FilterSelect
+                    value={repairTypeFilter}
+                    onValueChange={setRepairTypeFilter}
+                    placeholder="Reparación"
+                    options={repairTypeOptions}
+                  />
+                </div>
 
-                <FilterSelect
-                  value={failureTypeFilter}
-                  onValueChange={setFailureTypeFilter}
-                  placeholder="Tipo de falla"
-                  options={failureTypeOptions}
-                />
+                <div className="xl:col-span-3">
+                  <FilterSelect
+                    value={vehicleFilter}
+                    onValueChange={setVehicleFilter}
+                    placeholder="Vehículo"
+                    options={vehicleOptions}
+                  />
+                </div>
 
-                <FilterSelect
-                  value={driverFilter}
-                  onValueChange={setDriverFilter}
-                  placeholder="Chofer"
-                  options={driverOptions}
-                />
+                <div className="xl:col-span-2">
+                  <FilterSelect
+                    value={vehicleCodeFilter}
+                    onValueChange={setVehicleCodeFilter}
+                    placeholder="Código"
+                    options={vehicleCodeOptions}
+                  />
+                </div>
 
-                <DateFilter
-                  label="Fecha desde"
-                  value={dateFromFilter}
-                  onChange={setDateFromFilter}
-                />
+                <div className="xl:col-span-2">
+                  <FilterSelect
+                    value={failureTypeFilter}
+                    onValueChange={setFailureTypeFilter}
+                    placeholder="Falla"
+                    options={failureTypeOptions}
+                  />
+                </div>
 
-                <DateFilter
-                  label="Fecha hasta"
-                  value={dateToFilter}
-                  onChange={setDateToFilter}
-                />
-              </div>
+                <div className="xl:col-span-2">
+                  <FilterSelect
+                    value={driverFilter}
+                    onValueChange={setDriverFilter}
+                    placeholder="Chofer"
+                    options={driverOptions}
+                  />
+                </div>
 
-              <div className="flex flex-col gap-2 border-t pt-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <div className="xl:col-span-2">
+                  <DateFilter
+                    label="Fecha desde"
+                    value={dateFromFilter}
+                    onChange={setDateFromFilter}
+                  />
+                </div>
+
+                <div className="xl:col-span-2">
+                  <DateFilter
+                    label="Fecha hasta"
+                    value={dateToFilter}
+                    onChange={setDateToFilter}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 xl:col-span-4">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={clearFilters}
                     disabled={!hasActiveFilters}
-                    className="h-9 gap-2 rounded-xl"
+                    className="h-9 w-full gap-2 rounded-xl px-3"
                   >
                     <X className="h-4 w-4" />
                     Limpiar
@@ -977,23 +1019,25 @@ export function WorkOrdersClient() {
                     variant="outline"
                     onClick={fetchWorkOrders}
                     disabled={loading}
-                    className="h-9 gap-2 rounded-xl"
+                    className="h-9 w-full gap-2 rounded-xl px-3"
                   >
                     <RefreshCcw className="h-4 w-4" />
                     Actualizar
                   </Button>
                 </div>
+              </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+              <div className="flex justify-end border-t pt-3">
+                <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleSendWhatsApp}
                     disabled={selectedWorkOrders.length === 0}
-                    className="h-9 gap-2 rounded-xl"
+                    className="h-9 w-full gap-1 rounded-xl px-2 sm:w-auto sm:gap-2 sm:px-4"
                   >
                     <MessageCircle className="h-4 w-4" />
-                    WhatsApp
+                    <span className="text-xs sm:text-sm">WhatsApp</span>
                   </Button>
 
                   <Button
@@ -1001,12 +1045,14 @@ export function WorkOrdersClient() {
                     variant="outline"
                     onClick={exportToExcel}
                     disabled={exportWorkOrders.length === 0}
-                    className="h-9 gap-2 rounded-xl"
+                    className="h-9 w-full gap-1 rounded-xl px-2 sm:w-auto sm:gap-2 sm:px-4"
                   >
                     <FileSpreadsheet className="h-4 w-4" />
-                    {hasSelectedOrders
-                      ? `Excel ${selectedWorkOrders.length}`
-                      : "Excel"}
+                    <span className="text-xs sm:text-sm">
+                      {hasSelectedOrders
+                        ? `Excel ${selectedWorkOrders.length}`
+                        : "Excel"}
+                    </span>
                   </Button>
 
                   <Button
@@ -1014,18 +1060,19 @@ export function WorkOrdersClient() {
                     variant="outline"
                     onClick={exportToPDF}
                     disabled={exportWorkOrders.length === 0}
-                    className="h-9 gap-2 rounded-xl"
+                    className="h-9 w-full gap-1 rounded-xl px-2 sm:w-auto sm:gap-2 sm:px-4"
                   >
                     <FileText className="h-4 w-4" />
-                    {hasSelectedOrders
-                      ? `PDF ${selectedWorkOrders.length}`
-                      : "PDF"}
+                    <span className="text-xs sm:text-sm">
+                      {hasSelectedOrders
+                        ? `PDF ${selectedWorkOrders.length}`
+                        : "PDF"}
+                    </span>
                   </Button>
                 </div>
               </div>
             </div>
           </div>
-
           {hasSelectedOrders && (
             <p className="text-sm text-muted-foreground">
               {selectedWorkOrders.length} OT seleccionada(s). Al exportar o
@@ -1034,7 +1081,7 @@ export function WorkOrdersClient() {
           )}
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -1048,7 +1095,7 @@ export function WorkOrdersClient() {
           ) : (
             <>
               <div className="space-y-3 md:hidden">
-                <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 shadow-sm">
+                <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-3 shadow-sm">
                   <div>
                     <p className="text-sm font-semibold">OT visibles</p>
                     <p className="text-xs text-muted-foreground">
@@ -1080,7 +1127,7 @@ export function WorkOrdersClient() {
 
                   return (
                     <Card key={order.id} className="rounded-xl">
-                      <CardContent className="space-y-3 p-4">
+                      <CardContent className="space-y-3 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs text-muted-foreground">OT</p>
@@ -1103,14 +1150,13 @@ export function WorkOrdersClient() {
                               onCheckedChange={(checked) =>
                                 toggleOrderSelection(orderId, checked === true)
                               }
-                              aria-label={`Seleccionar OT ${
-                                order.order_number || ""
-                              }`}
+                              aria-label={`Seleccionar OT ${order.order_number || ""
+                                }`}
                             />
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                           <Info
                             label="Fecha"
                             value={formatDate(order.entry_date)}
@@ -1283,9 +1329,8 @@ export function WorkOrdersClient() {
                                     checked === true,
                                   )
                                 }
-                                aria-label={`Seleccionar OT ${
-                                  order.order_number || ""
-                                }`}
+                                aria-label={`Seleccionar OT ${order.order_number || ""
+                                  }`}
                               />
                             </div>
                           </td>
@@ -1383,7 +1428,7 @@ export function WorkOrdersClient() {
                 </table>
               </div>
 
-              <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
+              <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-card px-3 py-3 shadow-sm md:flex-row md:items-center md:justify-between md:px-4">
                 <p className="text-sm text-muted-foreground">
                   Mostrando{" "}
                   <span className="font-medium text-foreground">{start}</span>{" "}
@@ -1447,10 +1492,10 @@ export function WorkOrdersClient() {
                     <>
                       {pageNumbers[pageNumbers.length - 1] <
                         totalPages - 1 && (
-                        <span className="px-1 text-sm text-muted-foreground">
-                          ...
-                        </span>
-                      )}
+                          <span className="px-1 text-sm text-muted-foreground">
+                            ...
+                          </span>
+                        )}
 
                       <Button
                         type="button"
@@ -1503,11 +1548,11 @@ function FilterSelect({
   options: readonly string[];
 }) {
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <p className="text-xs font-medium text-muted-foreground">{placeholder}</p>
 
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className="h-9 rounded-xl">
+        <SelectTrigger className="h-9 w-full min-w-0 rounded-xl">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
 
@@ -1535,14 +1580,14 @@ function DateFilter({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
 
       <Input
         type="date"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 rounded-xl"
+        className="h-9 w-full rounded-xl"
       />
     </div>
   );
@@ -1550,9 +1595,9 @@ function DateFilter({
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="break-words text-sm">{value}</p>
+      <p className="break-words text-sm leading-snug">{value}</p>
     </div>
   );
 }
