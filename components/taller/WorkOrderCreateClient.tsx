@@ -204,6 +204,34 @@ const getSpeechRecognitionConstructor = () => {
   );
 };
 
+const canUseMicrophone = async () => {
+  if (typeof window === "undefined") return false;
+
+  if (!window.isSecureContext) {
+    toast.error(
+      "El dictado por voz necesita HTTPS o localhost para poder usar el micrófono.",
+    );
+    return false;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast.error("Tu navegador no permite acceder al micrófono.");
+    return false;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return true;
+  } catch (error) {
+    console.warn("Permiso de micrófono rechazado o no disponible:", error);
+    toast.error(
+      "No se pudo acceder al micrófono. Revisá permisos del sitio, permisos del sistema y que el micrófono no esté ocupado.",
+    );
+    return false;
+  }
+};
+
 export function WorkOrderCreateClient() {
   const router = useRouter();
 
@@ -290,7 +318,7 @@ export function WorkOrderCreateClient() {
     });
   };
 
-  const startVoiceDictation = () => {
+  const startVoiceDictation = async () => {
     const SpeechRecognitionConstructor = getSpeechRecognitionConstructor();
 
     if (!SpeechRecognitionConstructor) {
@@ -298,6 +326,13 @@ export function WorkOrderCreateClient() {
       toast.error(
         "Tu navegador no permite dictado por voz. Probá con Chrome o escribí la observación manualmente.",
       );
+      return;
+    }
+
+    const microphoneAllowed = await canUseMicrophone();
+
+    if (!microphoneAllowed) {
+      setIsListening(false);
       return;
     }
 
@@ -338,18 +373,23 @@ export function WorkOrderCreateClient() {
     };
 
     recognition.onerror = (event) => {
-      console.error("Error en dictado por voz:", event.error);
+      console.warn("Error en dictado por voz:", event.error);
 
-      if (event.error === "not-allowed") {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         toast.error(
-          "No se habilitó el micrófono. Revisá los permisos del navegador.",
+          "El navegador bloqueó el dictado. Revisá permisos del sitio, permisos del sistema y probá recargar la página.",
         );
+      } else if (event.error === "no-speech") {
+        toast.error("No se detectó voz. Probá hablar más cerca del micrófono.");
+      } else if (event.error === "audio-capture") {
+        toast.error("No se encontró un micrófono disponible.");
       } else {
         toast.error("No se pudo usar el dictado por voz.");
       }
 
       setIsListening(false);
       recognitionRef.current = null;
+      baseObservationTextRef.current = "";
     };
 
     recognition.onend = () => {
@@ -390,6 +430,8 @@ export function WorkOrderCreateClient() {
         },
         body: JSON.stringify({
           ...formData,
+          entry_date: formData.entry_date || null,
+          exit_date: formData.exit_date || null,
           spare_part_code: null,
           units: null,
           amount: formData.amount ? Number(formData.amount) : null,
@@ -450,15 +492,11 @@ export function WorkOrderCreateClient() {
               />
             </Field>
 
-            <Field label="Fecha de ingreso">
-              <Input
-                type="date"
-                value={formData.entry_date}
-                onChange={(event) =>
-                  handleChange("entry_date", event.target.value)
-                }
-              />
-            </Field>
+            <DateField
+              label="Fecha de ingreso"
+              value={formData.entry_date}
+              onChange={(value) => handleChange("entry_date", value)}
+            />
 
             <ComboField
               label="Estado"
@@ -552,15 +590,11 @@ export function WorkOrderCreateClient() {
               placeholder="Ej: Motor"
             />
 
-            <Field label="Fecha de salida">
-              <Input
-                type="date"
-                value={formData.exit_date}
-                onChange={(event) =>
-                  handleChange("exit_date", event.target.value)
-                }
-              />
-            </Field>
+            <DateField
+              label="Fecha de salida"
+              value={formData.exit_date}
+              onChange={(value) => handleChange("exit_date", value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -732,6 +766,39 @@ function Field({
       <Label>{label}</Label>
       {children}
     </div>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Input
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0"
+        />
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => onChange("")}
+          disabled={!value}
+          className="shrink-0 px-3"
+        >
+          Limpiar
+        </Button>
+      </div>
+    </Field>
   );
 }
 

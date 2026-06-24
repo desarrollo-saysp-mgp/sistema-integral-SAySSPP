@@ -57,6 +57,30 @@ const cleanObservations = (value?: string | null) => {
   return cleaned || "-";
 };
 
+const getCriticalityValue = (value?: string | number | null) => {
+  const cleanCriticality = String(value ?? "").trim();
+
+  return cleanCriticality || "--";
+};
+
+const getCriticalityBadgeClass = (criticality?: string | number | null) => {
+  const value = Number(criticality);
+
+  if (!Number.isFinite(value)) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+
+  if (value >= 13) {
+    return "border-red-200 bg-red-100 text-red-800";
+  }
+
+  if (value >= 10) {
+    return "border-yellow-200 bg-yellow-100 text-yellow-800";
+  }
+
+  return "border-green-200 bg-green-100 text-green-800";
+};
+
 const formatProviders = (value?: string | null) => {
   const providers = String(value || "")
     .split("|")
@@ -250,6 +274,8 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
         ["Tipo de falla", cleanValue(order.failure_type)],
         ["Localización de falla", cleanValue(order.failure_location)],
         ["Fecha de salida", formatDate(order.exit_date)],
+        ["Fecha ingreso al taller", formatDate(order.workshop_entry_date)],
+        ["Fecha de cierre", formatDate(order.closed_date)],
 
         ["REPUESTOS Y PROVEEDOR", ""],
         ["Requiere repuesto", cleanValue(order.requires_spare_part)],
@@ -468,7 +494,7 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
             />
             <Info label="Vehículo" value={cleanValue(order.vehicle)} />
             <Info label="Dominio" value={cleanValue(order.license_plate)} />
-            <Info label="Criticidad" value={cleanValue(order.criticality)} />
+            <CriticalityInfo value={order.criticality} />
             <Info
               label="Tipo de falla"
               value={cleanValue(order.failure_type)}
@@ -480,6 +506,14 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
             <Info
               label="Fecha de salida"
               value={formatDate(order.exit_date)}
+            />
+            <Info
+              label="Fecha ingreso al taller"
+              value={formatDate(order.workshop_entry_date)}
+            />
+            <Info
+              label="Fecha de cierre"
+              value={formatDate(order.closed_date)}
             />
           </div>
         </CardContent>
@@ -558,6 +592,26 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
           </p>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function CriticalityInfo({ value }: { value?: string | number | null }) {
+  const criticality = getCriticalityValue(value);
+
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium text-muted-foreground">
+        Criticidad
+      </p>
+
+      <Badge
+        className={`${getCriticalityBadgeClass(
+          criticality,
+        )} border px-3 py-1 text-sm font-semibold`}
+      >
+        {criticality}
+      </Badge>
     </div>
   );
 }
