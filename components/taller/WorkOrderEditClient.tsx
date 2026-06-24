@@ -65,6 +65,8 @@ type WorkOrderFormData = {
   observations: string;
   driver: string;
   status: string;
+  workshop_entry_date: string;
+  closed_date: string;
 };
 
 type PdfStatusColors = {
@@ -238,6 +240,8 @@ const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
     observations: cleanObservations(order.observations),
     driver: order.driver || "",
     status: order.status || "",
+    workshop_entry_date: order.workshop_entry_date || "",
+    closed_date: order.closed_date || "",
   };
 };
 
@@ -510,6 +514,8 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
           ["N° orden de trabajo", cleanPdfValue(formData.order_number)],
           ["Fecha de ingreso", formatDateForPDF(formData.entry_date)],
           ["Estado", cleanPdfValue(formData.status)],
+          ["Fecha ingreso al taller", formatDateForPDF(formData.workshop_entry_date)],
+          ["Fecha de cierre", formatDateForPDF(formData.closed_date)],
           ["Área solicitante", cleanPdfValue(formData.requesting_area)],
           ["Reporte de falla", cleanPdfValue(formData.failure_report)],
           ["Tipo de reparación", cleanPdfValue(formData.repair_type)],
@@ -866,6 +872,28 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
                 options={STATUS_OPTIONS}
                 placeholder="Seleccione o escriba"
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <Field label="Fecha ingreso al taller">
+                <Input
+                  type="date"
+                  value={formData.workshop_entry_date}
+                  onChange={(event) =>
+                    handleChange("workshop_entry_date", event.target.value)
+                  }
+                />
+              </Field>
+
+              <Field label="Fecha de cierre">
+                <Input
+                  type="date"
+                  value={formData.closed_date}
+                  onChange={(event) =>
+                    handleChange("closed_date", event.target.value)
+                  }
+                />
+              </Field>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
