@@ -35,6 +35,7 @@ import {
   FileSpreadsheet,
   FileText,
   MessageCircle,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -866,12 +867,25 @@ export function WorkOrdersClient() {
           </p>
         </div>
 
-        <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">
-          <Link href="/dashboard/taller/ordenes-trabajo/nueva">
-            <PlusCircle className="h-4 w-4" />
-            Cargar nueva OT
-          </Link>
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button
+            asChild
+            variant="outline"
+            className="h-9 w-full gap-2 rounded-xl sm:w-auto"
+          >
+            <Link href="/dashboard/taller/ordenes-trabajo/estadisticas">
+              <BarChart3 className="h-4 w-4" />
+              Estadísticas
+            </Link>
+          </Button>
+
+          <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">
+            <Link href="/dashboard/taller/ordenes-trabajo/nueva">
+              <PlusCircle className="h-4 w-4" />
+              Cargar nueva OT
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
