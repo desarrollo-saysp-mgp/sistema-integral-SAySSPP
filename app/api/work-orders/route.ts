@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { WorkOrderInsert } from "@/types";
 
+const PAGE_SIZE = 1000;
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -53,32 +55,49 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const status = searchParams.get("status");
 
-    let query = supabase
-      .from("work_orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+    let allWorkOrders: unknown[] = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (search) {
-      query = query.or(
-        `order_number.ilike.%${search}%,vehicle_code.ilike.%${search}%,vehicle.ilike.%${search}%,license_plate.ilike.%${search}%,driver.ilike.%${search}%`,
-      );
+    while (hasMore) {
+      let query = supabase
+        .from("work_orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (search) {
+        query = query.or(
+          `order_number.ilike.%${search}%,vehicle_code.ilike.%${search}%,vehicle.ilike.%${search}%,license_plate.ilike.%${search}%,driver.ilike.%${search}%`,
+        );
+      }
+
+      if (status && status !== "Todos") {
+        query = query.eq("status", status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error fetching work orders:", error);
+        return NextResponse.json(
+          { error: "Error al cargar órdenes de trabajo" },
+          { status: 500 },
+        );
+      }
+
+      const currentBatch = data || [];
+
+      allWorkOrders = [...allWorkOrders, ...currentBatch];
+
+      if (currentBatch.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        from += PAGE_SIZE;
+      }
     }
 
-    if (status && status !== "Todos") {
-      query = query.eq("status", status);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching work orders:", error);
-      return NextResponse.json(
-        { error: "Error al cargar órdenes de trabajo" },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: allWorkOrders });
   } catch (error) {
     console.error("Unexpected error in GET /api/work-orders:", error);
     return NextResponse.json(
@@ -137,7 +156,7 @@ export async function POST(request: NextRequest) {
       amount: body.amount ? Number(body.amount) : null,
       observations: body.observations || null,
       driver: body.driver || null,
-      status: body.status || "Iniciado",
+      status: body.status || "INICIADO",
       created_by: user.id,
     };
 
