@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { WorkOrderUpdate } from "@/types";
 
+type SupplyNeeded = {
+  code: string;
+  units: string;
+  description: string;
+};
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -21,6 +27,29 @@ const canAccessWorkOrders = (profile: {
     role === "taller" ||
     profile.modules?.includes("work_orders")
   );
+};
+
+const normalizeSuppliesNeeded = (value: unknown): SupplyNeeded[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      const supply = item as {
+        code?: unknown;
+        units?: unknown;
+        description?: unknown;
+      };
+
+      return {
+        code: String(supply.code || "").trim(),
+        units: String(supply.units || "").trim(),
+        description: String(supply.description || "").trim(),
+      };
+    })
+    .filter(
+      (item) =>
+        item.code.trim() || item.units.trim() || item.description.trim(),
+    );
 };
 
 export async function GET(
@@ -108,7 +137,7 @@ export async function PATCH(
 
     const body = await request.json();
 
-    const payload: WorkOrderUpdate = {
+    const payload: WorkOrderUpdate & { supplies_needed: SupplyNeeded[] } = {
       order_number: body.order_number || null,
       entry_date: body.entry_date || null,
       requesting_area: body.requesting_area || null,
@@ -122,6 +151,8 @@ export async function PATCH(
       vehicle: body.vehicle || null,
       license_plate: body.license_plate || null,
       exit_date: body.exit_date || null,
+      workshop_entry_date: body.workshop_entry_date || null,
+      closed_date: body.closed_date || null,
       spare_part_detail: body.spare_part_detail || null,
       spare_part_code: body.spare_part_code || null,
       units:
@@ -136,6 +167,7 @@ export async function PATCH(
       observations: body.observations || null,
       driver: body.driver || null,
       status: body.status || null,
+      supplies_needed: normalizeSuppliesNeeded(body.supplies_needed),
     };
 
     const { data, error } = await supabase

@@ -4,6 +4,12 @@ import type { WorkOrderInsert } from "@/types";
 
 const PAGE_SIZE = 1000;
 
+type SupplyNeeded = {
+  code: string;
+  units: string;
+  description: string;
+};
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -23,6 +29,29 @@ const canAccessWorkOrders = (profile: {
     role === "taller" ||
     profile.modules?.includes("work_orders")
   );
+};
+
+const normalizeSuppliesNeeded = (value: unknown): SupplyNeeded[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      const supply = item as {
+        code?: unknown;
+        units?: unknown;
+        description?: unknown;
+      };
+
+      return {
+        code: String(supply.code || "").trim(),
+        units: String(supply.units || "").trim(),
+        description: String(supply.description || "").trim(),
+      };
+    })
+    .filter(
+      (item) =>
+        item.code.trim() || item.units.trim() || item.description.trim(),
+    );
 };
 
 export async function GET(request: NextRequest) {
@@ -87,7 +116,6 @@ export async function GET(request: NextRequest) {
       }
 
       const currentBatch = data || [];
-
       allWorkOrders = [...allWorkOrders, ...currentBatch];
 
       if (currentBatch.length < PAGE_SIZE) {
@@ -135,7 +163,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const payload: WorkOrderInsert = {
+    const payload: WorkOrderInsert & { supplies_needed: SupplyNeeded[] } = {
       order_number: body.order_number || null,
       entry_date: body.entry_date || null,
       requesting_area: body.requesting_area || null,
@@ -149,15 +177,24 @@ export async function POST(request: NextRequest) {
       vehicle: body.vehicle || null,
       license_plate: body.license_plate || null,
       exit_date: body.exit_date || null,
+      workshop_entry_date: body.workshop_entry_date || null,
+      closed_date: body.closed_date || null,
       spare_part_detail: body.spare_part_detail || null,
       spare_part_code: body.spare_part_code || null,
-      units: body.units ? Number(body.units) : null,
+      units:
+        body.units !== null && body.units !== undefined && body.units !== ""
+          ? Number(body.units)
+          : null,
       provider: body.provider || null,
-      amount: body.amount ? Number(body.amount) : null,
+      amount:
+        body.amount !== null && body.amount !== undefined && body.amount !== ""
+          ? Number(body.amount)
+          : null,
       observations: body.observations || null,
       driver: body.driver || null,
       status: body.status || "INICIADO",
       created_by: user.id,
+      supplies_needed: normalizeSuppliesNeeded(body.supplies_needed),
     };
 
     const { data, error } = await supabase

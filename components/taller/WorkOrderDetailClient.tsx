@@ -26,6 +26,16 @@ import autoTable, { type CellHookData } from "jspdf-autotable";
 
 type AmountCurrency = "ARS" | "USD";
 
+type SupplyItem = {
+  code?: string | null;
+  units?: string | number | null;
+  description?: string | null;
+};
+
+type WorkOrderWithSupplies = WorkOrder & {
+  supplies_needed?: SupplyItem[] | null;
+};
+
 type PdfStatusColors = {
   fillColor: [number, number, number];
   textColor: [number, number, number];
@@ -92,7 +102,32 @@ const formatProviders = (value?: string | null) => {
   return providers.join(", ");
 };
 
-export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
+const EMPTY_SUPPLY_ITEMS: SupplyItem[] = Array.from({ length: 5 }, () => ({
+  code: "",
+  units: "",
+  description: "",
+}));
+
+const getSupplyItems = (order: WorkOrderWithSupplies) => {
+  const cleanItems = Array.isArray(order.supplies_needed)
+    ? order.supplies_needed
+        .map((item) => ({
+          code: String(item?.code || "").trim(),
+          units: String(item?.units || "").trim(),
+          description: String(item?.description || "").trim(),
+        }))
+        .filter((item) => item.code || item.units || item.description)
+    : [];
+
+  return cleanItems;
+};
+
+const getSupplyItemsForDisplay = (order: WorkOrderWithSupplies) => {
+  const cleanItems = getSupplyItems(order);
+  return cleanItems.length > 0 ? cleanItems : EMPTY_SUPPLY_ITEMS;
+};
+
+export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies }) {
   const amountCurrency = getAmountCurrency(order);
 
   const formatDate = (dateString?: string | null) => {
@@ -213,6 +248,8 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      const contentWidth = pageWidth - marginX * 2;
 
       let logoDataUrl: string | null = null;
 
@@ -224,40 +261,196 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
         console.warn("No se pudo cargar el logo para el PDF:", error);
       }
 
-      if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", 14, 8, 32, 11);
-      }
-
-      doc.setFontSize(15);
-      doc.setTextColor(30, 41, 59);
-      doc.text("Sistema Integral SAySSPP", 52, 13);
-
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text("Registro de Órdenes de Trabajo - Taller", 52, 18);
-
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, 23, pageWidth - 14, 23);
-
-      doc.setFontSize(13);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`Detalle de OT ${cleanValue(order.order_number)}`, 14, 31);
-
       const statusColors = getPdfStatusColors(order.status);
 
-      doc.setFillColor(...statusColors.fillColor);
-      doc.roundedRect(pageWidth - 55, 26, 41, 8, 2, 2, "F");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...statusColors.textColor);
-      doc.text(cleanValue(order.status), pageWidth - 34.5, 31.2, {
-        align: "center",
-      });
+      const drawHeader = (pageNumber: number) => {
+        if (logoDataUrl) {
+          doc.addImage(logoDataUrl, "PNG", marginX, 7, 32, 14);
+        }
 
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Exportado: ${new Date().toLocaleString("es-AR")}`, 14, 37);
+        doc.setFontSize(13);
+        doc.setTextColor(30, 41, 59);
+        doc.text("Registro de Órdenes de Trabajo - Taller", 52, 15);
 
-      const compactRows: string[][] = [
+        doc.setDrawColor(226, 232, 240);
+        doc.line(marginX, 24, pageWidth - marginX, 24);
+
+        doc.setFontSize(13);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Detalle de OT ${cleanValue(order.order_number)}`, marginX, 32);
+
+        doc.setFillColor(...statusColors.fillColor);
+        doc.roundedRect(pageWidth - 55, 27, 41, 8, 2, 2, "F");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...statusColors.textColor);
+        doc.text(cleanValue(order.status), pageWidth - 34.5, 32.2, {
+          align: "center",
+        });
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Exportado: ${new Date().toLocaleString("es-AR")}`, marginX, 38);
+
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.text(`Página ${pageNumber} de 2`, pageWidth - marginX, pageHeight - 7, {
+          align: "right",
+        });
+      };
+
+      const registroRows: string[][] = [
+        ["DATOS DE REGISTRO", ""],
+        ["Creado", new Date(order.created_at).toLocaleString("es-AR")],
+        [
+          "Última modificación",
+          new Date(order.updated_at).toLocaleString("es-AR"),
+        ],
+      ];
+
+      const drawTable = (rows: string[][], startY: number) => {
+        autoTable(doc, {
+          startY,
+          body: rows,
+          theme: "grid",
+          margin: { left: marginX, right: marginX, bottom: 8 },
+          pageBreak: "avoid",
+          rowPageBreak: "avoid",
+          styles: {
+            fontSize: 8,
+            cellPadding: 2,
+            textColor: [51, 65, 85],
+            lineColor: [226, 232, 240],
+            lineWidth: 0.12,
+            valign: "middle",
+            overflow: "linebreak",
+          },
+          columnStyles: {
+            0: { cellWidth: 52, fontStyle: "bold" },
+            1: { cellWidth: contentWidth - 52 },
+          },
+          didParseCell: (data: CellHookData) => {
+            const rawRow = data.row.raw;
+            const firstValue = Array.isArray(rawRow)
+              ? String(rawRow[0] ?? "")
+              : "";
+
+            const isSectionRow = [
+              "INFORMACIÓN BÁSICA",
+              "VEHÍCULO Y FALLA",
+              "REPUESTOS Y PROVEEDOR",
+              "INSUMOS Y/O REPUESTOS NECESARIOS",
+              "OBSERVACIONES",
+              "DATOS DE REGISTRO",
+            ].includes(firstValue);
+
+            if (isSectionRow) {
+              data.cell.styles.fillColor = [16, 185, 129];
+              data.cell.styles.textColor = [255, 255, 255];
+              data.cell.styles.fontStyle = "bold";
+
+              if (data.column.index === 1) {
+                data.cell.text = [""];
+              }
+            }
+
+            if (firstValue === "Estado" && data.column.index === 1) {
+              const colors = getPdfStatusColors(order.status);
+
+              data.cell.styles.fillColor = colors.fillColor;
+              data.cell.styles.textColor = colors.textColor;
+              data.cell.styles.fontStyle = "bold";
+            }
+
+            if (firstValue === "Criticidad" && data.column.index === 1) {
+              const value = Number(order.criticality);
+
+              if (!Number.isFinite(value)) {
+                data.cell.styles.fillColor = [241, 245, 249];
+                data.cell.styles.textColor = [51, 65, 85];
+              } else if (value >= 13) {
+                data.cell.styles.fillColor = [254, 226, 226];
+                data.cell.styles.textColor = [153, 27, 27];
+              } else if (value >= 10) {
+                data.cell.styles.fillColor = [254, 249, 195];
+                data.cell.styles.textColor = [133, 77, 14];
+              } else {
+                data.cell.styles.fillColor = [220, 252, 231];
+                data.cell.styles.textColor = [22, 101, 52];
+              }
+
+              data.cell.styles.fontStyle = "bold";
+            }
+          },
+        });
+      };
+
+      const drawSuppliesTable = (startY: number) => {
+        autoTable(doc, {
+          startY,
+          head: [
+            ["INSUMOS Y/O REPUESTOS NECESARIOS", "", ""],
+            ["Código", "Un.", "Descripción"],
+          ],
+          body: getSupplyItemsForDisplay(order).map((item) => [
+            item.code || "-",
+            item.units || "-",
+            item.description || "-",
+          ]),
+          theme: "grid",
+          margin: { left: marginX, right: marginX, bottom: 8 },
+          pageBreak: "avoid",
+          rowPageBreak: "avoid",
+          styles: {
+            fontSize: 8,
+            cellPadding: 2,
+            textColor: [51, 65, 85],
+            lineColor: [226, 232, 240],
+            lineWidth: 0.12,
+            valign: "middle",
+            overflow: "linebreak",
+          },
+          headStyles: {
+            fillColor: [16, 185, 129],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+          },
+          columnStyles: {
+            0: { cellWidth: 35, fontStyle: "bold" },
+            1: { cellWidth: 20 },
+            2: { cellWidth: contentWidth - 55 },
+          },
+          didParseCell: (data: CellHookData) => {
+            if (data.section !== "head") return;
+
+            if (data.row.index === 0) {
+              data.cell.styles.fillColor = [16, 185, 129];
+              data.cell.styles.textColor = [255, 255, 255];
+              data.cell.styles.fontStyle = "bold";
+              return;
+            }
+
+            if (data.row.index === 1) {
+              data.cell.styles.fillColor = [248, 250, 252];
+              data.cell.styles.textColor = [51, 65, 85];
+              data.cell.styles.fontStyle = "bold";
+            }
+          },
+        });
+      };
+
+      const getLastAutoTableY = () => {
+        const finalY = (
+          doc as unknown as {
+            lastAutoTable?: { finalY?: number };
+          }
+        ).lastAutoTable?.finalY;
+
+        return typeof finalY === "number" ? finalY : 45;
+      };
+
+      drawHeader(1);
+
+      const firstPageRows: string[][] = [
         ["INFORMACIÓN BÁSICA", ""],
         ["N° orden de trabajo", cleanValue(order.order_number)],
         ["Fecha de ingreso", formatDate(order.entry_date)],
@@ -271,11 +464,35 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
         ["Vehículo", cleanValue(order.vehicle)],
         ["Dominio", cleanValue(order.license_plate)],
         ["Criticidad", cleanValue(order.criticality)],
+        ["Fecha ingreso al taller", formatDate(order.workshop_entry_date)],
+        ["Chofer", cleanValue(order.driver)],
+
+        ...registroRows,
+      ];
+
+      drawTable(firstPageRows, 45);
+
+      doc.setDrawColor(51, 65, 85);
+      doc.setLineWidth(0.25);
+      doc.line(70, pageHeight - 42, pageWidth - 70, pageHeight - 42);
+
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      doc.text(
+        "Firma y Aclaración Capataz",
+        pageWidth / 2,
+        pageHeight - 37,
+        { align: "center" },
+      );
+
+      doc.addPage();
+      drawHeader(2);
+
+      const secondPageRows: string[][] = [
+        ["VEHÍCULO Y FALLA", ""],
         ["Tipo de falla", cleanValue(order.failure_type)],
         ["Localización de falla", cleanValue(order.failure_location)],
         ["Fecha de salida", formatDate(order.exit_date)],
-        ["Fecha ingreso al taller", formatDate(order.workshop_entry_date)],
-        ["Fecha de cierre", formatDate(order.closed_date)],
 
         ["REPUESTOS Y PROVEEDOR", ""],
         ["Requiere repuesto", cleanValue(order.requires_spare_part)],
@@ -283,109 +500,61 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
       ];
 
       if (hasRealValue(order.spare_part_code)) {
-        compactRows.push([
+        secondPageRows.push([
           "Código de repuesto",
           cleanValue(order.spare_part_code),
         ]);
       }
 
       if (hasRealValue(order.units)) {
-        compactRows.push(["Unidades", cleanValue(order.units)]);
+        secondPageRows.push(["Unidades", cleanValue(order.units)]);
       }
 
-      compactRows.push(
+      secondPageRows.push(
         ["Proveedor/es", formatProviders(order.provider)],
         ["Moneda", amountCurrency],
         ["Monto", formatMoney(order.amount, amountCurrency)],
-
-        ["CHOFER Y OBSERVACIONES", ""],
-        ["Chofer", cleanValue(order.driver)],
-        ["Observaciones", cleanObservations(order.observations)],
-
-        ["DATOS DE REGISTRO", ""],
-        ["Creado", new Date(order.created_at).toLocaleString("es-AR")],
-        [
-          "Última modificación",
-          new Date(order.updated_at).toLocaleString("es-AR"),
-        ],
       );
 
-      autoTable(doc, {
-        startY: 44,
-        body: compactRows,
-        theme: "grid",
-        margin: { left: 14, right: 14, bottom: 10 },
-        pageBreak: "avoid",
-        rowPageBreak: "avoid",
-        styles: {
-          fontSize: 8,
-          cellPadding: 1.8,
-          textColor: [51, 65, 85],
-          lineColor: [226, 232, 240],
-          lineWidth: 0.12,
-          valign: "middle",
-          overflow: "linebreak",
-        },
-        columnStyles: {
-          0: { cellWidth: 52, fontStyle: "bold" },
-          1: { cellWidth: 130 },
-        },
-        didParseCell: (data: CellHookData) => {
-          const rawRow = data.row.raw;
-          const firstValue = Array.isArray(rawRow) ? String(rawRow[0] ?? "") : "";
+      drawTable(secondPageRows, 45);
 
-          const isSectionRow = [
-            "INFORMACIÓN BÁSICA",
-            "VEHÍCULO Y FALLA",
-            "REPUESTOS Y PROVEEDOR",
-            "CHOFER Y OBSERVACIONES",
-            "DATOS DE REGISTRO",
-          ].includes(firstValue);
+      if (getSupplyItems(order).length > 0) {
+        drawSuppliesTable(getLastAutoTableY() + 6);
+      }
 
-          if (isSectionRow) {
-            data.cell.styles.fillColor = [16, 185, 129];
-            data.cell.styles.textColor = [255, 255, 255];
-            data.cell.styles.fontStyle = "bold";
+      const observationsRows: string[][] = [
+        ["OBSERVACIONES", ""],
+        ["Observaciones", cleanObservations(order.observations)],
+        ...registroRows,
+      ];
 
-            if (data.column.index === 1) {
-              data.cell.text = [""];
-            }
-          }
+      drawTable(observationsRows, getLastAutoTableY() + 6);
 
-          if (firstValue === "Estado" && data.column.index === 1) {
-            const colors = getPdfStatusColors(order.status);
+      doc.setDrawColor(51, 65, 85);
+      doc.setLineWidth(0.25);
 
-            data.cell.styles.fillColor = colors.fillColor;
-            data.cell.styles.textColor = colors.textColor;
-            data.cell.styles.fontStyle = "bold";
-          }
+      const signatureY = pageHeight - 36;
+      const signatureWidth = 48;
+      const signatureGap = 10;
+      const totalSignatureWidth = signatureWidth * 3 + signatureGap * 2;
+      const signatureStartX = (pageWidth - totalSignatureWidth) / 2;
 
-          if (firstValue === "Criticidad" && data.column.index === 1) {
-            const value = Number(order.criticality);
+      const signatures = [
+        "Firma y Aclaración Taller",
+        "Firma y Aclaración Suministro",
+        "Firma y Aclaración Director/Secretario",
+      ];
 
-            if (!Number.isFinite(value)) {
-              data.cell.styles.fillColor = [241, 245, 249];
-              data.cell.styles.textColor = [51, 65, 85];
-            } else if (value >= 13) {
-              data.cell.styles.fillColor = [254, 226, 226];
-              data.cell.styles.textColor = [153, 27, 27];
-            } else if (value >= 10) {
-              data.cell.styles.fillColor = [254, 249, 195];
-              data.cell.styles.textColor = [133, 77, 14];
-            } else {
-              data.cell.styles.fillColor = [220, 252, 231];
-              data.cell.styles.textColor = [22, 101, 52];
-            }
+      signatures.forEach((label, index) => {
+        const x = signatureStartX + index * (signatureWidth + signatureGap);
 
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
-      });
+        doc.line(x, signatureY, x + signatureWidth, signatureY);
 
-      doc.setFontSize(7);
-      doc.setTextColor(100);
-      doc.text("Página 1 de 1", pageWidth - 14, pageHeight - 7, {
-        align: "right",
+        doc.setFontSize(7.2);
+        doc.setTextColor(51, 65, 85);
+        doc.text(label, x + signatureWidth / 2, signatureY + 5, {
+          align: "center",
+        });
       });
 
       doc.save(`ot_${cleanValue(order.order_number)}.pdf`);
@@ -549,6 +718,45 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrder }) {
               <Info label="Unidades" value={cleanValue(order.units)} />
             )}
 
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                Insumos y/o repuestos necesarios
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Código, unidades y descripción de insumos solicitados.
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border">
+              <div className="grid grid-cols-[120px_80px_1fr] bg-muted/60 text-xs font-semibold text-muted-foreground">
+                <div className="border-r px-3 py-2">Código</div>
+                <div className="border-r px-3 py-2">Un.</div>
+                <div className="px-3 py-2">Descripción</div>
+              </div>
+
+              {getSupplyItemsForDisplay(order).map((item, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[120px_80px_1fr] border-t text-sm"
+                >
+                  <div className="border-r px-3 py-2">
+                    {cleanValue(item.code)}
+                  </div>
+                  <div className="border-r px-3 py-2">
+                    {cleanValue(item.units)}
+                  </div>
+                  <div className="px-3 py-2">
+                    {cleanValue(item.description)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
             <Info label="Proveedor/es" value={formatProviders(order.provider)} />
             <Info label="Moneda" value={amountCurrency} />
             <Info label="Monto" value={formatMoney(order.amount)} />
