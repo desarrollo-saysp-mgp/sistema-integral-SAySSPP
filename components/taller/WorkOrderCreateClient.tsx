@@ -39,6 +39,12 @@ import {
 
 type AmountCurrency = "ARS" | "USD";
 
+type SupplyItem = {
+  code: string;
+  units: string;
+  description: string;
+};
+
 type WorkOrderFormData = {
   order_number: string;
   entry_date: string;
@@ -54,6 +60,7 @@ type WorkOrderFormData = {
   license_plate: string;
   exit_date: string;
   spare_part_detail: string;
+  supplies_needed: SupplyItem[];
   provider: string;
   amount: string;
   amount_currency: AmountCurrency;
@@ -116,6 +123,11 @@ const initialFormData: WorkOrderFormData = {
   license_plate: "",
   exit_date: "",
   spare_part_detail: "",
+  supplies_needed: Array.from({ length: 5 }, () => ({
+    code: "",
+    units: "",
+    description: "",
+  })),
   provider: "",
   amount: "",
   amount_currency: "ARS",
@@ -148,6 +160,16 @@ const getUniqueOptions = (options: readonly string[]) => {
       seen.add(normalized);
       return true;
     });
+};
+
+const getCleanSupplyItems = (items: SupplyItem[]) => {
+  return items
+    .map((item) => ({
+      code: item.code.trim(),
+      units: item.units.trim(),
+      description: item.description.trim(),
+    }))
+    .filter((item) => item.code || item.units || item.description);
 };
 
 const getCriticalityValue = (value?: string | number | null) => {
@@ -271,6 +293,20 @@ export function WorkOrderCreateClient() {
     }));
   };
 
+
+  const handleSupplyItemChange = (
+    index: number,
+    field: keyof SupplyItem,
+    value: string,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      supplies_needed: prev.supplies_needed.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
+      ),
+    }));
+  };
+
   const handleCurrencyChange = (value: string) => {
     if (value !== "ARS" && value !== "USD") return;
 
@@ -313,6 +349,9 @@ export function WorkOrderCreateClient() {
       if (key === "criticality") return value !== "--";
       if (key === "status") return false;
       if (key === "amount_currency") return false;
+      if (key === "supplies_needed") {
+        return getCleanSupplyItems(value as SupplyItem[]).length > 0;
+      }
 
       return String(value || "").trim() !== "";
     });
@@ -410,6 +449,17 @@ export function WorkOrderCreateClient() {
     toast.success("Dictado detenido");
   };
 
+  const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Enter") return;
+
+    const target = event.target as HTMLElement;
+    const tagName = target.tagName.toLowerCase();
+
+    if (tagName === "textarea") return;
+
+    event.preventDefault();
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -434,6 +484,7 @@ export function WorkOrderCreateClient() {
           exit_date: formData.exit_date || null,
           spare_part_code: null,
           units: null,
+          supplies_needed: getCleanSupplyItems(formData.supplies_needed),
           amount: formData.amount ? Number(formData.amount) : null,
           observations: buildObservationsWithCurrency(
             formData.observations,
@@ -464,7 +515,7 @@ export function WorkOrderCreateClient() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-6">
       <Button
         type="button"
         variant="ghost"
@@ -624,6 +675,11 @@ export function WorkOrderCreateClient() {
               />
             </Field>
           </div>
+
+          <SuppliesNeededField
+            value={formData.supplies_needed}
+            onChange={handleSupplyItemChange}
+          />
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <MultiProviderField
@@ -815,6 +871,64 @@ function CriticalityField({ value }: { value: string }) {
         )}`}
       >
         {criticality}
+      </div>
+    </div>
+  );
+}
+
+function SuppliesNeededField({
+  value,
+  onChange,
+}: {
+  value: SupplyItem[];
+  onChange: (index: number, field: keyof SupplyItem, value: string) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+      <div>
+        <Label>Insumos y/o repuestos necesarios</Label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Podés dejarlo vacío o completar código, unidades y descripción.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {value.map((item, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-1 gap-3 rounded-lg border bg-background p-3 md:grid-cols-[160px_110px_1fr]"
+          >
+            <Field label={`Código ${index + 1}`}>
+              <Input
+                value={item.code}
+                onChange={(event) =>
+                  onChange(index, "code", event.target.value)
+                }
+                placeholder="Código"
+              />
+            </Field>
+
+            <Field label="Un.">
+              <Input
+                value={item.units}
+                onChange={(event) =>
+                  onChange(index, "units", event.target.value)
+                }
+                placeholder="Un."
+              />
+            </Field>
+
+            <Field label="Descripción">
+              <Input
+                value={item.description}
+                onChange={(event) =>
+                  onChange(index, "description", event.target.value)
+                }
+                placeholder="Descripción del insumo o repuesto"
+              />
+            </Field>
+          </div>
+        ))}
       </div>
     </div>
   );

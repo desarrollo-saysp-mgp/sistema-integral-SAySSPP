@@ -42,6 +42,16 @@ import {
 
 type AmountCurrency = "ARS" | "USD";
 
+type SupplyItem = {
+  code: string;
+  units: string;
+  description: string;
+};
+
+type WorkOrderWithSupplies = WorkOrder & {
+  supplies_needed?: SupplyItem[] | null;
+};
+
 type WorkOrderFormData = {
   order_number: string;
   entry_date: string;
@@ -57,6 +67,7 @@ type WorkOrderFormData = {
   license_plate: string;
   exit_date: string;
   spare_part_detail: string;
+  supplies_needed: SupplyItem[];
   spare_part_code: string;
   units: string;
   provider: string;
@@ -101,6 +112,36 @@ const getUniqueOptions = (options: readonly string[]) => {
       seen.add(normalized);
       return true;
     });
+};
+
+const EMPTY_SUPPLY_ITEMS = Array.from({ length: 5 }, () => ({
+  code: "",
+  units: "",
+  description: "",
+}));
+
+const getCleanSupplyItems = (items: SupplyItem[]) => {
+  return items
+    .map((item) => ({
+      code: item.code.trim(),
+      units: item.units.trim(),
+      description: item.description.trim(),
+    }))
+    .filter((item) => item.code || item.units || item.description);
+};
+
+const normalizeSupplyItems = (items?: SupplyItem[] | null) => {
+  const cleanItems = Array.isArray(items)
+    ? items.map((item) => ({
+        code: String(item?.code || ""),
+        units: String(item?.units || ""),
+        description: String(item?.description || ""),
+      }))
+    : [];
+
+  return Array.from({ length: Math.max(5, cleanItems.length) }, (_, index) =>
+    cleanItems[index] || { code: "", units: "", description: "" },
+  );
 };
 
 const getCriticalityValue = (value?: string | number | null) => {
@@ -206,7 +247,7 @@ const getVehicleMatchFromOrder = (order: WorkOrder) => {
   return null;
 };
 
-const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
+const getInitialFormData = (order: WorkOrderWithSupplies): WorkOrderFormData => {
   const matchedVehicle = getVehicleMatchFromOrder(order);
 
   return {
@@ -226,6 +267,7 @@ const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
     license_plate: order.license_plate || matchedVehicle?.licensePlate || "",
     exit_date: order.exit_date || "",
     spare_part_detail: order.spare_part_detail || "",
+    supplies_needed: normalizeSupplyItems(order.supplies_needed),
     spare_part_code: order.spare_part_code || "",
     units:
       order.units === null || order.units === undefined
@@ -245,7 +287,7 @@ const getInitialFormData = (order: WorkOrder): WorkOrderFormData => {
   };
 };
 
-export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
+export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies }) {
   const router = useRouter();
 
   const [formData, setFormData] = useState<WorkOrderFormData>(
@@ -274,6 +316,20 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+
+  const handleSupplyItemChange = (
+    index: number,
+    field: keyof SupplyItem,
+    value: string,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      supplies_needed: prev.supplies_needed.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
+      ),
     }));
   };
 
@@ -318,6 +374,9 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     return Object.entries(formData).some(([key, value]) => {
       if (key === "criticality") return value !== "--";
       if (key === "amount_currency") return false;
+      if (key === "supplies_needed") {
+        return getCleanSupplyItems(value as SupplyItem[]).length > 0;
+      }
 
       return String(value || "").trim() !== "";
     });
@@ -451,6 +510,17 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     rows.push(["Monto", formatMoneyForPDF(formData.amount)]);
 
     return rows;
+  };
+
+  const getSupplyPdfRows = () => {
+    const cleanItems = getCleanSupplyItems(formData.supplies_needed);
+    const rows = cleanItems.length > 0 ? cleanItems : EMPTY_SUPPLY_ITEMS;
+
+    return rows.map((item) => [
+      item.code || "-",
+      item.units || "-",
+      item.description || "-",
+    ]);
   };
 
   const handleExportPDF = async () => {
@@ -642,6 +712,33 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
 
       autoTable(doc, {
         startY: getLastAutoTableY(doc) + 8,
+        head: [["Insumos y/o repuestos necesarios", "", ""]],
+        body: getSupplyPdfRows(),
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+          textColor: [51, 65, 85],
+          lineColor: [226, 232, 240],
+          lineWidth: 0.15,
+          valign: "middle",
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: [16, 185, 129],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          0: { cellWidth: 35, fontStyle: "bold" },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 123 },
+        },
+      });
+
+      autoTable(doc, {
+        startY: getLastAutoTableY(doc) + 8,
         head: [["Chofer y observaciones", ""]],
         body: [
           ["Chofer", cleanPdfValue(formData.driver)],
@@ -715,6 +812,17 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
     }
   };
 
+  const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Enter") return;
+
+    const target = event.target as HTMLElement;
+    const tagName = target.tagName.toLowerCase();
+
+    if (tagName === "textarea") return;
+
+    event.preventDefault();
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -733,6 +841,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
         },
         body: JSON.stringify({
           ...formData,
+          supplies_needed: getCleanSupplyItems(formData.supplies_needed),
           spare_part_code: shouldShowLegacySparePartCode
             ? formData.spare_part_code || null
             : null,
@@ -801,7 +910,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Button
             type="button"
@@ -1050,6 +1159,11 @@ export function WorkOrderEditClient({ order }: { order: WorkOrder }) {
               </div>
             )}
 
+            <SuppliesNeededField
+              value={formData.supplies_needed}
+              onChange={handleSupplyItemChange}
+            />
+
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <MultiProviderField
                 label="Proveedor/es"
@@ -1257,6 +1371,64 @@ function CriticalityField({ value }: { value: string }) {
         )}`}
       >
         {criticality}
+      </div>
+    </div>
+  );
+}
+
+function SuppliesNeededField({
+  value,
+  onChange,
+}: {
+  value: SupplyItem[];
+  onChange: (index: number, field: keyof SupplyItem, value: string) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+      <div>
+        <Label>Insumos y/o repuestos necesarios</Label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Podés dejarlo vacío o completar código, unidades y descripción.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {value.map((item, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-1 gap-3 rounded-lg border bg-background p-3 md:grid-cols-[160px_110px_1fr]"
+          >
+            <Field label={`Código ${index + 1}`}>
+              <Input
+                value={item.code}
+                onChange={(event) =>
+                  onChange(index, "code", event.target.value)
+                }
+                placeholder="Código"
+              />
+            </Field>
+
+            <Field label="Un.">
+              <Input
+                value={item.units}
+                onChange={(event) =>
+                  onChange(index, "units", event.target.value)
+                }
+                placeholder="Un."
+              />
+            </Field>
+
+            <Field label="Descripción">
+              <Input
+                value={item.description}
+                onChange={(event) =>
+                  onChange(index, "description", event.target.value)
+                }
+                placeholder="Descripción del insumo o repuesto"
+              />
+            </Field>
+          </div>
+        ))}
       </div>
     </div>
   );
