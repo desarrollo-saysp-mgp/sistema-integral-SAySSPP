@@ -36,6 +36,21 @@ const normalizeValue = (value?: string | null) => {
   return clean ? clean : "Sin dato";
 };
 
+const getDelayDays = (complaintDate?: string | null) => {
+  if (!complaintDate) return 0;
+
+  const start = new Date(`${complaintDate}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (Number.isNaN(start.getTime())) return 0;
+
+  return Math.max(
+    0,
+    Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+  );
+};
+
 const getRelatedName = (
   value: RelatedItem | RelatedItem[] | null,
 ): string | null => {
@@ -398,6 +413,33 @@ export async function GET(request: NextRequest) {
 
     const grouped = getGroupedStats(allComplaints, groupByParam);
 
+    const oldestInProgress = allComplaints
+      .filter((complaint) => normalizeText(complaint.status) === "en proceso")
+      .map((complaint) => ({
+        id: complaint.id,
+        complaint_number: complaint.complaint_number,
+        complaint_date: complaint.complaint_date,
+        address: normalizeValue(complaint.address),
+        zone: normalizeValue(complaint.zone),
+        status: normalizeValue(complaint.status),
+        service: normalizeValue(getRelatedName(complaint.service)),
+        cause: normalizeValue(getRelatedName(complaint.cause)),
+        delay_days: getDelayDays(complaint.complaint_date),
+      }))
+      .sort((a, b) => {
+        if (a.delay_days !== b.delay_days) {
+          return b.delay_days - a.delay_days;
+        }
+
+        const dateA = new Date(a.complaint_date).getTime();
+        const dateB = new Date(b.complaint_date).getTime();
+
+        if (dateA !== dateB) return dateA - dateB;
+
+        return (a.complaint_number ?? a.id) - (b.complaint_number ?? b.id);
+      })
+      .slice(0, 20);
+
     const detailRows =
       detailGroup && detailValue
         ? allComplaints
@@ -439,6 +481,7 @@ export async function GET(request: NextRequest) {
         byCause,
         byStatus,
         byZone,
+        oldestInProgress,
         detail: {
           group: detailGroup,
           value: detailValue,

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import {
   BarChart3,
+  Clock3,
   Download,
   ExternalLink,
   FilterX,
@@ -41,6 +42,7 @@ type DetailComplaintItem = {
   status: string;
   service: string;
   cause: string;
+  delay_days?: number;
 };
 
 type StatsData = {
@@ -52,6 +54,7 @@ type StatsData = {
   byCause: StatItem[];
   byStatus: StatItem[];
   byZone: StatItem[];
+  oldestInProgress: DetailComplaintItem[];
   detail?: {
     group: string | null;
     value: string | null;
@@ -75,7 +78,7 @@ type CurrentUser = {
   module?: string;
 };
 
-type DetailGroup = "street" | "service" | "cause" | "zone" | "status";
+type DetailGroup = "street" | "service" | "cause" | "zone" | "status" | "delay";
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
@@ -141,6 +144,7 @@ const getDetailGroupLabel = (group: DetailGroup) => {
   if (group === "service") return "servicio";
   if (group === "cause") return "causa";
   if (group === "zone") return "zona";
+  if (group === "delay") return "demora";
   return "estado";
 };
 
@@ -415,6 +419,7 @@ export default function StatsPage() {
   });
 
   const mainStat = stats?.byStreet?.[0];
+  const mostDelayedComplaint = stats?.oldestInProgress?.[0];
 
   const detailPageCount = Math.max(
     Math.ceil(detailItems.length / DETAIL_PAGE_SIZE),
@@ -472,7 +477,11 @@ export default function StatsPage() {
 
     if (zone !== "all") params.append("zone", zone);
 
-    if (detailGroupParam && detailValueParam) {
+    if (
+      detailGroupParam &&
+      detailValueParam &&
+      detailGroupParam !== "delay"
+    ) {
       params.append("detail_group", detailGroupParam);
       params.append("detail_value", detailValueParam);
     }
@@ -604,6 +613,18 @@ export default function StatsPage() {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const openDelayDetailModal = (pageToOpen = 1) => {
+    const items = stats?.oldestInProgress ?? [];
+
+    setDetailOpen(true);
+    setDetailLoading(false);
+    setDetailGroup("delay");
+    setDetailValue("Reclamos en proceso con mayor demora");
+    setDetailItems(items);
+    setDetailTotal(items.length);
+    setDetailPage(pageToOpen);
   };
 
   const closeDetailModal = () => {
@@ -959,6 +980,7 @@ export default function StatsPage() {
         byCause: [],
         byStatus: [],
         byZone: [],
+        oldestInProgress: [],
       });
       setLoading(false);
       return;
@@ -974,6 +996,7 @@ export default function StatsPage() {
         byCause: [],
         byStatus: [],
         byZone: [],
+        oldestInProgress: [],
       });
       setLoading(false);
       return;
@@ -1003,11 +1026,16 @@ export default function StatsPage() {
   useEffect(() => {
     if (!pendingRestoreDetail || loading) return;
 
-    void openDetailModal(
-      pendingRestoreDetail.group,
-      { name: pendingRestoreDetail.value, count: 0 },
-      pendingRestoreDetail.page,
-    ).then(() => {
+    const restorePromise =
+      pendingRestoreDetail.group === "delay"
+        ? Promise.resolve(openDelayDetailModal(pendingRestoreDetail.page))
+        : openDetailModal(
+            pendingRestoreDetail.group,
+            { name: pendingRestoreDetail.value, count: 0 },
+            pendingRestoreDetail.page,
+          );
+
+    void restorePromise.then(() => {
       window.scrollTo({ top: pendingRestoreDetail.scrollY, behavior: "auto" });
       sessionStorage.removeItem(STATS_RETURN_STATE_KEY);
       setPendingRestoreDetail(null);
@@ -1172,6 +1200,16 @@ export default function StatsPage() {
         doc,
         title: "Reclamos por zona",
         data: stats.byZone,
+        startY: currentY,
+      });
+
+      currentY = addChartToPdf({
+        doc,
+        title: "Reclamos en proceso con mayor demora",
+        data: stats.oldestInProgress.map((item) => ({
+          name: `Reclamo ${item.complaint_number ?? item.id}`,
+          count: item.delay_days ?? 0,
+        })),
         startY: currentY,
       });
 
@@ -1423,6 +1461,44 @@ export default function StatsPage() {
               </CardContent>
             </Card>
           </button>
+
+          <button
+            type="button"
+            disabled={loading || !mostDelayedComplaint}
+            onClick={() =>
+              mostDelayedComplaint ? openDelayDetailModal() : undefined
+            }
+            className="text-left disabled:cursor-default"
+          >
+            <Card className="h-full rounded-2xl border-border bg-card text-card-foreground shadow-sm transition hover:border-[#00A27F] hover:shadow-md">
+              <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                <Clock3 className="h-5 w-5 text-[#00A27F]" />
+                <CardTitle className="text-sm font-bold text-foreground">
+                  Reclamo más demorado
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent>
+                <div className="text-2xl font-bold text-foreground">
+                  {loading
+                    ? "..."
+                    : mostDelayedComplaint
+                      ? `Reclamo ${
+                          mostDelayedComplaint.complaint_number ??
+                          mostDelayedComplaint.id
+                        }`
+                      : "Sin datos"}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {mostDelayedComplaint
+                    ? `${mostDelayedComplaint.delay_days ?? 0} días en proceso · ${formatDate(
+                        mostDelayedComplaint.complaint_date,
+                      )} · Click para ver`
+                    : "No hay reclamos actualmente en proceso"}
+                </p>
+              </CardContent>
+            </Card>
+          </button>
         </div>
 
         {loading ? (
@@ -1461,6 +1537,64 @@ export default function StatsPage() {
               group="zone"
               onItemClick={openDetailModal}
             />
+
+            <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base font-bold text-foreground">
+                    Reclamos con mayor demora
+                  </CardTitle>
+
+                  {(stats?.oldestInProgress?.length ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openDelayDetailModal()}
+                      className="hidden items-center gap-1 rounded-full bg-[#00A27F]/10 px-2.5 py-1 text-xs font-medium text-[#00A27F] sm:flex"
+                    >
+                      <MousePointerClick className="h-3.5 w-3.5" />
+                      Click para ver
+                    </button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                {(stats?.oldestInProgress?.length ?? 0) === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No hay reclamos en proceso
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {stats?.oldestInProgress.slice(0, 10).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => saveReturnStateAndOpenComplaint(item.id)}
+                        className="flex w-full items-center justify-between gap-4 rounded-xl border border-border p-3 text-left transition hover:border-[#00A27F] hover:bg-muted/60"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            Reclamo {item.complaint_number ?? item.id}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {formatDate(item.complaint_date)} · {item.address} · {item.service}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-bold text-[#00A27F]">
+                            {item.delay_days ?? 0} días
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            En proceso
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="xl:col-span-2">
               <StatBars
@@ -1542,6 +1676,11 @@ export default function StatsPage() {
                         <th className="px-4 py-3 font-semibold">Causa</th>
                         <th className="px-4 py-3 font-semibold">Zona</th>
                         <th className="px-4 py-3 font-semibold">Estado</th>
+                        {detailGroup === "delay" && (
+                          <th className="px-4 py-3 font-semibold">
+                            Días en proceso
+                          </th>
+                        )}
                         <th className="px-4 py-3 text-center font-semibold">
                           Acción
                         </th>
@@ -1566,6 +1705,11 @@ export default function StatsPage() {
                               {item.status}
                             </span>
                           </td>
+                          {detailGroup === "delay" && (
+                            <td className="px-4 py-3 font-bold text-[#00A27F]">
+                              {item.delay_days ?? 0} días
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-center">
                             <Button
                               type="button"
