@@ -54,6 +54,7 @@ const ARBOLADO_DESCRIPTION_OPTIONS = [
   "Ramas se quiebran",
   "Árbol decrépito",
   "Evaluar árbol",
+  "Raices",
 ] as const;
 
 const ARBOLADO_SOLUTIONS = ["Interno", "Tercero"] as const;
