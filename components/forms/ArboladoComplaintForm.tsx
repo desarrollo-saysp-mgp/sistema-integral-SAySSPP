@@ -131,16 +131,17 @@ const getExtraData = (complaint?: Complaint | null): ComplaintExtraData => {
   return {};
 };
 
-export function ArboladoComplaintForm({
-  complaint,
-  onSubmit,
-  onCancel,
-}: ArboladoComplaintFormProps) {
-  const { profile } = useUser();
-  const today = formatLocalDate(new Date());
+const normalizeComparable = (value: unknown) =>
+  String(value ?? "").trim();
+
+const getInitialFormData = (
+  complaint: Complaint | null | undefined,
+  profileFullName: string,
+  today: string,
+): ArboladoComplaintFormData => {
   const extra = getExtraData(complaint);
 
-  const [formData, setFormData] = useState<ArboladoComplaintFormData>({
+  return {
     arbolado_number:
       complaint?.arbolado_number === null ||
       complaint?.arbolado_number === undefined
@@ -178,8 +179,30 @@ export function ArboladoComplaintForm({
     resolution_responsible:
       typeof extra.resolution_responsible === "string"
         ? extra.resolution_responsible
-        : profile?.full_name || "",
-  });
+        : profileFullName,
+  };
+};
+
+export function ArboladoComplaintForm({
+  complaint,
+  onSubmit,
+  onCancel,
+}: ArboladoComplaintFormProps) {
+  const { profile } = useUser();
+  const today = formatLocalDate(new Date());
+
+  const initialFormData = useMemo(
+    () =>
+      getInitialFormData(
+        complaint,
+        profile?.full_name || "",
+        today,
+      ),
+    [complaint, profile?.full_name, today],
+  );
+
+  const [formData, setFormData] =
+    useState<ArboladoComplaintFormData>(initialFormData);
 
   const [addressQuery, setAddressQuery] = useState(complaint?.address || "");
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
@@ -196,6 +219,12 @@ export function ArboladoComplaintForm({
       resolution_responsible: profile?.full_name || prev.resolution_responsible,
     }));
   }, [profile?.full_name]);
+
+  useEffect(() => {
+    setFormData(initialFormData);
+    setAddressQuery(initialFormData.address);
+    setErrors({});
+  }, [initialFormData]);
 
   const filteredStreets = useMemo(() => {
     const query = addressQuery.trim().toLowerCase();
@@ -242,15 +271,37 @@ export function ArboladoComplaintForm({
     }
   }, [formData.address]);
 
+  const isOnlyArboladoNumberChanged = () => {
+    if (!complaint) return false;
+
+    const keys = Object.keys(formData) as (keyof ArboladoComplaintFormData)[];
+
+    return keys.every((key) => {
+      if (key === "arbolado_number") return true;
+
+      return (
+        normalizeComparable(formData[key]) ===
+        normalizeComparable(initialFormData[key])
+      );
+    });
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof ArboladoComplaintFormData, string>> =
       {};
+
+    const editingOnlyArboladoNumber = isOnlyArboladoNumberChanged();
 
     if (
       formData.arbolado_number.trim() &&
       !/^\d+$/.test(formData.arbolado_number.trim())
     ) {
       newErrors.arbolado_number = "El número de reclamo debe ser numérico";
+    }
+
+    if (editingOnlyArboladoNumber) {
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
     }
 
     if (!formData.complaint_date) {
@@ -369,7 +420,7 @@ export function ArboladoComplaintForm({
       if (!result.success) {
         setErrors((prev) => ({
           ...prev,
-          description_type: result.error || "Error al guardar",
+          arbolado_number: result.error || "Error al guardar",
         }));
       }
     } finally {
