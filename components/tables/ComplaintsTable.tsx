@@ -47,13 +47,45 @@ const ITEMS_PER_PAGE = 20;
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
-const parseLocalDate = (dateStr: string): Date => {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day);
+const parseLocalDate = (dateStr?: string | null): Date | null => {
+  if (!dateStr) return null;
+
+  const cleanDate = String(dateStr).trim();
+
+  if (
+    !cleanDate ||
+    cleanDate === "-" ||
+    cleanDate.toLowerCase() === "null" ||
+    cleanDate.toLowerCase() === "undefined" ||
+    cleanDate.toLowerCase() === "invalid date"
+  ) {
+    return null;
+  }
+
+  const dateOnly = cleanDate.split("T")[0];
+  const [year, month, day] = dateOnly.split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  const date = new Date(year, month - 1, day);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
 };
 
-const formatLocalDate = (dateStr: string): string => {
+const formatLocalDate = (dateStr?: string | null): string => {
   const date = parseLocalDate(dateStr);
+
+  if (!date) return "-";
+
   return date.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
@@ -148,9 +180,8 @@ const getComplaintNumberForSort = (complaint: ComplaintWithDetails) => {
 };
 
 const getComplaintDateForSort = (complaint: ComplaintWithDetails) => {
-  if (!complaint.complaint_date) return 0;
-
-  return parseLocalDate(complaint.complaint_date).getTime();
+  const date = parseLocalDate(complaint.complaint_date);
+  return date?.getTime() ?? 0;
 };
 
 const getComplaintDisplayData = (
@@ -643,7 +674,7 @@ export function ComplaintsTable({
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string | null) => {
     return formatLocalDate(dateString);
   };
 
