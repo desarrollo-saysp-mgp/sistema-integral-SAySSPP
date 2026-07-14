@@ -75,6 +75,13 @@ export const VEHICLE_OPTIONS = [
     "criticality": "4"
   },
   {
+    code: "S.P.3",
+    vehicle: "F100 doble cabina roja",
+    licensePlate: "WOE320",
+    vehicleType: "Camioneta",
+    criticality: "",
+  },
+  {
     "code": "S.P.4",
     "vehicle": "Chevrolet C10 Pick Up",
     "licensePlate": "WWE612",
