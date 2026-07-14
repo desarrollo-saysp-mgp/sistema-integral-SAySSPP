@@ -36,6 +36,7 @@ import {
   FileText,
   MessageCircle,
   BarChart3,
+  Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -876,6 +877,17 @@ export function WorkOrdersClient() {
             <Link href="/dashboard/taller/ordenes-trabajo/estadisticas">
               <BarChart3 className="h-4 w-4" />
               Estadísticas
+            </Link>
+          </Button>
+
+          <Button
+            asChild
+            variant="outline"
+            className="h-9 w-full gap-2 rounded-xl sm:w-auto"
+          >
+            <Link href="/dashboard/taller/ordenes-trabajo/criticidad">
+              <Gauge className="h-4 w-4" />
+              Criticidad
             </Link>
           </Button>
 
