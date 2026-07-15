@@ -54,7 +54,7 @@ type VehicleSecurityInspection = {
   updated_at: string;
 };
 
-type SecurityFilter = "Todos" | "Bueno" | "Regular" | "Malo";
+type SecurityFilter = "Todos" | "Bueno" | "Regular" | "Crítico";
 type ViewMode = "history" | "latest";
 
 const normalizeText = (value: unknown) =>
@@ -104,7 +104,7 @@ const isLatestInspectionForVehicle = (
 };
 
 const getSecurityStatus = (score: number): Exclude<SecurityFilter, "Todos"> => {
-  if (score >= 4) return "Malo";
+  if (score >= 4) return "Crítico";
   if (score >= 2) return "Regular";
   return "Bueno";
 };
@@ -116,7 +116,7 @@ const getSecurityBadgeClass = (score: number) => {
 };
 
 const getStatusBadgeClass = (status: SecurityFilter) => {
-  if (status === "Malo") return "border-red-200 bg-red-100 text-red-800";
+  if (status === "Crítico") return "border-red-200 bg-red-100 text-red-800";
   if (status === "Regular")
     return "border-yellow-200 bg-yellow-100 text-yellow-800";
   if (status === "Bueno")
@@ -359,7 +359,7 @@ export function VehicleSecurityClient() {
       inspection.security_score >= 2 && inspection.security_score <= 3,
   ).length;
 
-  const badVehicles = filteredInspections.filter(
+  const criticalVehicles = filteredInspections.filter(
     (inspection) => inspection.security_score >= 4,
   ).length;
 
@@ -474,7 +474,9 @@ export function VehicleSecurityClient() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             title={
-              viewMode === "latest" ? "Últimas checklist" : "Checklists cargados"
+              viewMode === "latest"
+                ? "Últimas checklist"
+                : "Checklists cargados"
             }
             value={totalInspections}
             description={
@@ -501,11 +503,11 @@ export function VehicleSecurityClient() {
           />
 
           <SummaryCard
-            title="Vehículos malos"
-            value={badVehicles}
+            title="Vehículos críticos"
+            value={criticalVehicles}
             description="Seguridad 4 o superior"
-            active={securityStatusFilter === "Malo"}
-            onClick={() => handleCardFilter("Malo")}
+            active={securityStatusFilter === "Crítico"}
+            onClick={() => handleCardFilter("Crítico")}
           />
         </div>
 
@@ -652,7 +654,7 @@ export function VehicleSecurityClient() {
                     <option value="Todos">Todos</option>
                     <option value="Bueno">Bueno</option>
                     <option value="Regular">Regular</option>
-                    <option value="Malo">Malo</option>
+                    <option value="Crítico">Crítico</option>
                   </select>
                 </div>
 

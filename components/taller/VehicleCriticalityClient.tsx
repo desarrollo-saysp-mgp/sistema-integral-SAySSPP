@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Check,
   ClipboardCheck,
+  Filter,
   Gauge,
   Loader2,
   Pencil,
@@ -24,10 +25,27 @@ import {
   Search,
   Truck,
   X,
+  PieChart as PieChartIcon,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+} from "recharts";
 
-type VehicleCriticalityStatus = "BUENO" | "REGULAR" | "MALO" | "SIN DATOS";
+type VehicleCriticalityStatus =
+  | "BUENO"
+  | "REGULAR"
+  | "MALO"
+  | "SIN DATOS"
+  | "SIN CHECKLIST";
+
+type StatusFilter = "Todos" | VehicleCriticalityStatus;
 
 type VehicleCriticalitySetting = {
   id: string;
@@ -42,6 +60,13 @@ type VehicleCriticalitySetting = {
   updated_at?: string;
 };
 
+type VehicleSecurityInspection = {
+  id: string;
+  vehicle_code: string;
+  inspection_date: string | null;
+  created_at: string | null;
+};
+
 type VehicleCriticalityRow = {
   vehicle_code: string;
   vehicle: string;
@@ -51,7 +76,8 @@ type VehicleCriticalityRow = {
   service_criticality: number;
   replacement_score: number;
   security_score: number;
-  total_criticality: number;
+  has_checklist: boolean;
+  total_criticality: number | null;
   notes: string;
   status_label: VehicleCriticalityStatus;
 };
@@ -70,9 +96,7 @@ const normalizeText = (value: unknown) =>
 
 const toNumber = (value: unknown) => {
   const numberValue = Number(value);
-
   if (!Number.isFinite(numberValue)) return 0;
-
   return numberValue;
 };
 
@@ -108,7 +132,6 @@ const getSixMonthsAgo = () => {
   const date = new Date();
   date.setMonth(date.getMonth() - 6);
   date.setHours(0, 0, 0, 0);
-
   return date;
 };
 
@@ -116,11 +139,9 @@ const getDateValue = (dateString?: string | null) => {
   if (!dateString) return null;
 
   const [year, month, day] = dateString.split("-").map(Number);
-
   if (!year || !month || !day) return null;
 
   const date = new Date(year, month - 1, day);
-
   if (Number.isNaN(date.getTime())) return null;
 
   return date;
@@ -136,14 +157,30 @@ const getMechanicalReliabilityScore = (count: number) => {
 };
 
 const getCriticalityStatus = (
-  criticality: number,
-  hasAnyCriticalityData = true,
+  criticality: number | null,
+  hasChecklist: boolean,
 ): VehicleCriticalityStatus => {
-  if (!hasAnyCriticalityData) return "SIN DATOS";
-
+  if (!hasChecklist) return "SIN CHECKLIST";
+  if (criticality === null) return "SIN DATOS";
   if (criticality >= 13) return "MALO";
   if (criticality >= 10) return "REGULAR";
   return "BUENO";
+};
+
+const getStatusLabel = (status: VehicleCriticalityStatus) => {
+  switch (status) {
+    case "BUENO":
+      return "BUENO";
+    case "REGULAR":
+      return "REGULAR";
+    case "MALO":
+      return "CRÍTICO";
+    case "SIN CHECKLIST":
+      return "SIN CHECKLIST";
+    case "SIN DATOS":
+    default:
+      return "SIN DATOS";
+  }
 };
 
 const getStatusBadgeClass = (status: VehicleCriticalityStatus) => {
@@ -154,6 +191,8 @@ const getStatusBadgeClass = (status: VehicleCriticalityStatus) => {
       return "border-yellow-200 bg-yellow-100 text-yellow-800";
     case "MALO":
       return "border-red-200 bg-red-100 text-red-800";
+    case "SIN CHECKLIST":
+      return "border-orange-200 bg-orange-100 text-orange-800";
     case "SIN DATOS":
     default:
       return "border-slate-200 bg-slate-100 text-slate-700";
@@ -166,9 +205,45 @@ const getScoreBadgeClass = (score: number) => {
   return "border-green-200 bg-green-100 text-green-800";
 };
 
+const getTotalBadgeClass = (total: number | null) => {
+  if (total === null) return "border-orange-200 bg-orange-100 text-orange-800";
+  return getScoreBadgeClass(total);
+};
+
+const hasActiveFilters = ({
+  search,
+  code,
+  plate,
+  vehicle,
+  status,
+  minTotal,
+  maxTotal,
+}: {
+  search: string;
+  code: string;
+  plate: string;
+  vehicle: string;
+  status: StatusFilter;
+  minTotal: string;
+  maxTotal: string;
+}) => {
+  return (
+    search.trim() !== "" ||
+    code !== "Todos" ||
+    plate.trim() !== "" ||
+    vehicle.trim() !== "" ||
+    status !== "Todos" ||
+    minTotal.trim() !== "" ||
+    maxTotal.trim() !== ""
+  );
+};
+
 export function VehicleCriticalityClient() {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [settings, setSettings] = useState<VehicleCriticalitySetting[]>([]);
+  const [inspections, setInspections] = useState<VehicleSecurityInspection[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [savingVehicleCode, setSavingVehicleCode] = useState<string | null>(
     null,
@@ -180,19 +255,29 @@ export function VehicleCriticalityClient() {
     replacement_score: "0",
     notes: "",
   });
+
   const [search, setSearch] = useState("");
+  const [codeFilter, setCodeFilter] = useState("Todos");
+  const [plateFilter, setPlateFilter] = useState("");
+  const [vehicleFilter, setVehicleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Todos");
+  const [minTotalFilter, setMinTotalFilter] = useState("");
+  const [maxTotalFilter, setMaxTotalFilter] = useState("");
 
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      const [workOrdersResponse, settingsResponse] = await Promise.all([
-        fetch("/api/work-orders", { cache: "no-store" }),
-        fetch("/api/taller/criticidad", { cache: "no-store" }),
-      ]);
+      const [workOrdersResponse, settingsResponse, inspectionsResponse] =
+        await Promise.all([
+          fetch("/api/work-orders", { cache: "no-store" }),
+          fetch("/api/taller/criticidad", { cache: "no-store" }),
+          fetch("/api/taller/estado-general", { cache: "no-store" }),
+        ]);
 
       const workOrdersResult = await workOrdersResponse.json();
       const settingsResult = await settingsResponse.json();
+      const inspectionsResult = await inspectionsResponse.json();
 
       if (!workOrdersResponse.ok) {
         throw new Error(
@@ -206,8 +291,15 @@ export function VehicleCriticalityClient() {
         );
       }
 
+      if (!inspectionsResponse.ok) {
+        throw new Error(
+          inspectionsResult.error || "Error al cargar checklists vehiculares",
+        );
+      }
+
       setWorkOrders(workOrdersResult.data || []);
       setSettings(settingsResult.data || []);
+      setInspections(inspectionsResult.data || []);
     } catch (error) {
       console.error("Error fetching vehicle criticality data:", error);
       toast.error(
@@ -224,13 +316,26 @@ export function VehicleCriticalityClient() {
     fetchData();
   }, []);
 
-  const rows = useMemo<VehicleCriticalityRow[]>(() => {
+  const vehiclesWithChecklist = useMemo(() => {
+    const vehicleCodes = new Set<string>();
+
+    inspections.forEach((inspection) => {
+      const vehicleCode = String(inspection.vehicle_code || "").trim();
+
+      if (!vehicleCode) return;
+
+      vehicleCodes.add(normalizeText(vehicleCode));
+    });
+
+    return vehicleCodes;
+  }, [inspections]);
+
+  const rows = useMemo<VehicleCriticalityRow[]>((() => {
     const sixMonthsAgo = getSixMonthsAgo();
     const workOrdersByVehicle = new Map<string, WorkOrder[]>();
 
     workOrders.forEach((order) => {
       const vehicleCode = String(order.vehicle_code || "").trim();
-
       if (!vehicleCode) return;
 
       const currentOrders = workOrdersByVehicle.get(vehicleCode) || [];
@@ -261,13 +366,11 @@ export function VehicleCriticalityClient() {
         const latestOrder = [...orders].sort((a, b) => {
           const dateA = getDateValue(a.entry_date)?.getTime() ?? 0;
           const dateB = getDateValue(b.entry_date)?.getTime() ?? 0;
-
           return dateB - dateA;
         })[0];
 
         const validOtCount = orders.filter((order) => {
           const date = getDateValue(order.entry_date);
-
           if (!date || date < sixMonthsAgo) return false;
 
           const failureType = normalizeText(order.failure_type);
@@ -283,15 +386,16 @@ export function VehicleCriticalityClient() {
         const serviceCriticality = toNumber(setting?.service_criticality);
         const replacementScore = toNumber(setting?.replacement_score);
         const securityScore = toNumber(setting?.security_score);
+        const hasChecklist = vehiclesWithChecklist.has(
+          normalizeText(vehicleCode),
+        );
 
-        const totalCriticality =
-          mechanicalScore +
-          serviceCriticality +
-          replacementScore +
-          securityScore;
-
-        const hasAnyCriticalityData =
-          serviceCriticality > 0 || replacementScore > 0 || securityScore > 0;
+        const totalCriticality = hasChecklist
+          ? mechanicalScore +
+            serviceCriticality +
+            replacementScore +
+            securityScore
+          : null;
 
         const matchedVehicle = getVehicleFromCode(vehicleCode);
 
@@ -312,16 +416,26 @@ export function VehicleCriticalityClient() {
           service_criticality: serviceCriticality,
           replacement_score: replacementScore,
           security_score: securityScore,
+          has_checklist: hasChecklist,
           total_criticality: totalCriticality,
           notes: setting?.notes || "",
-          status_label: getCriticalityStatus(
-            totalCriticality,
-            hasAnyCriticalityData || mechanicalScore > 0,
-          ),
+          status_label: getCriticalityStatus(totalCriticality, hasChecklist),
         };
       })
       .sort((a, b) => {
-        if (a.total_criticality !== b.total_criticality) {
+        if (a.total_criticality === null && b.total_criticality !== null) {
+          return 1;
+        }
+
+        if (a.total_criticality !== null && b.total_criticality === null) {
+          return -1;
+        }
+
+        if (
+          a.total_criticality !== null &&
+          b.total_criticality !== null &&
+          a.total_criticality !== b.total_criticality
+        ) {
           return b.total_criticality - a.total_criticality;
         }
 
@@ -329,29 +443,138 @@ export function VehicleCriticalityClient() {
           numeric: true,
         });
       });
-  }, [workOrders, settings]);
+  }) as () => VehicleCriticalityRow[], [
+    workOrders,
+    settings,
+    vehiclesWithChecklist,
+  ]);
 
-  const filteredRows = useMemo(() => {
+  const vehicleCodes = useMemo(() => {
+    const codes = new Set<string>();
+
+    rows.forEach((row) => {
+      if (row.vehicle_code.trim()) codes.add(row.vehicle_code.trim());
+    });
+
+    return Array.from(codes).sort((a, b) =>
+      a.localeCompare(b, "es", { numeric: true }),
+    );
+  }, [rows]);
+
+  const baseFilteredRows = useMemo(() => {
     const normalizedSearch = normalizeText(search);
-
-    if (!normalizedSearch) return rows;
+    const normalizedPlate = normalizeText(plateFilter);
+    const normalizedVehicle = normalizeText(vehicleFilter);
+    const minTotal =
+      minTotalFilter.trim() === "" ? null : Number(minTotalFilter);
+    const maxTotal =
+      maxTotalFilter.trim() === "" ? null : Number(maxTotalFilter);
 
     return rows.filter((row) => {
-      return (
+      const matchesSearch =
+        !normalizedSearch ||
         normalizeText(row.vehicle_code).includes(normalizedSearch) ||
         normalizeText(row.vehicle).includes(normalizedSearch) ||
         normalizeText(row.license_plate).includes(normalizedSearch) ||
-        normalizeText(row.status_label).includes(normalizedSearch)
+        normalizeText(getStatusLabel(row.status_label)).includes(
+          normalizedSearch,
+        );
+
+      const matchesCode =
+        codeFilter === "Todos" || row.vehicle_code === codeFilter;
+
+      const matchesPlate =
+        !normalizedPlate ||
+        normalizeText(row.license_plate).includes(normalizedPlate);
+
+      const matchesVehicle =
+        !normalizedVehicle ||
+        normalizeText(row.vehicle).includes(normalizedVehicle);
+
+      const matchesMinTotal =
+        minTotal === null ||
+        !Number.isFinite(minTotal) ||
+        (row.total_criticality !== null && row.total_criticality >= minTotal);
+
+      const matchesMaxTotal =
+        maxTotal === null ||
+        !Number.isFinite(maxTotal) ||
+        (row.total_criticality !== null && row.total_criticality <= maxTotal);
+
+      return (
+        matchesSearch &&
+        matchesCode &&
+        matchesPlate &&
+        matchesVehicle &&
+        matchesMinTotal &&
+        matchesMaxTotal
       );
     });
-  }, [rows, search]);
+  }, [
+    rows,
+    search,
+    codeFilter,
+    plateFilter,
+    vehicleFilter,
+    minTotalFilter,
+    maxTotalFilter,
+  ]);
 
-  const totalVehicles = rows.length;
-  const goodVehicles = rows.filter((row) => row.status_label === "BUENO").length;
-  const regularVehicles = rows.filter(
-    (row) => row.status_label === "REGULAR",
+  const filteredRows = useMemo(() => {
+    return baseFilteredRows.filter((row) => {
+      const matchesStatus =
+        statusFilter === "Todos" || row.status_label === statusFilter;
+
+      return matchesStatus;
+    });
+  }, [baseFilteredRows, statusFilter]);
+
+  const totalVehicles = baseFilteredRows.length;
+
+  const goodVehicles = baseFilteredRows.filter(
+    (row) => row.has_checklist && row.status_label === "BUENO",
   ).length;
-  const badVehicles = rows.filter((row) => row.status_label === "MALO").length;
+
+  const regularVehicles = baseFilteredRows.filter(
+    (row) => row.has_checklist && row.status_label === "REGULAR",
+  ).length;
+
+  const badVehicles = baseFilteredRows.filter(
+    (row) => row.has_checklist && row.status_label === "MALO",
+  ).length;
+
+  const withoutChecklistVehicles = baseFilteredRows.filter(
+    (row) => !row.has_checklist,
+  ).length;
+
+  const activeFilters = hasActiveFilters({
+    search,
+    code: codeFilter,
+    plate: plateFilter,
+    vehicle: vehicleFilter,
+    status: statusFilter,
+    minTotal: minTotalFilter,
+    maxTotal: maxTotalFilter,
+  });
+
+  const clearFilters = () => {
+    setSearch("");
+    setCodeFilter("Todos");
+    setPlateFilter("");
+    setVehicleFilter("");
+    setStatusFilter("Todos");
+    setMinTotalFilter("");
+    setMaxTotalFilter("");
+  };
+
+  const handleCardFilter = (status: StatusFilter) => {
+    if (status === "Todos") {
+      setStatusFilter("Todos");
+      return;
+    }
+
+    setStatusFilter((prev) => (prev === status ? "Todos" : status));
+  };
 
   const startEditing = (row: VehicleCriticalityRow) => {
     setEditingVehicleCode(row.vehicle_code);
@@ -428,6 +651,37 @@ export function VehicleCriticalityClient() {
     }
   };
 
+  const chartData = useMemo(() => {
+    const data = [
+      {
+        key: "BUENO",
+        name: "Bueno",
+        value: goodVehicles,
+        color: "#22c55e",
+      },
+      {
+        key: "REGULAR",
+        name: "Regular",
+        value: regularVehicles,
+        color: "#eab308",
+      },
+      {
+        key: "MALO",
+        name: "Crítico",
+        value: badVehicles,
+        color: "#ef4444",
+      },
+      {
+        key: "SIN CHECKLIST",
+        name: "Sin checklist",
+        value: withoutChecklistVehicles,
+        color: "#f97316",
+      },
+    ];
+
+    return data.filter((item) => item.value > 0);
+  }, [goodVehicles, regularVehicles, badVehicles, withoutChecklistVehicles]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -439,11 +693,11 @@ export function VehicleCriticalityClient() {
             </Link>
           </Button>
 
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             Criticidad Vehicular
           </h1>
 
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
             Gestión y cálculo de criticidad de la planta vehicular.
           </p>
         </div>
@@ -469,34 +723,60 @@ export function VehicleCriticalityClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           title="Vehículos analizados"
           value={totalVehicles}
-          description="Con configuración de criticidad"
+          description="Según filtros aplicados"
+          active={statusFilter === "Todos"}
+          onClick={() => handleCardFilter("Todos")}
         />
 
         <SummaryCard
           title="Buenos"
           value={goodVehicles}
           description="Criticidad menor a 10"
+          active={statusFilter === "BUENO"}
+          onClick={() => handleCardFilter("BUENO")}
         />
 
         <SummaryCard
           title="Regulares"
           value={regularVehicles}
           description="Criticidad entre 10 y 12"
+          active={statusFilter === "REGULAR"}
+          onClick={() => handleCardFilter("REGULAR")}
         />
 
         <SummaryCard
-          title="Malos"
+          title="Críticos"
           value={badVehicles}
           description="Criticidad 13 o superior"
+          active={statusFilter === "MALO"}
+          onClick={() => handleCardFilter("MALO")}
+        />
+
+        <SummaryCard
+          title="Sin checklist"
+          value={withoutChecklistVehicles}
+          description="No se puede calcular seguridad"
+          active={statusFilter === "SIN CHECKLIST"}
+          onClick={() => handleCardFilter("SIN CHECKLIST")}
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <CriticalityChartCard
+          data={chartData}
+          total={totalVehicles}
+          loading={loading}
+        />
+
+        <CriticalityLegendCard />
+      </div>
+
       <Card>
-        <CardHeader className="space-y-3">
+        <CardHeader className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -510,25 +790,149 @@ export function VehicleCriticalityClient() {
               </p>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Criticidad servicio y seguridad son solo lectura. La seguridad
-                se alimenta desde la última checklist vehicular.
+                Si el vehículo no tiene checklist, no se calcula la criticidad
+                total porque no se puede determinar la seguridad.
               </p>
             </div>
 
             <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-              {filteredRows.length} de {rows.length} vehículos
+              {filteredRows.length} de {baseFilteredRows.length} vehículos
             </Badge>
           </div>
 
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="rounded-2xl border bg-muted/20 p-3 sm:p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Filter className="h-4 w-4 text-[#00A27F]" />
+              Filtros
+            </div>
 
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por código, vehículo o dominio..."
-              className="h-10 rounded-xl pl-9"
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <div className="sm:col-span-2 xl:col-span-2">
+                <label className="mb-1 block text-xs font-medium">
+                  Buscar
+                </label>
+
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Código, vehículo, dominio o estado..."
+                    className="h-10 rounded-xl pl-9"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Código
+                </label>
+
+                <select
+                  value={codeFilter}
+                  onChange={(event) => setCodeFilter(event.target.value)}
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
+                >
+                  <option value="Todos">Todos</option>
+
+                  {vehicleCodes.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Estado
+                </label>
+
+                <select
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as StatusFilter)
+                  }
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
+                >
+                  <option value="Todos">Todos</option>
+                  <option value="BUENO">Bueno</option>
+                  <option value="REGULAR">Regular</option>
+                  <option value="MALO">Crítico</option>
+                  <option value="SIN CHECKLIST">Sin checklist</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Dominio / patente
+                </label>
+
+                <Input
+                  value={plateFilter}
+                  onChange={(event) => setPlateFilter(event.target.value)}
+                  placeholder="Ej: AFU928"
+                  className="h-10 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Vehículo
+                </label>
+
+                <Input
+                  value={vehicleFilter}
+                  onChange={(event) => setVehicleFilter(event.target.value)}
+                  placeholder="Ej: Iveco"
+                  className="h-10 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Total desde
+                </label>
+
+                <Input
+                  type="number"
+                  min={0}
+                  value={minTotalFilter}
+                  onChange={(event) => setMinTotalFilter(event.target.value)}
+                  placeholder="Ej: 10"
+                  className="h-10 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium">
+                  Total hasta
+                </label>
+
+                <Input
+                  type="number"
+                  min={0}
+                  value={maxTotalFilter}
+                  onChange={(event) => setMaxTotalFilter(event.target.value)}
+                  placeholder="Ej: 12"
+                  className="h-10 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-end sm:col-span-2 xl:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={clearFilters}
+                  disabled={!activeFilters}
+                  className="h-10 w-full gap-2 rounded-xl"
+                >
+                  <X className="h-4 w-4" />
+                  Limpiar filtros
+                </Button>
+              </div>
+            </div>
           </div>
         </CardHeader>
 
@@ -541,106 +945,285 @@ export function VehicleCriticalityClient() {
           ) : filteredRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <Truck className="mb-3 h-10 w-10" />
-              <p>No hay vehículos para mostrar.</p>
+              <p>No hay vehículos para los filtros aplicados.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full min-w-[1180px] border-collapse text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-3 py-3 text-left font-semibold">
-                      Código
-                    </th>
-                    <th className="px-3 py-3 text-left font-semibold">
-                      Vehículo
-                    </th>
-                    <th className="px-3 py-3 text-left font-semibold">
-                      Dominio
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      OT 6 meses
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Conf. mecánica
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Crit. servicio
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Reemplazo
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Seguridad
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Total
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Estado
-                    </th>
-                    <th className="px-3 py-3 text-center font-semibold">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
+            <>
+              <div className="hidden overflow-x-auto rounded-xl border lg:block">
+                <table className="w-full min-w-[1180px] border-collapse text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Código
+                      </th>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Vehículo
+                      </th>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Dominio
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        OT 6 meses
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Conf. mecánica
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Crit. servicio
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Reemplazo
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Seguridad
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Total
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Estado
+                      </th>
+                      <th className="px-3 py-3 text-center font-semibold">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
 
-                <tbody>
-                  {filteredRows.map((row) => {
-                    const isEditing = editingVehicleCode === row.vehicle_code;
-                    const isSaving = savingVehicleCode === row.vehicle_code;
+                  <tbody>
+                    {filteredRows.map((row) => {
+                      const isEditing = editingVehicleCode === row.vehicle_code;
+                      const isSaving = savingVehicleCode === row.vehicle_code;
 
-                    return (
-                      <tr key={row.vehicle_code} className="border-t align-top">
-                        <td className="px-3 py-3 font-semibold">
-                          {row.vehicle_code}
-                        </td>
+                      return (
+                        <tr
+                          key={row.vehicle_code}
+                          className="border-t align-top"
+                        >
+                          <td className="px-3 py-3 font-semibold">
+                            {row.vehicle_code}
+                          </td>
 
-                        <td className="px-3 py-3">{row.vehicle}</td>
+                          <td className="px-3 py-3">{row.vehicle}</td>
 
-                        <td className="px-3 py-3">{row.license_plate}</td>
+                          <td className="px-3 py-3">{row.license_plate}</td>
 
-                        <td className="px-3 py-3 text-center">
-                          {row.work_orders_count}
-                        </td>
+                          <td className="px-3 py-3 text-center">
+                            {row.work_orders_count}
+                          </td>
 
-                        <ReadOnlyScoreCell value={row.mechanical_reliability_score} />
+                          <ReadOnlyScoreCell
+                            value={row.mechanical_reliability_score}
+                          />
 
-                        <ReadOnlyScoreCell value={row.service_criticality} />
+                          <ReadOnlyScoreCell value={row.service_criticality} />
 
-                        <EditableReplacementCell
-                          isEditing={isEditing}
-                          value={row.replacement_score}
-                          inputValue={editingValues.replacement_score}
-                          onChange={(value) =>
-                            updateEditingValue("replacement_score", value)
-                          }
-                        />
+                          <EditableReplacementCell
+                            isEditing={isEditing}
+                            value={row.replacement_score}
+                            inputValue={editingValues.replacement_score}
+                            onChange={(value) =>
+                              updateEditingValue("replacement_score", value)
+                            }
+                          />
 
-                        <ReadOnlyScoreCell value={row.security_score} />
+                          <td className="px-3 py-3 text-center">
+                            {row.has_checklist ? (
+                              <Badge
+                                className={`${getScoreBadgeClass(
+                                  row.security_score,
+                                )} border`}
+                              >
+                                {row.security_score}
+                              </Badge>
+                            ) : (
+                              <Badge className="border border-orange-200 bg-orange-100 text-orange-800">
+                                --
+                              </Badge>
+                            )}
+                          </td>
 
-                        <td className="px-3 py-3 text-center">
-                          <Badge
-                            className={`${getScoreBadgeClass(
-                              row.total_criticality,
-                            )} border`}
-                          >
-                            {row.total_criticality}
-                          </Badge>
-                        </td>
+                          <td className="px-3 py-3 text-center">
+                            <Badge
+                              className={`${getTotalBadgeClass(
+                                row.total_criticality,
+                              )} border`}
+                            >
+                              {row.total_criticality ?? "--"}
+                            </Badge>
+                          </td>
 
-                        <td className="px-3 py-3 text-center">
+                          <td className="px-3 py-3 text-center">
+                            <Badge
+                              className={`${getStatusBadgeClass(
+                                row.status_label,
+                              )} border`}
+                            >
+                              {getStatusLabel(row.status_label)}
+                            </Badge>
+                          </td>
+
+                          <td className="px-3 py-3">
+                            {isEditing ? (
+                              <div className="flex justify-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => saveEditing(row.vehicle_code)}
+                                  disabled={isSaving}
+                                  className="h-8 gap-1 rounded-lg"
+                                >
+                                  {isSaving ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                  Guardar
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={cancelEditing}
+                                  disabled={isSaving}
+                                  className="h-8 gap-1 rounded-lg"
+                                >
+                                  <X className="h-4 w-4" />
+                                  Cancelar
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-center">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => startEditing(row)}
+                                  className="h-8 gap-1 rounded-lg"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Editar reemplazo
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 lg:hidden">
+                {filteredRows.map((row) => {
+                  const isEditing = editingVehicleCode === row.vehicle_code;
+                  const isSaving = savingVehicleCode === row.vehicle_code;
+
+                  return (
+                    <Card key={row.vehicle_code} className="overflow-hidden">
+                      <CardContent className="space-y-4 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-lg font-bold">
+                              {row.vehicle_code}
+                            </p>
+                            <p className="text-sm font-medium">{row.vehicle}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Dominio: {row.license_plate}
+                            </p>
+                          </div>
+
                           <Badge
                             className={`${getStatusBadgeClass(
                               row.status_label,
-                            )} border`}
+                            )} shrink-0 border`}
                           >
-                            {row.status_label}
+                            {getStatusLabel(row.status_label)}
                           </Badge>
-                        </td>
+                        </div>
 
-                        <td className="px-3 py-3">
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <MobileScore
+                            label="OT 6 meses"
+                            value={row.work_orders_count}
+                          />
+                          <MobileScore
+                            label="Conf. mecánica"
+                            value={row.mechanical_reliability_score}
+                          />
+                          <MobileScore
+                            label="Crit. servicio"
+                            value={row.service_criticality}
+                          />
+
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Seguridad
+                            </p>
+
+                            {row.has_checklist ? (
+                              <Badge
+                                className={`${getScoreBadgeClass(
+                                  row.security_score,
+                                )} mt-1 border`}
+                              >
+                                {row.security_score}
+                              </Badge>
+                            ) : (
+                              <Badge className="mt-1 border border-orange-200 bg-orange-100 text-orange-800">
+                                --
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Reemplazo
+                            </p>
+
+                            {isEditing ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                max={5}
+                                value={editingValues.replacement_score}
+                                onChange={(event) =>
+                                  updateEditingValue(
+                                    "replacement_score",
+                                    event.target.value,
+                                  )
+                                }
+                                className="mt-1 h-9 rounded-lg"
+                              />
+                            ) : (
+                              <Badge
+                                className={`${getScoreBadgeClass(
+                                  row.replacement_score,
+                                )} mt-1 border`}
+                              >
+                                {row.replacement_score}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Total
+                            </p>
+
+                            <Badge
+                              className={`${getTotalBadgeClass(
+                                row.total_criticality,
+                              )} mt-1 border`}
+                            >
+                              {row.total_criticality ?? "--"}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end border-t pt-3">
                           {isEditing ? (
-                            <div className="flex justify-center gap-2">
+                            <div className="flex gap-2">
                               <Button
                                 type="button"
                                 size="sm"
@@ -669,26 +1252,24 @@ export function VehicleCriticalityClient() {
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex justify-center">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => startEditing(row)}
-                                className="h-8 gap-1 rounded-lg"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Editar reemplazo
-                              </Button>
-                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => startEditing(row)}
+                              className="h-8 gap-1 rounded-lg"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Editar reemplazo
+                            </Button>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -721,6 +1302,7 @@ function EditableReplacementCell({
         <Input
           type="number"
           min={0}
+          max={5}
           value={inputValue}
           onChange={(event) => onChange(event.target.value)}
           className="mx-auto h-8 w-20 rounded-lg text-center"
@@ -740,22 +1322,299 @@ function SummaryCard({
   title,
   value,
   description,
+  active,
+  onClick,
 }: {
   title: string;
   value: number;
   description: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-4 p-5">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="mt-2 text-3xl font-bold">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    <button type="button" onClick={onClick} className="text-left">
+      <Card
+        className={`h-full transition hover:border-primary/50 hover:shadow-md ${
+          active ? "border-primary bg-primary/5" : ""
+        }`}
+      >
+        <CardContent className="flex items-center justify-between gap-4 p-5">
+          <div>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="mt-2 text-3xl font-bold">{value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          </div>
+
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+            <Gauge className="h-5 w-5 text-primary" />
+          </div>
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
+function MobileScore({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <Badge className={`${getScoreBadgeClass(value)} mt-1 border`}>
+        {value}
+      </Badge>
+    </div>
+  );
+}
+
+function CriticalityChartCard({
+  data,
+  total,
+  loading,
+}: {
+  data: { key: string; name: string; value: number; color: string }[];
+  total: number;
+  loading: boolean;
+}) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <PieChartIcon className="h-5 w-5 text-[#00A27F]" />
+          Distribución de criticidad
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        {loading ? (
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Cargando gráfico...
+          </div>
+        ) : total === 0 ? (
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            No hay datos para mostrar.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={95}
+                    innerRadius={45}
+                    paddingAngle={2}
+                    label={({ name, percent }) =>
+                      `${name} ${((percent || 0) * 100).toFixed(1)}%`
+                    }
+                  >
+                    {data.map((entry) => (
+                      <Cell key={entry.key} fill={entry.color} />
+                    ))}
+                  </Pie>
+
+                  <RechartsTooltip
+                    formatter={(value, name) => {
+                      const numericValue = Number(value ?? 0);
+
+                      const percent =
+                        total > 0
+                          ? ((numericValue / total) * 100).toFixed(1)
+                          : "0.0";
+
+                      return [
+                        `${numericValue} vehículos (${percent}%)`,
+                        String(name ?? ""),
+                      ];
+                    }}
+                  />
+
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {data.map((item) => {
+                const percent =
+                  total > 0 ? ((item.value / total) * 100).toFixed(1) : "0.0";
+
+                return (
+                  <div
+                    key={item.key}
+                    className="rounded-xl border bg-muted/20 p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+
+                      <p className="text-sm font-medium">{item.name}</p>
+                    </div>
+
+                    <p className="mt-2 text-2xl font-bold">{item.value}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {percent}% del total
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CriticalityLegendCard() {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Info className="h-5 w-5 text-[#00A27F]" />
+          Criterios utilizados para el cálculo de criticidad
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="space-y-4 text-sm text-muted-foreground">
+        <div className="space-y-2">
+          <p>
+            <strong className="text-foreground">Confiabilidad Mecánica:</strong>{" "}
+            se calcula a partir de la cantidad de órdenes de trabajo registradas
+            para cada vehículo en los últimos 6 meses, excluyendo aquellas
+            cargadas como “Mantenimiento”.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Criticidad del Servicio:</strong>{" "}
+            según la necesidad de contar con el vehículo para realizar el
+            servicio en tiempo y forma.
+          </p>
+
+          <p className="rounded-lg border bg-muted/20 p-3 text-xs leading-relaxed">
+            <strong className="text-foreground">
+              Referencias Criticidad del Servicio:
+            </strong>{" "}
+            RE=5; CT=3; DF=3; M=5; R=2; CYD=3; GRÚA=4; TRA=2.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Reemplazo:</strong> según la
+            posibilidad o necesidad de reemplazar el vehículo para no afectar la
+            prestación del servicio.
+          </p>
+
+          <p className="rounded-lg border bg-muted/20 p-3 text-xs leading-relaxed">
+            <strong className="text-foreground">Escala de reemplazo:</strong>{" "}
+            RD=2; RE=5; Palas=5; B=5; M=4; R=1; CYD=3; GR=3; O=1.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Seguridad:</strong> surge del
+            resultado de la última checklist vehicular realizada sobre cada
+            unidad.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Sin checklist:</strong> si el
+            vehículo nunca tuvo checklist cargada, no se calcula la criticidad
+            total porque no se puede determinar la seguridad.
+          </p>
         </div>
 
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-          <Gauge className="h-5 w-5 text-primary" />
+        <div className="rounded-xl border bg-muted/20 p-4">
+          <p className="mb-3 font-semibold text-foreground">
+            Referencias de siglas utilizadas
+          </p>
+
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <p>
+              <strong>RD:</strong> Recolección Domiciliaria / Recolectoras
+            </p>
+            <p>
+              <strong>RE:</strong> Recolección Especial
+            </p>
+            <p>
+              <strong>CT:</strong> Contenedores / Porta Contenedores
+            </p>
+            <p>
+              <strong>DF:</strong> Disposición Final
+            </p>
+            <p>
+              <strong>M:</strong> Motoniveladoras
+            </p>
+            <p>
+              <strong>R:</strong> Regadores
+            </p>
+            <p>
+              <strong>CYD:</strong> Canales y Desagües
+            </p>
+            <p>
+              <strong>GR / GRÚA:</strong> Grúa
+            </p>
+            <p>
+              <strong>TRA:</strong> Tractores
+            </p>
+            <p>
+              <strong>B:</strong> Barrido
+            </p>
+            <p>
+              <strong>O:</strong> Otros vehículos
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-muted/20 p-4">
+          <p className="mb-3 font-semibold text-foreground">
+            Escala de criticidad final
+          </p>
+
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <Badge className="border border-green-200 bg-green-100 text-green-800">
+                1 a 9
+              </Badge>
+              <p>
+                <strong className="text-foreground">Baja:</strong> estado
+                aceptable.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Badge className="border border-yellow-200 bg-yellow-100 text-yellow-800">
+                10 a 12
+              </Badge>
+              <p>
+                <strong className="text-foreground">Media:</strong> requiere
+                seguimiento.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Badge className="border border-red-200 bg-red-100 text-red-800">
+                13 a 20
+              </Badge>
+              <p>
+                <strong className="text-foreground">Crítica:</strong> requiere
+                atención prioritaria.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Badge className="border border-orange-200 bg-orange-100 text-orange-800">
+                --
+              </Badge>
+              <p>
+                <strong className="text-foreground">Sin checklist:</strong> no
+                se calcula criticidad total.
+              </p>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
