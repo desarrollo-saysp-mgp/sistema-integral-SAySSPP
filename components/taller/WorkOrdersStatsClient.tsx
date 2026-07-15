@@ -24,9 +24,7 @@ import {
   Loader2,
   RefreshCcw,
   X,
-  TrendingUp,
   Wrench,
-  CircleDollarSign,
   Truck,
   ClipboardList,
   CheckCircle2,
@@ -48,16 +46,8 @@ import {
 } from "recharts";
 
 const ALL_VALUE = "Todos";
-const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
-
-type AmountCurrency = "ARS" | "USD";
 
 type StatItem = {
-  name: string;
-  value: number;
-};
-
-type MoneyStatItem = {
   name: string;
   value: number;
 };
@@ -123,29 +113,6 @@ const getVehicleUniqueKey = (order: WorkOrder) => {
   return normalizeText(getVehicleLabel(order));
 };
 
-const getLicensePlateLabel = (order: WorkOrder) => {
-  if (order.license_plate && order.license_plate.trim()) {
-    return order.license_plate;
-  }
-
-  const matchedVehicle = getVehicleFromCode(order.vehicle_code);
-  return matchedVehicle?.licensePlate || "-";
-};
-
-const getAmountCurrency = (order: WorkOrder): AmountCurrency => {
-  const observations = String(order.observations || "");
-  const match = observations.match(/\[\[amount_currency:(ARS|USD)\]\]/);
-
-  if (match?.[1] === "USD") return "USD";
-
-  return "ARS";
-};
-
-const cleanObservations = (value?: string | null) => {
-  const cleaned = String(value || "").replace(CURRENCY_MARKER_REGEX, "").trim();
-  return cleaned || "-";
-};
-
 const formatProviders = (value?: string | null) => {
   const providers = String(value || "")
     .split("|")
@@ -155,19 +122,6 @@ const formatProviders = (value?: string | null) => {
   if (providers.length === 0) return ["-"];
 
   return providers;
-};
-
-const formatMoney = (
-  value?: number | null,
-  currency: AmountCurrency = "ARS",
-) => {
-  if (value === null || value === undefined) return "-";
-
-  return value.toLocaleString("es-AR", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  });
 };
 
 const formatNumber = (value: number) =>
@@ -226,27 +180,6 @@ const groupCount = (
   items.forEach((order) => {
     const key = getKey(order) || "-";
     map.set(key, (map.get(key) || 0) + 1);
-  });
-
-  return Array.from(map.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-};
-
-const groupMoney = (
-  items: WorkOrder[],
-  getKey: (order: WorkOrder) => string,
-  currency: AmountCurrency,
-): MoneyStatItem[] => {
-  const map = new Map<string, number>();
-
-  items.forEach((order) => {
-    if (getAmountCurrency(order) !== currency) return;
-
-    const key = getKey(order) || "-";
-    const amount = Number(order.amount || 0);
-
-    map.set(key, (map.get(key) || 0) + amount);
   });
 
   return Array.from(map.entries())
@@ -325,7 +258,8 @@ export function WorkOrdersStatsClient() {
   );
 
   const vehicleOptions = useMemo(
-    () => getUniqueOptions(workOrders.map((order) => getVehicleStatsLabel(order))),
+    () =>
+      getUniqueOptions(workOrders.map((order) => getVehicleStatsLabel(order))),
     [workOrders],
   );
 
@@ -367,7 +301,8 @@ export function WorkOrdersStatsClient() {
 
       const matchesVehicle =
         vehicleFilter === ALL_VALUE ||
-        normalizeText(getVehicleStatsLabel(order)) === normalizeText(vehicleFilter);
+        normalizeText(getVehicleStatsLabel(order)) ===
+          normalizeText(vehicleFilter);
 
       const matchesVehicleCode =
         vehicleCodeFilter === ALL_VALUE ||
@@ -380,7 +315,8 @@ export function WorkOrdersStatsClient() {
       const matchesProvider =
         providerFilter === ALL_VALUE ||
         providers.some(
-          (provider) => normalizeText(provider) === normalizeText(providerFilter),
+          (provider) =>
+            normalizeText(provider) === normalizeText(providerFilter),
         );
 
       const matchesDate = isDateInRange(
@@ -442,26 +378,12 @@ export function WorkOrdersStatsClient() {
 
   const stats = useMemo(() => {
     const total = filteredWorkOrders.length;
+
     const closed = filteredWorkOrders.filter(
       (order) => normalizeText(order.status) === "cerrado",
     ).length;
+
     const open = total - closed;
-
-    const arsOrders = filteredWorkOrders.filter(
-      (order) => getAmountCurrency(order) === "ARS",
-    );
-    const usdOrders = filteredWorkOrders.filter(
-      (order) => getAmountCurrency(order) === "USD",
-    );
-
-    const totalArs = arsOrders.reduce(
-      (acc, order) => acc + Number(order.amount || 0),
-      0,
-    );
-    const totalUsd = usdOrders.reduce(
-      (acc, order) => acc + Number(order.amount || 0),
-      0,
-    );
 
     const vehicles = new Set(
       filteredWorkOrders
@@ -477,9 +399,6 @@ export function WorkOrdersStatsClient() {
       total,
       closed,
       open,
-      totalArs,
-      totalUsd,
-      averageArs: arsOrders.length > 0 ? totalArs / arsOrders.length : 0,
       vehiclesCount: vehicles.size,
       withSparePart,
     };
@@ -542,22 +461,12 @@ export function WorkOrdersStatsClient() {
     [filteredWorkOrders],
   );
 
-  const topVehiclesByMoneyArs = useMemo(
+  const topProvidersByOrders = useMemo(
     () =>
       getTop(
-        groupMoney(filteredWorkOrders, (order) => getVehicleStatsLabel(order), "ARS"),
-        10,
-      ),
-    [filteredWorkOrders],
-  );
-
-  const topProvidersByMoneyArs = useMemo(
-    () =>
-      getTop(
-        groupMoney(
+        groupCount(
           filteredWorkOrders,
           (order) => formatProviders(order.provider)[0] || "-",
-          "ARS",
         ),
         10,
       ),
@@ -586,11 +495,7 @@ export function WorkOrdersStatsClient() {
   return (
     <div className="space-y-5">
       <div className="flex justify-start">
-        <Button
-          asChild
-          variant="outline"
-          className="h-9 gap-2 rounded-xl"
-        >
+        <Button asChild variant="outline" className="h-9 gap-2 rounded-xl">
           <Link href="/dashboard/taller/ordenes-trabajo">
             <ArrowLeft className="h-4 w-4" />
             Volver
@@ -606,9 +511,10 @@ export function WorkOrdersStatsClient() {
                 <BarChart3 className="h-5 w-5 text-primary" />
                 Panel estadístico de OT
               </CardTitle>
+
               <p className="mt-1 text-sm text-muted-foreground">
-                Filtrá la información y analizá órdenes, montos, vehículos,
-                fallas, proveedores y choferes.
+                Filtrá la información y analizá órdenes, vehículos, fallas,
+                proveedores y choferes.
               </p>
             </div>
 
@@ -747,7 +653,7 @@ export function WorkOrdersStatsClient() {
             </div>
           ) : (
             <div className="space-y-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <StatCard
                   title="Total de OT"
                   value={formatNumber(stats.total)}
@@ -758,10 +664,11 @@ export function WorkOrdersStatsClient() {
                 <StatCard
                   title="OT cerradas"
                   value={formatNumber(stats.closed)}
-                  description={`${stats.total > 0
+                  description={`${
+                    stats.total > 0
                       ? Math.round((stats.closed / stats.total) * 100)
                       : 0
-                    }% del total`}
+                  }% del total`}
                   icon={<CheckCircle2 className="h-5 w-5" />}
                 />
 
@@ -780,34 +687,14 @@ export function WorkOrdersStatsClient() {
                 />
 
                 <StatCard
-                  title="Monto total ARS"
-                  value={formatMoney(stats.totalArs, "ARS")}
-                  description={`Promedio: ${formatMoney(stats.averageArs, "ARS")}`}
-                  icon={<CircleDollarSign className="h-5 w-5" />}
-                />
-
-                <StatCard
-                  title="Monto total USD"
-                  value={formatMoney(stats.totalUsd, "USD")}
-                  description="Solo OT cargadas en USD"
-                  icon={<CircleDollarSign className="h-5 w-5" />}
-                />
-
-                <StatCard
                   title="Con repuesto"
                   value={formatNumber(stats.withSparePart)}
-                  description={`${stats.total > 0
+                  description={`${
+                    stats.total > 0
                       ? Math.round((stats.withSparePart / stats.total) * 100)
                       : 0
-                    }% del total`}
+                  }% del total`}
                   icon={<Wrench className="h-5 w-5" />}
-                />
-
-                <StatCard
-                  title="Monto por OT"
-                  value={formatMoney(stats.averageArs, "ARS")}
-                  description="Promedio sobre OT en pesos"
-                  icon={<TrendingUp className="h-5 w-5" />}
                 />
               </div>
 
@@ -925,9 +812,9 @@ export function WorkOrdersStatsClient() {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Top proveedores por monto ARS">
+                <ChartCard title="Top proveedores con más OT">
                   <ResponsiveContainer width="100%" height={340}>
-                    <BarChart data={topProvidersByMoneyArs} layout="vertical">
+                    <BarChart data={topProvidersByOrders} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" fontSize={12} />
                       <YAxis
@@ -936,15 +823,11 @@ export function WorkOrdersStatsClient() {
                         width={150}
                         fontSize={12}
                       />
-                      <Tooltip
-                        formatter={(value) =>
-                          formatMoney(Number(value), "ARS")
-                        }
-                      />
-                      <Bar dataKey="value" name="Monto" radius={[0, 8, 8, 0]}>
-                        {topProvidersByMoneyArs.map((_, index) => (
+                      <Tooltip />
+                      <Bar dataKey="value" name="OT" radius={[0, 8, 8, 0]}>
+                        {topProvidersByOrders.map((_, index) => (
                           <Cell
-                            key={`provider-money-${index}`}
+                            key={`provider-orders-${index}`}
                             fill={CHART_COLORS[index % CHART_COLORS.length]}
                           />
                         ))}
@@ -962,10 +845,9 @@ export function WorkOrdersStatsClient() {
                 />
 
                 <RankingCard
-                  title="Vehículos con mayor gasto ARS"
-                  items={topVehiclesByMoneyArs}
-                  valueLabel="Monto"
-                  money
+                  title="Proveedores con más OT"
+                  items={topProvidersByOrders}
+                  valueLabel="OT"
                 />
 
                 <RankingCard
@@ -1089,12 +971,10 @@ function RankingCard({
   title,
   items,
   valueLabel,
-  money = false,
 }: {
   title: string;
   items: Array<{ name: string; value: number }>;
   valueLabel: string;
-  money?: boolean;
 }) {
   return (
     <Card>
@@ -1120,7 +1000,7 @@ function RankingCard({
                 </div>
 
                 <p className="shrink-0 text-sm font-bold">
-                  {money ? formatMoney(item.value, "ARS") : formatNumber(item.value)}
+                  {formatNumber(item.value)}
                 </p>
               </div>
             ))

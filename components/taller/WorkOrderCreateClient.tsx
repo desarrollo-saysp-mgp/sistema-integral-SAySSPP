@@ -69,6 +69,29 @@ type WorkOrderFormData = {
   status: string;
 };
 
+type WorkOrderForCriticality = {
+  vehicle_code?: string | null;
+  entry_date?: string | null;
+  failure_type?: string | null;
+  repair_type?: string | null;
+};
+
+type VehicleCriticalitySetting = {
+  vehicle_code: string;
+  service_criticality: number | null;
+  replacement_score: number | null;
+  security_score: number | null;
+};
+
+type VehicleSecurityInspection = {
+  id: string;
+  vehicle_code: string;
+  inspection_date: string | null;
+  created_at: string | null;
+};
+
+type VehicleCriticalityByCode = Record<string, string>;
+
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
 };
@@ -136,12 +159,51 @@ const initialFormData: WorkOrderFormData = {
   status: "INICIADO",
 };
 
-const normalizeText = (value: string) =>
-  value
+const normalizeText = (value: unknown) =>
+  String(value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+
+const toNumber = (value: unknown) => {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) return 0;
+
+  return numberValue;
+};
+
+const getDateValue = (dateString?: string | null) => {
+  if (!dateString) return null;
+
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  const date = new Date(year, month - 1, day);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+};
+
+const getSixMonthsAgo = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 6);
+  date.setHours(0, 0, 0, 0);
+
+  return date;
+};
+
+const getMechanicalReliabilityScore = (count: number) => {
+  if (count <= 0) return 0;
+  if (count <= 3) return 1;
+  if (count <= 6) return 2;
+  if (count <= 9) return 3;
+  if (count <= 12) return 4;
+  return 5;
+};
 
 const getUniqueOptions = (options: readonly string[]) => {
   const seen = new Set<string>();
@@ -261,6 +323,9 @@ export function WorkOrderCreateClient() {
   const [saving, setSaving] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [criticalityLoading, setCriticalityLoading] = useState(false);
+  const [criticalityByVehicleCode, setCriticalityByVehicleCode] =
+    useState<VehicleCriticalityByCode>({});
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const baseObservationTextRef = useRef("");
@@ -273,6 +338,155 @@ export function WorkOrderCreateClient() {
       recognitionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const fetchCriticalityData = async () => {
+      try {
+        setCriticalityLoading(true);
+
+        const [workOrdersResponse, settingsResponse, inspectionsResponse] =
+          await Promise.all([
+            fetch("/api/work-orders", { cache: "no-store" }),
+            fetch("/api/taller/criticidad", { cache: "no-store" }),
+            fetch("/api/taller/estado-general", { cache: "no-store" }),
+          ]);
+
+        const workOrdersResult = await workOrdersResponse.json();
+        const settingsResult = await settingsResponse.json();
+        const inspectionsResult = await inspectionsResponse.json();
+
+        if (!workOrdersResponse.ok) {
+          throw new Error(
+            workOrdersResult.error ||
+              "No se pudieron cargar las órdenes de trabajo",
+          );
+        }
+
+        if (!settingsResponse.ok) {
+          throw new Error(
+            settingsResult.error || "No se pudo cargar la criticidad vehicular",
+          );
+        }
+
+        if (!inspectionsResponse.ok) {
+          throw new Error(
+            inspectionsResult.error ||
+              "No se pudieron cargar las checklists vehiculares",
+          );
+        }
+
+        const workOrders: WorkOrderForCriticality[] =
+          workOrdersResult.data || [];
+
+        const settings: VehicleCriticalitySetting[] =
+          settingsResult.data || [];
+
+        const inspections: VehicleSecurityInspection[] =
+          inspectionsResult.data || [];
+
+        const vehiclesWithChecklist = new Set<string>();
+
+        inspections.forEach((inspection) => {
+          const vehicleCode = String(inspection.vehicle_code || "").trim();
+
+          if (!vehicleCode) return;
+
+          vehiclesWithChecklist.add(normalizeText(vehicleCode));
+        });
+
+        const sixMonthsAgo = getSixMonthsAgo();
+        const workOrdersByVehicle = new Map<
+          string,
+          WorkOrderForCriticality[]
+        >();
+
+        workOrders.forEach((order) => {
+          const vehicleCode = String(order.vehicle_code || "").trim();
+
+          if (!vehicleCode) return;
+
+          const normalizedVehicleCode = normalizeText(vehicleCode);
+          const currentOrders =
+            workOrdersByVehicle.get(normalizedVehicleCode) || [];
+
+          currentOrders.push(order);
+          workOrdersByVehicle.set(normalizedVehicleCode, currentOrders);
+        });
+
+        const nextCriticalityByVehicleCode: VehicleCriticalityByCode = {};
+
+        settings.forEach((setting) => {
+          const vehicleCode = String(setting.vehicle_code || "").trim();
+
+          if (!vehicleCode) return;
+
+          const normalizedVehicleCode = normalizeText(vehicleCode);
+          const hasChecklist = vehiclesWithChecklist.has(normalizedVehicleCode);
+
+          if (!hasChecklist) {
+            nextCriticalityByVehicleCode[normalizedVehicleCode] = "--";
+            return;
+          }
+
+          const vehicleOrders =
+            workOrdersByVehicle.get(normalizedVehicleCode) || [];
+
+          const validOtCount = vehicleOrders.filter((order) => {
+            const date = getDateValue(order.entry_date);
+
+            if (!date || date < sixMonthsAgo) return false;
+
+            const failureType = normalizeText(order.failure_type);
+            const repairType = normalizeText(order.repair_type);
+
+            return (
+              !failureType.includes("mantenimiento") &&
+              !repairType.includes("mantenimiento")
+            );
+          }).length;
+
+          const mechanicalScore = getMechanicalReliabilityScore(validOtCount);
+          const serviceCriticality = toNumber(setting.service_criticality);
+          const replacementScore = toNumber(setting.replacement_score);
+          const securityScore = toNumber(setting.security_score);
+
+          const totalCriticality =
+            mechanicalScore +
+            serviceCriticality +
+            replacementScore +
+            securityScore;
+
+          nextCriticalityByVehicleCode[normalizedVehicleCode] =
+            getCriticalityValue(totalCriticality);
+        });
+
+        setCriticalityByVehicleCode(nextCriticalityByVehicleCode);
+      } catch (error) {
+        console.error("Error loading vehicle criticality:", error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar la criticidad vehicular",
+        );
+      } finally {
+        setCriticalityLoading(false);
+      }
+    };
+
+    fetchCriticalityData();
+  }, []);
+
+  useEffect(() => {
+    if (!formData.vehicle_code) return;
+
+    const calculatedCriticality =
+      criticalityByVehicleCode[normalizeText(formData.vehicle_code)];
+
+    setFormData((prev) => ({
+      ...prev,
+      criticality: getCriticalityValue(calculatedCriticality),
+    }));
+  }, [criticalityByVehicleCode, formData.vehicle_code]);
 
   const vehicleCodeOptions = useMemo(
     () => getUniqueOptions(VEHICLE_OPTIONS.map((item) => item.code)),
@@ -293,6 +507,9 @@ export function WorkOrderCreateClient() {
     }));
   };
 
+  const getCalculatedCriticalityForCode = (vehicleCode: string) => {
+    return criticalityByVehicleCode[normalizeText(vehicleCode)] ?? "--";
+  };
 
   const handleSupplyItemChange = (
     index: number,
@@ -321,12 +538,14 @@ export function WorkOrderCreateClient() {
       (item) => normalizeText(item.code) === normalizeText(value),
     );
 
+    const calculatedCriticality = getCalculatedCriticalityForCode(value);
+
     setFormData((prev) => ({
       ...prev,
       vehicle_code: value,
       vehicle: selectedVehicle?.vehicle ?? prev.vehicle,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: getCriticalityValue(selectedVehicle?.criticality),
+      criticality: getCriticalityValue(calculatedCriticality),
     }));
   };
 
@@ -335,12 +554,16 @@ export function WorkOrderCreateClient() {
       (item) => normalizeText(item.vehicle) === normalizeText(value),
     );
 
+    const nextVehicleCode = selectedVehicle?.code ?? formData.vehicle_code;
+    const calculatedCriticality =
+      getCalculatedCriticalityForCode(nextVehicleCode);
+
     setFormData((prev) => ({
       ...prev,
       vehicle: value,
       vehicle_code: selectedVehicle?.code ?? prev.vehicle_code,
       license_plate: selectedVehicle?.licensePlate ?? prev.license_plate,
-      criticality: getCriticalityValue(selectedVehicle?.criticality),
+      criticality: getCriticalityValue(calculatedCriticality),
     }));
   };
 
@@ -349,6 +572,7 @@ export function WorkOrderCreateClient() {
       if (key === "criticality") return value !== "--";
       if (key === "status") return false;
       if (key === "amount_currency") return false;
+
       if (key === "supplies_needed") {
         return getCleanSupplyItems(value as SupplyItem[]).length > 0;
       }
@@ -414,7 +638,10 @@ export function WorkOrderCreateClient() {
     recognition.onerror = (event) => {
       console.warn("Error en dictado por voz:", event.error);
 
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      if (
+        event.error === "not-allowed" ||
+        event.error === "service-not-allowed"
+      ) {
         toast.error(
           "El navegador bloqueó el dictado. Revisá permisos del sitio, permisos del sistema y probá recargar la página.",
         );
@@ -515,7 +742,11 @@ export function WorkOrderCreateClient() {
   };
 
   return (
-    <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-6">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={handleFormKeyDown}
+      className="space-y-6"
+    >
       <Button
         type="button"
         variant="ghost"
@@ -621,7 +852,10 @@ export function WorkOrderCreateClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <CriticalityField value={formData.criticality} />
+            <CriticalityField
+              value={formData.criticality}
+              loading={criticalityLoading}
+            />
 
             <ComboField
               label="Tipo de falla"
@@ -707,7 +941,11 @@ export function WorkOrderCreateClient() {
                 inputMode="decimal"
                 value={formData.amount}
                 onChange={(event) => handleChange("amount", event.target.value)}
-                placeholder={formData.amount_currency === "USD" ? "Ej: 120" : "Ej: 150000"}
+                placeholder={
+                  formData.amount_currency === "USD"
+                    ? "Ej: 120"
+                    : "Ej: 150000"
+                }
               />
             </Field>
           </div>
@@ -769,8 +1007,6 @@ export function WorkOrderCreateClient() {
               placeholder="Escribí observaciones de la orden de trabajo o usá el dictado por voz..."
               className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
-
-
           </div>
         </CardContent>
       </Card>
@@ -858,7 +1094,13 @@ function DateField({
   );
 }
 
-function CriticalityField({ value }: { value: string }) {
+function CriticalityField({
+  value,
+  loading,
+}: {
+  value: string;
+  loading?: boolean;
+}) {
   const criticality = getCriticalityValue(value);
 
   return (
@@ -870,8 +1112,20 @@ function CriticalityField({ value }: { value: string }) {
           criticality,
         )}`}
       >
-        {criticality}
+        {loading ? (
+          <span className="flex items-center gap-2 text-slate-700">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando criticidad...
+          </span>
+        ) : (
+          criticality
+        )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Se toma automáticamente del módulo Criticidad Vehicular. Si el vehículo
+        no tiene checklist, se muestra --.
+      </p>
     </div>
   );
 }
