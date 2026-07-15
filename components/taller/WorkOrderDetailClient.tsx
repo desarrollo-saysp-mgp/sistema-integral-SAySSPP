@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { WorkOrder } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowLeft,
   CalendarDays,
   Car,
   ClipboardList,
   FileText,
+  Loader2,
   Package,
   Pencil,
   User,
@@ -25,6 +36,7 @@ import jsPDF from "jspdf";
 import autoTable, { type CellHookData } from "jspdf-autotable";
 
 type AmountCurrency = "ARS" | "USD";
+type PdfExportMode = "first" | "second" | "both";
 
 type SupplyItem = {
   code?: string | null;
@@ -111,12 +123,12 @@ const EMPTY_SUPPLY_ITEMS: SupplyItem[] = Array.from({ length: 5 }, () => ({
 const getSupplyItems = (order: WorkOrderWithSupplies) => {
   const cleanItems = Array.isArray(order.supplies_needed)
     ? order.supplies_needed
-        .map((item) => ({
-          code: String(item?.code || "").trim(),
-          units: String(item?.units || "").trim(),
-          description: String(item?.description || "").trim(),
-        }))
-        .filter((item) => item.code || item.units || item.description)
+      .map((item) => ({
+        code: String(item?.code || "").trim(),
+        units: String(item?.units || "").trim(),
+        description: String(item?.description || "").trim(),
+      }))
+      .filter((item) => item.code || item.units || item.description)
     : [];
 
   return cleanItems;
@@ -127,7 +139,16 @@ const getSupplyItemsForDisplay = (order: WorkOrderWithSupplies) => {
   return cleanItems.length > 0 ? cleanItems : EMPTY_SUPPLY_ITEMS;
 };
 
-export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies }) {
+export function WorkOrderDetailClient({
+  order,
+}: {
+  order: WorkOrderWithSupplies;
+}) {
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportingMode, setExportingMode] = useState<PdfExportMode | null>(
+    null,
+  );
+
   const amountCurrency = getAmountCurrency(order);
 
   const formatDate = (dateString?: string | null) => {
@@ -238,8 +259,10 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies 
     });
   };
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (mode: PdfExportMode) => {
     try {
+      setExportingMode(mode);
+
       const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -250,6 +273,7 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies 
       const pageHeight = doc.internal.pageSize.getHeight();
       const marginX = 14;
       const contentWidth = pageWidth - marginX * 2;
+      const totalPages = mode === "both" ? 2 : 1;
 
       let logoDataUrl: string | null = null;
 
@@ -291,11 +315,18 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies 
         doc.setTextColor(100, 116, 139);
         doc.text(`Exportado: ${new Date().toLocaleString("es-AR")}`, marginX, 38);
 
-        doc.setFontSize(7);
-        doc.setTextColor(100);
-        doc.text(`Página ${pageNumber} de 2`, pageWidth - marginX, pageHeight - 7, {
-          align: "right",
-        });
+        if (totalPages > 1) {
+          doc.setFontSize(7);
+          doc.setTextColor(100);
+          doc.text(
+            `Página ${pageNumber} de ${totalPages}`,
+            pageWidth - marginX,
+            pageHeight - 7,
+            {
+              align: "right",
+            },
+          );
+        }
       };
 
       const registroRows: string[][] = [
@@ -448,359 +479,498 @@ export function WorkOrderDetailClient({ order }: { order: WorkOrderWithSupplies 
         return typeof finalY === "number" ? finalY : 45;
       };
 
-      drawHeader(1);
+      const drawFirstPage = (pageNumber: number) => {
+        drawHeader(pageNumber);
 
-      const firstPageRows: string[][] = [
-        ["INFORMACIÓN BÁSICA", ""],
-        ["N° orden de trabajo", cleanValue(order.order_number)],
-        ["Fecha de ingreso", formatDate(order.entry_date)],
-        ["Estado", cleanValue(order.status)],
-        ["Área solicitante", cleanValue(order.requesting_area)],
-        ["Reporte de falla", cleanValue(order.failure_report)],
-        ["Tipo de reparación", cleanValue(order.repair_type)],
+        const firstPageRows: string[][] = [
+          ["INFORMACIÓN BÁSICA", ""],
+          ["N° orden de trabajo", cleanValue(order.order_number)],
+          ["Fecha de ingreso", formatDate(order.entry_date)],
+          ["Estado", cleanValue(order.status)],
+          ["Área solicitante", cleanValue(order.requesting_area)],
+          ["Reporte de falla", cleanValue(order.failure_report)],
+          ["Tipo de reparación", cleanValue(order.repair_type)],
 
-        ["VEHÍCULO Y FALLA", ""],
-        ["Código de vehículo", cleanValue(order.vehicle_code)],
-        ["Vehículo", cleanValue(order.vehicle)],
-        ["Dominio", cleanValue(order.license_plate)],
-        ["Criticidad", cleanValue(order.criticality)],
-        ["Fecha ingreso al taller", formatDate(order.workshop_entry_date)],
-        ["Chofer", cleanValue(order.driver)],
+          ["VEHÍCULO Y FALLA", ""],
+          ["Código de vehículo", cleanValue(order.vehicle_code)],
+          ["Vehículo", cleanValue(order.vehicle)],
+          ["Dominio", cleanValue(order.license_plate)],
+          ["Criticidad", cleanValue(order.criticality)],
+          ["Fecha ingreso al taller", formatDate(order.workshop_entry_date)],
+          ["Chofer", cleanValue(order.driver)],
 
-        ...registroRows,
-      ];
+          ...registroRows,
+        ];
 
-      drawTable(firstPageRows, 45);
+        drawTable(firstPageRows, 45);
 
-      doc.setDrawColor(51, 65, 85);
-      doc.setLineWidth(0.25);
-      doc.line(70, pageHeight - 42, pageWidth - 70, pageHeight - 42);
+        doc.setDrawColor(51, 65, 85);
+        doc.setLineWidth(0.25);
+        doc.line(70, pageHeight - 42, pageWidth - 70, pageHeight - 42);
 
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      doc.text(
-        "Firma y Aclaración Capataz",
-        pageWidth / 2,
-        pageHeight - 37,
-        { align: "center" },
-      );
-
-      doc.addPage();
-      drawHeader(2);
-
-      const secondPageRows: string[][] = [
-        ["VEHÍCULO Y FALLA", ""],
-        ["Tipo de falla", cleanValue(order.failure_type)],
-        ["Localización de falla", cleanValue(order.failure_location)],
-        ["Fecha de salida", formatDate(order.exit_date)],
-
-        ["REPUESTOS Y PROVEEDOR", ""],
-        ["Requiere repuesto", cleanValue(order.requires_spare_part)],
-        ["Detalle de repuesto", cleanValue(order.spare_part_detail)],
-      ];
-
-      if (hasRealValue(order.spare_part_code)) {
-        secondPageRows.push([
-          "Código de repuesto",
-          cleanValue(order.spare_part_code),
-        ]);
-      }
-
-      if (hasRealValue(order.units)) {
-        secondPageRows.push(["Unidades", cleanValue(order.units)]);
-      }
-
-      secondPageRows.push(
-        ["Proveedor/es", formatProviders(order.provider)],
-        ["Moneda", amountCurrency],
-        ["Monto", formatMoney(order.amount, amountCurrency)],
-      );
-
-      drawTable(secondPageRows, 45);
-
-      if (getSupplyItems(order).length > 0) {
-        drawSuppliesTable(getLastAutoTableY() + 6);
-      }
-
-      const observationsRows: string[][] = [
-        ["OBSERVACIONES", ""],
-        ["Observaciones", cleanObservations(order.observations)],
-        ...registroRows,
-      ];
-
-      drawTable(observationsRows, getLastAutoTableY() + 6);
-
-      doc.setDrawColor(51, 65, 85);
-      doc.setLineWidth(0.25);
-
-      const signatureY = pageHeight - 36;
-      const signatureWidth = 48;
-      const signatureGap = 10;
-      const totalSignatureWidth = signatureWidth * 3 + signatureGap * 2;
-      const signatureStartX = (pageWidth - totalSignatureWidth) / 2;
-
-      const signatures = [
-        "Firma y Aclaración Taller",
-        "Firma y Aclaración Suministro",
-        "Firma y Aclaración Director/Secretario",
-      ];
-
-      signatures.forEach((label, index) => {
-        const x = signatureStartX + index * (signatureWidth + signatureGap);
-
-        doc.line(x, signatureY, x + signatureWidth, signatureY);
-
-        doc.setFontSize(7.2);
+        doc.setFontSize(8);
         doc.setTextColor(51, 65, 85);
-        doc.text(label, x + signatureWidth / 2, signatureY + 5, {
+        doc.text("Firma y Aclaración Capataz", pageWidth / 2, pageHeight - 37, {
           align: "center",
         });
-      });
+      };
 
-      doc.save(`ot_${cleanValue(order.order_number)}.pdf`);
+      const drawSecondPage = (pageNumber: number) => {
+        drawHeader(pageNumber);
+
+        const secondPageRows: string[][] = [
+          ["VEHÍCULO Y FALLA", ""],
+          ["Tipo de falla", cleanValue(order.failure_type)],
+          ["Localización de falla", cleanValue(order.failure_location)],
+          ["Fecha de salida", formatDate(order.exit_date)],
+
+          ["REPUESTOS Y PROVEEDOR", ""],
+          ["Requiere repuesto", cleanValue(order.requires_spare_part)],
+          ["Detalle de repuesto", cleanValue(order.spare_part_detail)],
+        ];
+
+        if (hasRealValue(order.spare_part_code)) {
+          secondPageRows.push([
+            "Código de repuesto",
+            cleanValue(order.spare_part_code),
+          ]);
+        }
+
+        if (hasRealValue(order.units)) {
+          secondPageRows.push(["Unidades", cleanValue(order.units)]);
+        }
+
+        secondPageRows.push(
+          ["Proveedor/es", formatProviders(order.provider)],
+          ["Moneda", amountCurrency],
+          ["Monto", formatMoney(order.amount, amountCurrency)],
+        );
+
+        drawTable(secondPageRows, 45);
+
+        if (getSupplyItems(order).length > 0) {
+          drawSuppliesTable(getLastAutoTableY() + 6);
+        }
+
+        const observationsRows: string[][] = [
+          ["OBSERVACIONES", ""],
+          ["Observaciones", cleanObservations(order.observations)],
+          ...registroRows,
+        ];
+
+        drawTable(observationsRows, getLastAutoTableY() + 6);
+
+        doc.setDrawColor(51, 65, 85);
+        doc.setLineWidth(0.25);
+
+        const signatureY = pageHeight - 36;
+        const signatureWidth = 48;
+        const signatureGap = 10;
+        const totalSignatureWidth = signatureWidth * 3 + signatureGap * 2;
+        const signatureStartX = (pageWidth - totalSignatureWidth) / 2;
+
+        const signatures = [
+          "Firma y Aclaración Taller",
+          "Firma y Aclaración Suministro",
+          "Firma y Aclaración Director/Secretario",
+        ];
+
+        signatures.forEach((label, index) => {
+          const x = signatureStartX + index * (signatureWidth + signatureGap);
+
+          doc.line(x, signatureY, x + signatureWidth, signatureY);
+
+          doc.setFontSize(7.2);
+          doc.setTextColor(51, 65, 85);
+          doc.text(label, x + signatureWidth / 2, signatureY + 5, {
+            align: "center",
+          });
+        });
+      };
+
+      if (mode === "first") {
+        drawFirstPage(1);
+      }
+
+      if (mode === "second") {
+        drawSecondPage(1);
+      }
+
+      if (mode === "both") {
+        drawFirstPage(1);
+        doc.addPage();
+        drawSecondPage(2);
+      }
+
+      const suffix =
+        mode === "first"
+          ? "hoja_1"
+          : mode === "second"
+            ? "hoja_2"
+            : "completa";
+
+      doc.save(`ot_${cleanValue(order.order_number)}_${suffix}.pdf`);
+
+      setExportDialogOpen(false);
       toast.success("PDF de la OT exportado correctamente");
     } catch (error) {
       console.error("Error exporting OT PDF:", error);
       toast.error("Error al exportar PDF");
+    } finally {
+      setExportingMode(null);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <Button asChild variant="ghost" className="-ml-2 gap-2">
-          <Link href="/dashboard/taller/ordenes-trabajo">
-            <ArrowLeft className="h-4 w-4" />
-            Volver al registro
-          </Link>
-        </Button>
-
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleExportPDF}
-            className="gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Exportar PDF
-          </Button>
-
-          <Button asChild className="gap-2">
-            <Link href={`/dashboard/taller/ordenes-trabajo/${order.id}/edit`}>
-              <Pencil className="h-4 w-4" />
-              Editar OT
+    <>
+      <div className="space-y-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <Button asChild variant="ghost" className="-ml-2 gap-2">
+            <Link href="/dashboard/taller/ordenes-trabajo">
+              <ArrowLeft className="h-4 w-4" />
+              Volver al registro
             </Link>
           </Button>
-        </div>
-      </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">
-            OT {cleanValue(order.order_number)}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Detalle de la orden de trabajo.
-          </p>
-        </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setExportDialogOpen(true)}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Exportar PDF
+            </Button>
 
-        <Badge
-          className={`${getStatusBadgeClass(order.status)} border px-3 py-1 text-sm`}
-        >
-          {order.status || "-"}
-        </Badge>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <ClipboardList className="h-5 w-5 text-[#00A27F]" />
-            Información básica
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Info
-              label="N° orden de trabajo"
-              value={cleanValue(order.order_number)}
-            />
-            <Info
-              label="Fecha de ingreso"
-              value={formatDate(order.entry_date)}
-            />
-            <Info label="Estado" value={cleanValue(order.status)} />
-            <Info
-              label="Área solicitante"
-              value={cleanValue(order.requesting_area)}
-            />
-            <Info
-              label="Reporte de falla"
-              value={cleanValue(order.failure_report)}
-            />
-            <Info
-              label="Tipo de reparación"
-              value={cleanValue(order.repair_type)}
-            />
+            <Button asChild className="gap-2">
+              <Link href={`/dashboard/taller/ordenes-trabajo/${order.id}/edit`}>
+                <Pencil className="h-4 w-4" />
+                Editar OT
+              </Link>
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Car className="h-5 w-5 text-[#00A27F]" />
-            Vehículo y falla
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Info
-              label="Código de vehículo"
-              value={cleanValue(order.vehicle_code)}
-            />
-            <Info label="Vehículo" value={cleanValue(order.vehicle)} />
-            <Info label="Dominio" value={cleanValue(order.license_plate)} />
-            <CriticalityInfo value={order.criticality} />
-            <Info
-              label="Tipo de falla"
-              value={cleanValue(order.failure_type)}
-            />
-            <Info
-              label="Localización de falla"
-              value={cleanValue(order.failure_location)}
-            />
-            <Info
-              label="Fecha de salida"
-              value={formatDate(order.exit_date)}
-            />
-            <Info
-              label="Fecha ingreso al taller"
-              value={formatDate(order.workshop_entry_date)}
-            />
-            <Info
-              label="Fecha de cierre"
-              value={formatDate(order.closed_date)}
-            />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">
+              OT {cleanValue(order.order_number)}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Detalle de la orden de trabajo.
+            </p>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Package className="h-5 w-5 text-[#00A27F]" />
-            Repuestos y proveedor
-          </CardTitle>
-        </CardHeader>
+          <Badge
+            className={`${getStatusBadgeClass(order.status)} border px-3 py-1 text-sm`}
+          >
+            {order.status || "-"}
+          </Badge>
+        </div>
 
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Info
-              label="Requiere repuesto"
-              value={cleanValue(order.requires_spare_part)}
-            />
-            <Info
-              label="Detalle de repuesto"
-              value={cleanValue(order.spare_part_detail)}
-            />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ClipboardList className="h-5 w-5 text-[#00A27F]" />
+              Información básica
+            </CardTitle>
+          </CardHeader>
 
-            {hasRealValue(order.spare_part_code) && (
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Info
-                label="Código de repuesto"
-                value={cleanValue(order.spare_part_code)}
+                label="N° orden de trabajo"
+                value={cleanValue(order.order_number)}
               />
-            )}
+              <Info
+                label="Fecha de ingreso"
+                value={formatDate(order.entry_date)}
+              />
+              <Info label="Estado" value={cleanValue(order.status)} />
+              <Info
+                label="Área solicitante"
+                value={cleanValue(order.requesting_area)}
+              />
+              <Info
+                label="Reporte de falla"
+                value={cleanValue(order.failure_report)}
+              />
+              <Info
+                label="Tipo de reparación"
+                value={cleanValue(order.repair_type)}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-            {hasRealValue(order.units) && (
-              <Info label="Unidades" value={cleanValue(order.units)} />
-            )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Car className="h-5 w-5 text-[#00A27F]" />
+              Vehículo y falla
+            </CardTitle>
+          </CardHeader>
 
-          </div>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Info
+                label="Código de vehículo"
+                value={cleanValue(order.vehicle_code)}
+              />
+              <Info label="Vehículo" value={cleanValue(order.vehicle)} />
+              <Info label="Dominio" value={cleanValue(order.license_plate)} />
+              <CriticalityInfo value={order.criticality} />
+              <Info
+                label="Tipo de falla"
+                value={cleanValue(order.failure_type)}
+              />
+              <Info
+                label="Localización de falla"
+                value={cleanValue(order.failure_location)}
+              />
+              <Info
+                label="Fecha de salida"
+                value={formatDate(order.exit_date)}
+              />
+              <Info
+                label="Fecha ingreso al taller"
+                value={formatDate(order.workshop_entry_date)}
+              />
+              <Info
+                label="Fecha de cierre"
+                value={formatDate(order.closed_date)}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="mt-6 space-y-3">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Insumos y/o repuestos necesarios
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Código, unidades y descripción de insumos solicitados.
-              </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Package className="h-5 w-5 text-[#00A27F]" />
+              Repuestos y proveedor
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Info
+                label="Requiere repuesto"
+                value={cleanValue(order.requires_spare_part)}
+              />
+              <Info
+                label="Detalle de repuesto"
+                value={cleanValue(order.spare_part_detail)}
+              />
+
+              {hasRealValue(order.spare_part_code) && (
+                <Info
+                  label="Código de repuesto"
+                  value={cleanValue(order.spare_part_code)}
+                />
+              )}
+
+              {hasRealValue(order.units) && (
+                <Info label="Unidades" value={cleanValue(order.units)} />
+              )}
             </div>
 
-            <div className="overflow-hidden rounded-xl border">
-              <div className="grid grid-cols-[120px_80px_1fr] bg-muted/60 text-xs font-semibold text-muted-foreground">
-                <div className="border-r px-3 py-2">Código</div>
-                <div className="border-r px-3 py-2">Un.</div>
-                <div className="px-3 py-2">Descripción</div>
+            <div className="mt-6 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Insumos y/o repuestos necesarios
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Código, unidades y descripción de insumos solicitados.
+                </p>
               </div>
 
-              {getSupplyItemsForDisplay(order).map((item, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[120px_80px_1fr] border-t text-sm"
-                >
-                  <div className="border-r px-3 py-2">
-                    {cleanValue(item.code)}
+              <div className="overflow-x-auto rounded-xl border">
+                <div className="min-w-[520px]">
+                  <div className="grid grid-cols-[120px_80px_1fr] bg-muted/60 text-xs font-semibold text-muted-foreground">
+                    <div className="border-r px-3 py-2">Código</div>
+                    <div className="border-r px-3 py-2">Un.</div>
+                    <div className="px-3 py-2">Descripción</div>
                   </div>
-                  <div className="border-r px-3 py-2">
-                    {cleanValue(item.units)}
-                  </div>
-                  <div className="px-3 py-2">
-                    {cleanValue(item.description)}
-                  </div>
+
+                  {getSupplyItemsForDisplay(order).map((item, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-[120px_80px_1fr] border-t text-sm"
+                    >
+                      <div className="border-r px-3 py-2">
+                        {cleanValue(item.code)}
+                      </div>
+                      <div className="border-r px-3 py-2">
+                        {cleanValue(item.units)}
+                      </div>
+                      <div className="px-3 py-2">
+                        {cleanValue(item.description)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Info label="Proveedor/es" value={formatProviders(order.provider)} />
-            <Info label="Moneda" value={amountCurrency} />
-            <Info label="Monto" value={formatMoney(order.amount)} />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Info
+                label="Proveedor/es"
+                value={formatProviders(order.provider)}
+              />
+              <Info label="Moneda" value={amountCurrency} />
+              <Info label="Monto" value={formatMoney(order.amount)} />
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <User className="h-5 w-5 text-[#00A27F]" />
-            Chofer y observaciones
-          </CardTitle>
-        </CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <User className="h-5 w-5 text-[#00A27F]" />
+              Chofer y observaciones
+            </CardTitle>
+          </CardHeader>
 
-        <CardContent className="space-y-4">
-          <Info label="Chofer" value={cleanValue(order.driver)} />
+          <CardContent className="space-y-4">
+            <Info label="Chofer" value={cleanValue(order.driver)} />
 
-          <div>
-            <p className="mb-2 text-sm font-medium text-muted-foreground">
-              Observaciones
+            <div>
+              <p className="mb-2 text-sm font-medium text-muted-foreground">
+                Observaciones
+              </p>
+              <p className="min-h-[80px] whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
+                {cleanObservations(order.observations)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="grid grid-cols-1 gap-3 py-5 text-xs text-muted-foreground md:grid-cols-2">
+            <p className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Creado: {new Date(order.created_at).toLocaleString("es-AR")}
             </p>
-            <p className="min-h-[80px] whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
-              {cleanObservations(order.observations)}
+
+            <p className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Última modificación:{" "}
+              {new Date(order.updated_at).toLocaleString("es-AR")}
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <AlertDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-3xl rounded-2xl p-4 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">
+              ¿Qué querés exportar?
+            </AlertDialogTitle>
+
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Elegí si querés generar solo la primera hoja, solo la segunda hoja
+              o la orden completa en un mismo PDF.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="grid grid-cols-1 gap-3 py-3 md:grid-cols-3">
+            <ExportOptionButton
+              title="Primera hoja"
+              description="Datos básicos, vehículo, criticidad, chofer y firma del capataz."
+              active={exportingMode === "first"}
+              disabled={exportingMode !== null}
+              onClick={() => handleExportPDF("first")}
+            />
+
+            <ExportOptionButton
+              title="Segunda hoja"
+              description="Falla, repuestos, proveedor, observaciones y firmas finales."
+              active={exportingMode === "second"}
+              disabled={exportingMode !== null}
+              onClick={() => handleExportPDF("second")}
+            />
+
+            <ExportOptionButton
+              title="Ambas hojas"
+              description="Exporta la OT completa en un solo PDF."
+              active={exportingMode === "both"}
+              disabled={exportingMode !== null}
+              primary
+              onClick={() => handleExportPDF("both")}
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardContent className="grid grid-cols-1 gap-3 py-5 text-xs text-muted-foreground md:grid-cols-2">
-          <p className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />
-            Creado: {new Date(order.created_at).toLocaleString("es-AR")}
-          </p>
+          {exportingMode !== null && (
+            <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Generando PDF, esperá unos segundos...
+            </div>
+          )}
 
-          <p className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />
-            Última modificación:{" "}
-            {new Date(order.updated_at).toLocaleString("es-AR")}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={exportingMode !== null}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function ExportOptionButton({
+  title,
+  description,
+  active,
+  disabled,
+  primary,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  active?: boolean;
+  disabled?: boolean;
+  primary?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`min-h-[132px] rounded-2xl border p-4 text-left shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${primary
+          ? "border-[#00A27F] bg-[#00A27F] text-white hover:bg-[#00906f]"
+          : "bg-background hover:border-[#00A27F] hover:bg-[#00A27F]/5"
+        } ${active ? "ring-2 ring-[#00A27F] ring-offset-2" : ""}`}
+    >
+      <div
+        className={`mb-3 flex h-10 w-10 items-center justify-center rounded-full ${primary ? "bg-white/20 text-white" : "bg-[#00A27F]/10 text-[#00A27F]"
+          }`}
+      >
+        {active ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <FileText className="h-5 w-5" />
+        )}
+      </div>
+
+      <p className={primary ? "font-semibold text-white" : "font-semibold"}>
+        {title}
+      </p>
+
+      <p
+        className={`mt-1 text-xs leading-relaxed ${primary ? "text-white/85" : "text-muted-foreground"
+          }`}
+      >
+        {description}
+      </p>
+    </button>
   );
 }
 
