@@ -309,10 +309,10 @@ const getInspectionProblems = (
       };
     })
     .filter(Boolean) as Array<{
-    label: string;
-    value: ChecklistValue;
-    problem: string;
-  }>;
+      label: string;
+      value: ChecklistValue;
+      problem: string;
+    }>;
 };
 
 export function VehicleSecurityClient() {
@@ -469,8 +469,8 @@ export function VehicleSecurityClient() {
       selectedReportVehicle === "all"
         ? reportVehicles
         : reportVehicles.filter(
-            (item) => item.inspection.id === selectedReportVehicle,
-          );
+          (item) => item.inspection.id === selectedReportVehicle,
+        );
 
     if (selectedItems.length === 0) {
       toast.error("No hay vehículos con problemas para generar el informe");
@@ -537,13 +537,8 @@ export function VehicleSecurityClient() {
         bold: true,
       });
 
-      addText(`Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}`, marginX, {
-        fontSize: 9,
-        color: [90, 90, 90],
-      });
-
       addText(
-        `Vehículos incluidos: ${selectedItems.length}`,
+        `Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}`,
         marginX,
         {
           fontSize: 9,
@@ -551,13 +546,18 @@ export function VehicleSecurityClient() {
         },
       );
 
+      addText(`Vehículos incluidos: ${selectedItems.length}`, marginX, {
+        fontSize: 9,
+        color: [90, 90, 90],
+      });
+
       y += 3;
 
       selectedItems.forEach((item, index) => {
         const inspection = item.inspection;
         const problems = item.problems;
 
-        addPageIfNeeded(55);
+        addPageIfNeeded(45);
 
         if (index > 0) {
           doc.setDrawColor(220, 220, 220);
@@ -575,8 +575,7 @@ export function VehicleSecurityClient() {
         );
 
         addText(
-          `Dominio: ${inspection.license_plate || "-"}   |   Dirección: ${
-            inspection.area || "-"
+          `Dominio: ${inspection.license_plate || "-"}   |   Dirección: ${inspection.area || "-"
           }   |   Última checklist: ${formatDate(inspection.inspection_date)}`,
           marginX,
           {
@@ -586,8 +585,7 @@ export function VehicleSecurityClient() {
         );
 
         addText(
-          `Estado general: ${
-            inspection.state_percent ?? "-"
+          `Estado general: ${inspection.state_percent ?? "-"
           }%   |   Seguridad: ${inspection.security_score}`,
           marginX,
           {
@@ -604,12 +602,7 @@ export function VehicleSecurityClient() {
         });
 
         problems.forEach((problem) => {
-          const bullet =
-            problem.value === "bad"
-              ? `• ${problem.label}: ${problem.problem}`
-              : `• ${problem.label}: ${problem.problem}`;
-
-          addText(bullet, marginX + 3, {
+          addText(`• ${problem.label}: ${problem.problem}`, marginX + 3, {
             fontSize: 9,
             maxWidth: pageWidth - marginX * 2 - 3,
           });
@@ -624,14 +617,7 @@ export function VehicleSecurityClient() {
           });
         }
 
-        y += 3;
-
-        addText("Firma / recepción taller: ________________________________", marginX, {
-          fontSize: 9,
-          color: [90, 90, 90],
-        });
-
-        y += 4;
+        y += 6;
       });
 
       const totalPages = doc.getNumberOfPages();
@@ -1269,7 +1255,7 @@ export function VehicleSecurityClient() {
 
                             <td className="px-3 py-3 text-center">
                               {inspection.state_percent !== null &&
-                              inspection.state_percent !== undefined
+                                inspection.state_percent !== undefined
                                 ? `${inspection.state_percent}%`
                                 : "-"}
                             </td>
@@ -1380,7 +1366,7 @@ export function VehicleSecurityClient() {
                               label="% Estado"
                               value={
                                 inspection.state_percent !== null &&
-                                inspection.state_percent !== undefined
+                                  inspection.state_percent !== undefined
                                   ? `${inspection.state_percent}%`
                                   : "-"
                               }
@@ -1628,9 +1614,8 @@ function SummaryCard({
   return (
     <button type="button" onClick={onClick} className="text-left">
       <Card
-        className={`h-full transition hover:border-primary/50 hover:shadow-md ${
-          active ? "border-primary bg-primary/5" : ""
-        }`}
+        className={`h-full transition hover:border-primary/50 hover:shadow-md ${active ? "border-primary bg-primary/5" : ""
+          }`}
       >
         <CardContent className="flex items-center justify-between gap-4 p-5">
           <div>
