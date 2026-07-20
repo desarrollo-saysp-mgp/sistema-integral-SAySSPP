@@ -10,7 +10,10 @@ const validatePhone = (phone: string): boolean => {
 
 const validateEmail = (email: string): boolean => {
   if (!email || !email.trim()) return true;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.trim().length <= 100;
+  return (
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+    email.trim().length <= 100
+  );
 };
 
 const validSinceWhenValues = [
@@ -22,7 +25,14 @@ const validSinceWhenValues = [
   "1 año",
 ];
 
-const validContactMethods = ["Presencial", "Telefono", "Email", "WhatsApp"];
+const validContactMethods = [
+  "Presencial",
+  "Telefono",
+  "Email",
+  "WhatsApp",
+  "Nota",
+];
+
 const validStatuses = ["En proceso", "Resuelto", "No resuelto"];
 const validArboladoLevels = ["Urgente", "Importante", "Orden de llegada"];
 
@@ -181,23 +191,23 @@ export async function GET(request: NextRequest) {
     const safeComplaints =
       currentUser.role === "ReclamosArbolado"
         ? allComplaints.filter(
-          (c) =>
-            c.form_variant === "arbolado" ||
-            arboladoServiceIds.includes(c.service_id),
-        )
+            (c) =>
+              c.form_variant === "arbolado" ||
+              arboladoServiceIds.includes(c.service_id),
+          )
         : currentUser.role === "ReclamosZyV"
           ? allComplaints.filter(
-            (c) =>
-              c.form_variant === "zyv" ||
-              zyvServiceIds.includes(c.service_id),
-          )
+              (c) =>
+                c.form_variant === "zyv" ||
+                zyvServiceIds.includes(c.service_id),
+            )
           : currentUser.role === "Reclamos"
             ? allComplaints.filter(
-              (c) =>
-                c.form_variant === "general" ||
-                c.form_variant === "import_excel" ||
-                c.form_variant == null,
-            )
+                (c) =>
+                  c.form_variant === "general" ||
+                  c.form_variant === "import_excel" ||
+                  c.form_variant == null,
+              )
             : allComplaints;
 
     return NextResponse.json({ data: safeComplaints });

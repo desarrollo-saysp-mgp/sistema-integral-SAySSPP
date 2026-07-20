@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { WorkOrder } from "@/types";
 import { VEHICLE_OPTIONS } from "@/lib/taller/options";
@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -193,6 +194,9 @@ export function WorkOrdersStatsClient() {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const statsPanelRef = useRef<HTMLDivElement | null>(null);
 
   const [areaFilter, setAreaFilter] = useState(ALL_VALUE);
   const [statusFilter, setStatusFilter] = useState(ALL_VALUE);
@@ -479,6 +483,111 @@ export function WorkOrdersStatsClient() {
     [filteredWorkOrders],
   );
 
+  const exportStatsPdf = async () => {
+    if (filteredWorkOrders.length === 0) {
+      toast.error("No hay datos para exportar con los filtros actuales");
+      return;
+    }
+
+    if (!statsPanelRef.current) {
+      toast.error("No se encontró el panel para exportar");
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+
+      const [{ default: jsPDF }, { domToPng }] = await Promise.all([
+        import("jspdf"),
+        import("modern-screenshot"),
+      ]);
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+
+      const panel = statsPanelRef.current;
+
+      const imageData = await domToPng(panel, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        width: panel.scrollWidth,
+        height: panel.scrollHeight,
+      });
+
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const margin = 8;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+
+      const imageWidth = usableWidth;
+
+      const imageProperties = pdf.getImageProperties(imageData);
+      const imageHeight =
+        (imageProperties.height * imageWidth) / imageProperties.width;
+
+      let remainingHeight = imageHeight;
+      let positionY = margin;
+
+      pdf.addImage(imageData, "PNG", margin, positionY, imageWidth, imageHeight);
+
+      remainingHeight -= usableHeight;
+
+      while (remainingHeight > 0) {
+        pdf.addPage();
+
+        positionY = margin - (imageHeight - remainingHeight);
+
+        pdf.addImage(
+          imageData,
+          "PNG",
+          margin,
+          positionY,
+          imageWidth,
+          imageHeight,
+        );
+
+        remainingHeight -= usableHeight;
+      }
+
+      const totalPages = pdf.getNumberOfPages();
+
+      if (totalPages > 1) {
+        for (let page = 1; page <= totalPages; page += 1) {
+          pdf.setPage(page);
+          pdf.setFontSize(7);
+          pdf.setTextColor(120);
+
+          pdf.text(
+            `Página ${page} de ${totalPages}`,
+            pageWidth - margin,
+            pageHeight - 5,
+            { align: "right" },
+          );
+        }
+      }
+
+      const fileName = `estadisticas_ot_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+
+      pdf.save(fileName);
+
+      toast.success("PDF de estadísticas exportado correctamente");
+    } catch (error) {
+      console.error("Error exporting stats PDF:", error);
+      toast.error("No se pudo exportar el PDF de estadísticas");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   if (!mounted) {
     return (
       <div className="space-y-5">
@@ -503,7 +612,10 @@ export function WorkOrdersStatsClient() {
         </Button>
       </div>
 
-      <Card>
+      <Card
+        ref={statsPanelRef}
+        className={exportingPdf ? "stats-panel-exporting" : ""}
+      >
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -518,8 +630,27 @@ export function WorkOrdersStatsClient() {
               </p>
             </div>
 
-            <div className="w-fit rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
-              {filteredWorkOrders.length} de {workOrders.length} OT analizadas
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <div className="w-fit rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
+                {filteredWorkOrders.length} de {workOrders.length} OT analizadas
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportStatsPdf}
+                disabled={
+                  loading || exportingPdf || filteredWorkOrders.length === 0
+                }
+                className="h-9 gap-2 rounded-xl pdf-hidden"
+              >
+                {exportingPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                Exportar PDF
+              </Button>
             </div>
           </div>
 
@@ -614,7 +745,7 @@ export function WorkOrdersStatsClient() {
               </div>
             </div>
 
-            <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:justify-between">
+            <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:justify-between pdf-hidden">
               <Button
                 type="button"
                 variant="outline"
@@ -626,16 +757,18 @@ export function WorkOrdersStatsClient() {
                 Limpiar filtros
               </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={fetchWorkOrders}
-                disabled={loading}
-                className="h-9 gap-2 rounded-xl"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Actualizar
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={fetchWorkOrders}
+                  disabled={loading}
+                  className="h-9 gap-2 rounded-xl"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Actualizar
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -860,6 +993,28 @@ export function WorkOrdersStatsClient() {
           )}
         </CardContent>
       </Card>
+
+      <style jsx global>{`
+        .stats-panel-exporting {
+          background: #ffffff !important;
+          color: #111827 !important;
+          box-shadow: none !important;
+        }
+
+        .stats-panel-exporting .pdf-hidden {
+          display: none !important;
+        }
+
+        .stats-panel-exporting * {
+          text-shadow: none !important;
+        }
+
+        .stats-panel-exporting .recharts-wrapper,
+        .stats-panel-exporting .recharts-surface,
+        .stats-panel-exporting svg {
+          overflow: visible !important;
+        }
+      `}</style>
     </div>
   );
 }

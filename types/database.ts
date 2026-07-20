@@ -86,6 +86,7 @@ export interface Database {
           | "Telefono"
           | "Email"
           | "WhatsApp"
+          | "Nota"
           | null;
           details: string | null;
           status: "En proceso" | "Resuelto" | "No resuelto";
@@ -118,6 +119,7 @@ export interface Database {
           | "Telefono"
           | "Email"
           | "WhatsApp"
+          | "Nota"
           | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
@@ -150,6 +152,7 @@ export interface Database {
           | "Telefono"
           | "Email"
           | "WhatsApp"
+          | "Nota"
           | null;
           details?: string | null;
           status?: "En proceso" | "Resuelto" | "No resuelto";
@@ -398,7 +401,7 @@ export type ComplaintHistoryWithUser = ComplaintHistory & {
 };
 
 export type ComplaintStatus = "En proceso" | "Resuelto" | "No resuelto";
-export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp";
+export type ContactMethod = "Presencial" | "Telefono" | "Email" | "WhatsApp" | "Nota";
 
 export type UserRole =
   | "Admin"

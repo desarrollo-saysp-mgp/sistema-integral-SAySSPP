@@ -56,7 +56,13 @@ export interface ZyvComplaintFormData {
   service_id: string;
   cause_id: string;
   since_when: SinceWhenPeriod | "";
-  contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp" | "";
+  contact_method:
+    | "Presencial"
+    | "Telefono"
+    | "Email"
+    | "WhatsApp"
+    | "Nota"
+    | "";
   details: string;
   status: "En proceso" | "Resuelto" | "No resuelto";
   zone: string;
@@ -92,7 +98,9 @@ export function ZyvComplaintForm({
     service_id: complaint?.service_id ? String(complaint.service_id) : "",
     cause_id: complaint?.cause_id ? String(complaint.cause_id) : "",
     since_when: (complaint?.since_when as SinceWhenPeriod) || "En el día",
-    contact_method: complaint?.contact_method || "Telefono",
+    contact_method:
+      (complaint?.contact_method as ZyvComplaintFormData["contact_method"]) ||
+      "Telefono",
     details: complaint?.details || "",
     status: complaint?.status || "En proceso",
     zone: complaint?.zone || "",
@@ -538,7 +546,12 @@ export function ZyvComplaintForm({
               </Label>
               <Select
                 value={formData.contact_method}
-                onValueChange={(value) => handleChange("contact_method", value)}
+                onValueChange={(value) =>
+                  handleChange(
+                    "contact_method",
+                    value as ZyvComplaintFormData["contact_method"],
+                  )
+                }
               >
                 <SelectTrigger id="contact_method">
                   <SelectValue />
@@ -548,6 +561,7 @@ export function ZyvComplaintForm({
                   <SelectItem value="Presencial">Presencial</SelectItem>
                   <SelectItem value="Email">Email</SelectItem>
                   <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                  <SelectItem value="Nota">Nota</SelectItem>
                 </SelectContent>
               </Select>
               {errors.contact_method && (
