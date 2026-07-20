@@ -43,7 +43,13 @@ export interface ComplaintFormData {
   cause_id: string;
   zone: string;
   since_when: SinceWhenPeriod | "";
-  contact_method: "Presencial" | "Telefono" | "Email" | "WhatsApp" | "";
+  contact_method:
+    | "Presencial"
+    | "Telefono"
+    | "Email"
+    | "WhatsApp"
+    | "Nota"
+    | "";
   details: string;
   status: "En proceso" | "Resuelto" | "No resuelto";
   referred: boolean;
@@ -81,9 +87,11 @@ export function ComplaintForm({
         service_id: complaintData.service_id
           ? complaintData.service_id.toString()
           : "",
-        cause_id: complaintData.cause_id ? complaintData.cause_id.toString() : "",
+        cause_id: complaintData.cause_id
+          ? complaintData.cause_id.toString()
+          : "",
         zone: complaintData.zone || "",
-        since_when: ((complaintData.since_when as SinceWhenPeriod) || ""),
+        since_when: (complaintData.since_when as SinceWhenPeriod) || "",
         contact_method: complaintData.contact_method || "",
         details: complaintData.details || "",
         status: complaintData.status,
@@ -113,7 +121,9 @@ export function ComplaintForm({
   const [formData, setFormData] = useState<ComplaintFormData>(() =>
     getInitialFormData(complaint),
   );
-  const [addressQuery, setAddressQuery] = useState(() => complaint?.address || "");
+  const [addressQuery, setAddressQuery] = useState(
+    () => complaint?.address || "",
+  );
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
 
   const [services, setServices] = useState<Service[]>([]);
@@ -199,9 +209,11 @@ export function ComplaintForm({
 
     if (isEditing && complaint) {
       const complaintWithDetails = complaint as ComplaintWithDetails;
+
       if (
         complaintWithDetails.cause &&
-        complaintWithDetails.cause.service_id === parseInt(formData.service_id) &&
+        complaintWithDetails.cause.service_id ===
+          parseInt(formData.service_id) &&
         !filtered.some((c) => c.id === complaintWithDetails.cause?.id)
       ) {
         filtered = [...filtered, complaintWithDetails.cause];
@@ -374,6 +386,7 @@ export function ComplaintForm({
     value: string | boolean,
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -401,11 +414,13 @@ export function ComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Información Básica</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="complaint_date">
               Fecha de Reclamo <span className="text-red-500">*</span>
             </Label>
+
             <Input
               id="complaint_date"
               type="date"
@@ -413,6 +428,7 @@ export function ComplaintForm({
               onChange={(e) => handleChange("complaint_date", e.target.value)}
               max={today}
             />
+
             {errors.complaint_date && (
               <p className="mt-1 text-sm text-red-500">
                 {errors.complaint_date}
@@ -426,11 +442,13 @@ export function ComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Datos del Reclamante</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="complainant_name">
               Nombre y Apellido <span className="text-red-500">*</span>
             </Label>
+
             <Input
               id="complainant_name"
               value={formData.complainant_name}
@@ -439,6 +457,7 @@ export function ComplaintForm({
               }
               placeholder="Ingrese nombre y apellido"
             />
+
             {errors.complainant_name && (
               <p className="mt-1 text-sm text-red-500">
                 {errors.complainant_name}
@@ -463,6 +482,7 @@ export function ComplaintForm({
                     autoComplete="off"
                     className="pr-10"
                   />
+
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
 
@@ -502,6 +522,7 @@ export function ComplaintForm({
               <Label htmlFor="street_number">
                 Número <span className="text-red-500">*</span>
               </Label>
+
               <Input
                 id="street_number"
                 type="text"
@@ -514,6 +535,7 @@ export function ComplaintForm({
                 }}
                 placeholder="Nro."
               />
+
               {errors.street_number && (
                 <p className="mt-1 text-sm text-red-500">
                   {errors.street_number}
@@ -526,13 +548,15 @@ export function ComplaintForm({
             <Label>
               Medio de Contacto <span className="text-red-500">*</span>
             </Label>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
               {(
                 [
                   "Presencial",
                   "Telefono",
                   "Email",
                   "WhatsApp",
+                  "Nota",
                 ] as const
               ).map((method) => (
                 <label
@@ -549,10 +573,12 @@ export function ComplaintForm({
                     }
                     className="h-4 w-4"
                   />
+
                   <span>{method}</span>
                 </label>
               ))}
             </div>
+
             {errors.contact_method && (
               <p className="mt-1 text-sm text-red-500">
                 {errors.contact_method}
@@ -563,6 +589,7 @@ export function ComplaintForm({
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="phone_number">Teléfono</Label>
+
               <Input
                 id="phone_number"
                 type="text"
@@ -576,10 +603,28 @@ export function ComplaintForm({
                 }}
                 placeholder="Ingrese teléfono (opcional, solo números)"
               />
+
               {errors.phone_number && (
                 <p className="mt-1 text-sm text-red-500">
                   {errors.phone_number}
                 </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+
+              <Input
+                id="email"
+                type="email"
+                maxLength={100}
+                value={formData.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                placeholder="Ingrese email (opcional)"
+              />
+
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-500">{errors.email}</p>
               )}
             </div>
           </div>
@@ -590,12 +635,14 @@ export function ComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Detalles del Reclamo</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="service_id">
                 Servicio <span className="text-red-500">*</span>
               </Label>
+
               <Select
                 value={formData.service_id}
                 onValueChange={(value) => handleChange("service_id", value)}
@@ -604,6 +651,7 @@ export function ComplaintForm({
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione un servicio" />
                 </SelectTrigger>
+
                 <SelectContent>
                   {services.map((service) => (
                     <SelectItem key={service.id} value={service.id.toString()}>
@@ -612,6 +660,7 @@ export function ComplaintForm({
                   ))}
                 </SelectContent>
               </Select>
+
               {errors.service_id && (
                 <p className="mt-1 text-sm text-red-500">
                   {errors.service_id}
@@ -623,6 +672,7 @@ export function ComplaintForm({
               <Label htmlFor="cause_id">
                 Causa <span className="text-red-500">*</span>
               </Label>
+
               <Select
                 key={`cause-select-${filteredCauses.length}-${formData.service_id}`}
                 value={formData.cause_id}
@@ -638,6 +688,7 @@ export function ComplaintForm({
                     }
                   />
                 </SelectTrigger>
+
                 <SelectContent>
                   {filteredCauses.map((cause) => (
                     <SelectItem key={cause.id} value={cause.id.toString()}>
@@ -646,6 +697,7 @@ export function ComplaintForm({
                   ))}
                 </SelectContent>
               </Select>
+
               {errors.cause_id && (
                 <p className="mt-1 text-sm text-red-500">{errors.cause_id}</p>
               )}
@@ -657,6 +709,7 @@ export function ComplaintForm({
               <Label htmlFor="zone">
                 Zona <span className="text-red-500">*</span>
               </Label>
+
               <Select
                 value={formData.zone}
                 onValueChange={(value) => handleChange("zone", value)}
@@ -664,11 +717,13 @@ export function ComplaintForm({
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione una zona" />
                 </SelectTrigger>
+
                 <SelectContent>
                   <SelectItem value="Sin zona">Sin zona</SelectItem>
 
                   {Array.from({ length: 16 }, (_, i) => {
                     const zone = String(i + 1);
+
                     return (
                       <SelectItem key={zone} value={zone}>
                         {zone}
@@ -677,6 +732,7 @@ export function ComplaintForm({
                   })}
                 </SelectContent>
               </Select>
+
               {errors.zone && (
                 <p className="mt-1 text-sm text-red-500">{errors.zone}</p>
               )}
@@ -686,6 +742,7 @@ export function ComplaintForm({
               <Label htmlFor="since_when">
                 Desde Cuándo <span className="text-red-500">*</span>
               </Label>
+
               <Select
                 value={formData.since_when}
                 onValueChange={(value) => handleChange("since_when", value)}
@@ -693,6 +750,7 @@ export function ComplaintForm({
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione el período" />
                 </SelectTrigger>
+
                 <SelectContent>
                   {SINCE_WHEN_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
@@ -701,6 +759,7 @@ export function ComplaintForm({
                   ))}
                 </SelectContent>
               </Select>
+
               {errors.since_when && (
                 <p className="mt-1 text-sm text-red-500">
                   {errors.since_when}
@@ -711,14 +770,16 @@ export function ComplaintForm({
 
           <div className="space-y-2">
             <Label htmlFor="details">Detalle</Label>
+
             <textarea
               id="details"
               value={formData.details}
               onChange={(e) => handleChange("details", e.target.value)}
               placeholder="Detalle del reclamo"
-              className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               rows={4}
             />
+
             {errors.details && (
               <p className="mt-1 text-sm text-red-500">{errors.details}</p>
             )}
@@ -730,9 +791,11 @@ export function ComplaintForm({
         <CardHeader className="pb-4">
           <CardTitle>Estado y Seguimiento</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-0">
           <div className="space-y-3">
             <Label>Estado</Label>
+
             <div className="flex flex-wrap gap-4">
               {(["En proceso", "Resuelto", "No resuelto"] as const).map(
                 (statusOption) => (
@@ -748,6 +811,7 @@ export function ComplaintForm({
                       onChange={(e) => handleChange("status", e.target.value)}
                       className="h-4 w-4"
                     />
+
                     <span>{statusOption}</span>
                   </label>
                 ),
@@ -757,11 +821,13 @@ export function ComplaintForm({
 
           <div className="space-y-2">
             <Label>Responsable de Carga</Label>
+
             <Input
               value={profile?.full_name || "Usuario no disponible"}
               disabled
               className="bg-muted"
             />
+
             {!profile && (
               <p className="mt-1 text-sm text-amber-600">
                 ⚠️ No se pudo cargar el perfil del usuario
@@ -775,6 +841,7 @@ export function ComplaintForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
+
         <Button type="submit" disabled={isSubmitting || isLoadingServices}>
           {isSubmitting
             ? "Guardando..."
