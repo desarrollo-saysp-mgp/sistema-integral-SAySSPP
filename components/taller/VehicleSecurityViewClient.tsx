@@ -14,11 +14,13 @@ import {
     CalendarDays,
     CheckCircle2,
     ClipboardCheck,
+    Download,
     Pencil,
     ShieldCheck,
     XCircle,
     AlertCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type ChecklistValue = "ok" | "bad" | "obs" | "";
 
@@ -179,6 +181,7 @@ const getChecklistBadge = (value: ChecklistValue) => {
     if (value === "ok") {
         return {
             label: "✓ Bueno",
+            pdfLabel: "Bueno",
             className: "border-green-200 bg-green-100 text-green-800",
             icon: CheckCircle2,
         };
@@ -187,6 +190,7 @@ const getChecklistBadge = (value: ChecklistValue) => {
     if (value === "bad") {
         return {
             label: "X Malo",
+            pdfLabel: "Malo",
             className: "border-red-200 bg-red-100 text-red-800",
             icon: XCircle,
         };
@@ -195,6 +199,7 @@ const getChecklistBadge = (value: ChecklistValue) => {
     if (value === "obs") {
         return {
             label: "O Observación",
+            pdfLabel: "Observación",
             className: "border-yellow-200 bg-yellow-100 text-yellow-800",
             icon: AlertCircle,
         };
@@ -202,9 +207,38 @@ const getChecklistBadge = (value: ChecklistValue) => {
 
     return {
         label: "-",
+        pdfLabel: "-",
         className: "border-slate-200 bg-slate-100 text-slate-700",
         icon: AlertCircle,
     };
+};
+
+const getChecklistPdfColor = (value: ChecklistValue): [number, number, number] => {
+    if (value === "ok") return [22, 163, 74];
+    if (value === "bad") return [220, 38, 38];
+    if (value === "obs") return [202, 138, 4];
+
+    return [100, 116, 139];
+};
+
+const getStatusSummary = (inspection: VehicleSecurityInspection) => {
+    let good = 0;
+    let bad = 0;
+    let obs = 0;
+    let empty = 0;
+
+    CHECKLIST_SECTIONS.forEach((section) => {
+        section.items.forEach((item) => {
+            const value = (inspection[item.key] || "") as ChecklistValue;
+
+            if (value === "ok") good += 1;
+            else if (value === "bad") bad += 1;
+            else if (value === "obs") obs += 1;
+            else empty += 1;
+        });
+    });
+
+    return { good, bad, obs, empty };
 };
 
 export function VehicleSecurityViewClient({
@@ -212,6 +246,304 @@ export function VehicleSecurityViewClient({
 }: {
     inspection: VehicleSecurityInspection;
 }) {
+    const exportChecklistPdf = async () => {
+        try {
+            const { default: jsPDF } = await import("jspdf");
+
+            const doc = new jsPDF("p", "mm", "a4");
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const marginX = 13;
+            const bottomMargin = 12;
+            let y = 14;
+
+            const addPageIfNeeded = (neededHeight = 15) => {
+                if (y + neededHeight <= pageHeight - bottomMargin) return;
+
+                doc.addPage();
+                y = 14;
+            };
+
+            const addText = (
+                text: string,
+                x: number,
+                options?: {
+                    fontSize?: number;
+                    bold?: boolean;
+                    color?: [number, number, number];
+                    maxWidth?: number;
+                    lineGap?: number;
+                },
+            ) => {
+                const fontSize = options?.fontSize ?? 9;
+                const maxWidth = options?.maxWidth ?? pageWidth - marginX * 2;
+                const lineGap = options?.lineGap ?? 4.3;
+
+                doc.setFontSize(fontSize);
+                doc.setFont("helvetica", options?.bold ? "bold" : "normal");
+
+                if (options?.color) {
+                    doc.setTextColor(...options.color);
+                } else {
+                    doc.setTextColor(20, 20, 20);
+                }
+
+                const lines = doc.splitTextToSize(text, maxWidth);
+                addPageIfNeeded(lines.length * lineGap);
+
+                doc.text(lines, x, y);
+                y += lines.length * lineGap;
+            };
+
+            const addInfoBox = (
+                label: string,
+                value: string,
+                x: number,
+                boxY: number,
+                width: number,
+            ) => {
+                doc.setDrawColor(225, 231, 235);
+                doc.setFillColor(248, 250, 252);
+                doc.roundedRect(x, boxY, width, 16, 2.7, 2.7, "FD");
+
+                doc.setFontSize(7);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(100, 116, 139);
+                doc.text(label, x + 3, boxY + 5.4);
+
+                doc.setFontSize(10.2);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(17, 24, 39);
+                doc.text(value, x + 3, boxY + 12);
+            };
+
+            const summary = getStatusSummary(inspection);
+
+            doc.setFillColor(0, 162, 127);
+            doc.rect(0, 0, pageWidth, 8.5, "F");
+
+            y = 16;
+
+            addText("CHECKLIST VEHICULAR", marginX, {
+                fontSize: 15,
+                bold: true,
+                lineGap: 5,
+            });
+
+            addText("Estado general del vehículo", marginX, {
+                fontSize: 8.7,
+                color: [100, 116, 139],
+                lineGap: 4.2,
+            });
+
+            y += 2;
+
+            const boxWidth = (pageWidth - marginX * 2 - 9) / 4;
+
+            addInfoBox(
+                "Puntaje",
+                cleanValue(inspection.raw_score),
+                marginX,
+                y,
+                boxWidth,
+            );
+
+            addInfoBox(
+                "% Estado",
+                inspection.state_percent !== null && inspection.state_percent !== undefined
+                    ? `${inspection.state_percent}%`
+                    : "-",
+                marginX + boxWidth + 3,
+                y,
+                boxWidth,
+            );
+
+            addInfoBox(
+                "Seguridad",
+                cleanValue(inspection.security_score),
+                marginX + (boxWidth + 3) * 2,
+                y,
+                boxWidth,
+            );
+
+            addInfoBox(
+                "Fecha",
+                formatDate(inspection.inspection_date),
+                marginX + (boxWidth + 3) * 3,
+                y,
+                boxWidth,
+            );
+
+            y += 22.5;
+
+            addText("Datos del vehículo", marginX, {
+                fontSize: 11,
+                bold: true,
+                lineGap: 4.2,
+            });
+
+            const vehicleInfo = [
+                ["Código", cleanValue(inspection.vehicle_code)],
+                ["Vehículo", cleanValue(inspection.vehicle)],
+                ["Dominio", cleanValue(inspection.license_plate)],
+                ["Tipo", cleanValue(inspection.vehicle_type)],
+                ["Dirección", cleanValue(inspection.area)],
+            ];
+
+            doc.setFontSize(8.7);
+
+            vehicleInfo.forEach(([label, value], index) => {
+                const rowY = y + Math.floor(index / 2) * 6;
+                const colX = index % 2 === 0 ? marginX : marginX + 88;
+
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(100, 116, 139);
+                doc.text(`${label}:`, colX, rowY);
+
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(17, 24, 39);
+                doc.text(value, colX + 24, rowY);
+            });
+
+            y += 19;
+
+            addText("Resumen de checklist", marginX, {
+                fontSize: 11,
+                bold: true,
+                lineGap: 4.2,
+            });
+
+            doc.setFontSize(8.8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(17, 24, 39);
+            doc.text(
+                `Buenos: ${summary.good}    |    Malos: ${summary.bad}    |    Observados: ${summary.obs}    |    Sin dato: ${summary.empty}`,
+                marginX,
+                y,
+            );
+
+            y += 8;
+
+            CHECKLIST_SECTIONS.forEach((section) => {
+                addPageIfNeeded(14);
+
+                doc.setFillColor(230, 247, 243);
+                doc.setDrawColor(0, 162, 127);
+                doc.roundedRect(marginX, y, pageWidth - marginX * 2, 7.8, 2.2, 2.2, "FD");
+
+                doc.setFontSize(9.2);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0, 120, 95);
+                doc.text(section.title, marginX + 3, y + 5.3);
+
+                y += 10;
+
+                section.items.forEach((item) => {
+                    addPageIfNeeded(6.7);
+
+                    const value = (inspection[item.key] || "") as ChecklistValue;
+                    const badge = getChecklistBadge(value);
+                    const [red, green, blue] = getChecklistPdfColor(value);
+
+                    doc.setDrawColor(232, 232, 232);
+                    doc.line(marginX, y - 2, pageWidth - marginX, y - 2);
+
+                    doc.setFontSize(8.7);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(17, 24, 39);
+                    doc.text(item.label, marginX + 2, y + 2.2);
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(red, green, blue);
+                    doc.text(badge.pdfLabel, pageWidth - marginX - 2, y + 2.2, {
+                        align: "right",
+                    });
+
+                    y += 6.15;
+                });
+
+                y += 2.4;
+            });
+
+            addPageIfNeeded(32);
+
+            addText("Observaciones", marginX, {
+                fontSize: 11,
+                bold: true,
+                lineGap: 4.2,
+            });
+
+            const observationText = cleanValue(inspection.observations);
+            const observationLines = doc.splitTextToSize(
+                observationText,
+                pageWidth - marginX * 2 - 7,
+            );
+
+            const observationBoxHeight = Math.max(
+                20,
+                Math.min(31, observationLines.length * 4.4 + 9),
+            );
+
+            doc.setDrawColor(225, 231, 235);
+            doc.setFillColor(248, 250, 252);
+            doc.roundedRect(
+                marginX,
+                y,
+                pageWidth - marginX * 2,
+                observationBoxHeight,
+                3,
+                3,
+                "FD",
+            );
+
+            doc.setFontSize(8.8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(17, 24, 39);
+
+            doc.text(observationLines.slice(0, 6), marginX + 3.5, y + 6);
+
+            y += observationBoxHeight + 4;
+
+            const totalPages = doc.getNumberOfPages();
+
+            for (let page = 1; page <= totalPages; page += 1) {
+                doc.setPage(page);
+
+                doc.setFontSize(7);
+                doc.setTextColor(120, 120, 120);
+
+                doc.text(
+                    `Creado: ${formatDateTime(inspection.created_at)} | Última modificación: ${formatDateTime(
+                        inspection.updated_at,
+                    )}`,
+                    marginX,
+                    pageHeight - 7,
+                );
+
+                doc.text(
+                    `Página ${page} de ${totalPages}`,
+                    pageWidth - marginX,
+                    pageHeight - 7,
+                    { align: "right" },
+                );
+            }
+
+            const fileName = `checklist_${cleanValue(inspection.vehicle_code)
+                .replaceAll(" ", "_")
+                .replaceAll("/", "-")}_${formatDate(inspection.inspection_date).replaceAll(
+                    "/",
+                    "-",
+                )}.pdf`;
+
+            doc.save(fileName);
+            toast.success("Checklist exportada correctamente");
+        } catch (error) {
+            console.error("Error exporting checklist PDF:", error);
+            toast.error("No se pudo exportar la checklist");
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -232,14 +564,26 @@ export function VehicleSecurityViewClient({
                     </p>
                 </div>
 
-                <Button asChild className="gap-2 rounded-xl">
-                    <Link
-                        href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit`}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={exportChecklistPdf}
+                        className="gap-2 rounded-xl"
                     >
-                        <Pencil className="h-4 w-4" />
-                        Editar checklist
-                    </Link>
-                </Button>
+                        <Download className="h-4 w-4" />
+                        Exportar PDF
+                    </Button>
+
+                    <Button asChild className="gap-2 rounded-xl">
+                        <Link
+                            href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit`}
+                        >
+                            <Pencil className="h-4 w-4" />
+                            Editar checklist
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">

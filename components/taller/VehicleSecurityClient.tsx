@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   ClipboardCheck,
   Eye,
+  FileText,
   Filter,
   Loader2,
   Pencil,
@@ -37,6 +38,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+
+type ChecklistValue = "ok" | "bad" | "obs" | "" | null | undefined;
 
 type VehicleSecurityInspection = {
   id: string;
@@ -52,10 +55,100 @@ type VehicleSecurityInspection = {
   observations: string | null;
   created_at: string;
   updated_at: string;
+
+  micas_del?: ChecklistValue;
+  balizas_del?: ChecklistValue;
+  altas_del?: ChecklistValue;
+  bajas_del?: ChecklistValue;
+  posicion_del?: ChecklistValue;
+  ginios_del?: ChecklistValue;
+
+  micas_tras?: ChecklistValue;
+  balizas_tras?: ChecklistValue;
+  ginios_tras?: ChecklistValue;
+  posicion_tras?: ChecklistValue;
+  stop_tras?: ChecklistValue;
+  reversa_tras?: ChecklistValue;
+  alarma_retro?: ChecklistValue;
+
+  parabrisa_delantero?: ChecklistValue;
+  parabrisa_trasero?: ChecklistValue;
+  parabrisas_laterales?: ChecklistValue;
+  limpia_parabrisas?: ChecklistValue;
+  espejos?: ChecklistValue;
+
+  anclaje_asientos?: ChecklistValue;
+  cinturones_seguridad?: ChecklistValue;
+  bocina?: ChecklistValue;
+  espejo_ret_central?: ChecklistValue;
+  freno_mano_bloqueo?: ChecklistValue;
+  tablero_indicadores?: ChecklistValue;
+
+  puerta_lado_conductor?: ChecklistValue;
+  puerta_lado_acompanante?: ChecklistValue;
+  baul_porton_trasero?: ChecklistValue;
+
+  eje_delantero?: ChecklistValue;
+  eje_trasero?: ChecklistValue;
+  eje_dual?: ChecklistValue;
+
+  documentacion_completa?: ChecklistValue;
+  chapa_patente_delantera?: ChecklistValue;
+  chapa_patente_trasera?: ChecklistValue;
+  calcos_reflectivos?: ChecklistValue;
+  extintor?: ChecklistValue;
+  conos_balizas?: ChecklistValue;
+  guardabarros_barreros?: ChecklistValue;
+
+  botiquin?: ChecklistValue;
+  calcos_municipio?: ChecklistValue;
+  calco_codigo_vehiculo?: ChecklistValue;
 };
 
 type SecurityFilter = "Todos" | "Bueno" | "Regular" | "Crítico";
 type ViewMode = "history" | "latest";
+type ReportType = "lights" | "body";
+
+type ChecklistReportField = {
+  key: keyof VehicleSecurityInspection;
+  label: string;
+};
+
+const LIGHT_REPORT_FIELDS: ChecklistReportField[] = [
+  { key: "micas_del", label: "Micas delanteras" },
+  { key: "balizas_del", label: "Balizas delanteras" },
+  { key: "altas_del", label: "Luces altas delanteras" },
+  { key: "bajas_del", label: "Luces bajas delanteras" },
+  { key: "posicion_del", label: "Luces de posición delanteras" },
+  { key: "ginios_del", label: "Guiños delanteros" },
+
+  { key: "micas_tras", label: "Micas traseras" },
+  { key: "balizas_tras", label: "Balizas traseras" },
+  { key: "ginios_tras", label: "Guiños traseros" },
+  { key: "posicion_tras", label: "Luces de posición traseras" },
+  { key: "stop_tras", label: "Luces de stop traseras" },
+  { key: "reversa_tras", label: "Luces de reversa" },
+  { key: "alarma_retro", label: "Alarma de retroceso" },
+];
+
+const BODY_REPORT_FIELDS: ChecklistReportField[] = [
+  { key: "puerta_lado_conductor", label: "Puerta lado conductor" },
+  { key: "puerta_lado_acompanante", label: "Puerta lado acompañante" },
+  { key: "baul_porton_trasero", label: "Baúl / portón trasero" },
+
+  { key: "guardabarros_barreros", label: "Guardabarros / barreros" },
+  { key: "chapa_patente_delantera", label: "Chapa patente delantera" },
+  { key: "chapa_patente_trasera", label: "Chapa patente trasera" },
+  { key: "calcos_reflectivos", label: "Calcos reflectivos" },
+  { key: "calcos_municipio", label: "Calcos del municipio" },
+  { key: "calco_codigo_vehiculo", label: "Calco código vehículo" },
+
+  { key: "parabrisa_delantero", label: "Parabrisa delantero" },
+  { key: "parabrisa_trasero", label: "Parabrisa trasero" },
+  { key: "parabrisas_laterales", label: "Parabrisas laterales" },
+  { key: "limpia_parabrisas", label: "Limpia parabrisas" },
+  { key: "espejos", label: "Espejos" },
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -103,9 +196,13 @@ const isLatestInspectionForVehicle = (
   );
 };
 
-const getSecurityStatus = (score: number): Exclude<SecurityFilter, "Todos"> => {
-  if (score >= 4) return "Crítico";
-  if (score >= 2) return "Regular";
+const getSecurityStatus = (
+  statePercent: number | null | undefined,
+): Exclude<SecurityFilter, "Todos"> => {
+  const percent = Number(statePercent ?? 0);
+
+  if (percent <= 70) return "Crítico";
+  if (percent < 80) return "Regular";
   return "Bueno";
 };
 
@@ -172,6 +269,52 @@ const hasActiveFilters = ({
   );
 };
 
+const getProblemLabel = (value: ChecklistValue) => {
+  if (value === "bad") return "No funciona / roto";
+  if (value === "obs") return "Observado / revisar";
+  return null;
+};
+
+const getReportFields = (reportType: ReportType) => {
+  return reportType === "lights" ? LIGHT_REPORT_FIELDS : BODY_REPORT_FIELDS;
+};
+
+const getReportTitle = (reportType: ReportType) => {
+  return reportType === "lights"
+    ? "INFORME PARA TALLER - LUCES"
+    : "INFORME PARA TALLER - CHAPA / CARROCERÍA";
+};
+
+const getReportFileName = (reportType: ReportType) => {
+  return reportType === "lights" ? "informe_luces" : "informe_chapa";
+};
+
+const getInspectionProblems = (
+  inspection: VehicleSecurityInspection,
+  reportType: ReportType,
+) => {
+  const fields = getReportFields(reportType);
+
+  return fields
+    .map((field) => {
+      const value = inspection[field.key] as ChecklistValue;
+      const problem = getProblemLabel(value);
+
+      if (!problem) return null;
+
+      return {
+        label: field.label,
+        value,
+        problem,
+      };
+    })
+    .filter(Boolean) as Array<{
+    label: string;
+    value: ChecklistValue;
+    problem: string;
+  }>;
+};
+
 export function VehicleSecurityClient() {
   const [inspections, setInspections] = useState<VehicleSecurityInspection[]>(
     [],
@@ -192,6 +335,10 @@ export function VehicleSecurityClient() {
   const [inspectionToDelete, setInspectionToDelete] =
     useState<VehicleSecurityInspection | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [reportType, setReportType] = useState<ReportType | null>(null);
+  const [selectedReportVehicle, setSelectedReportVehicle] = useState("all");
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   const fetchInspections = async () => {
     try {
@@ -287,14 +434,252 @@ export function VehicleSecurityClient() {
     );
   }, [inspections]);
 
-  const filteredInspections = useMemo(() => {
+  const reportVehicles = useMemo(() => {
+    if (!reportType) return [];
+
+    return latestByVehicle
+      .map((inspection) => ({
+        inspection,
+        problems: getInspectionProblems(inspection, reportType),
+      }))
+      .filter((item) => item.problems.length > 0)
+      .sort((a, b) =>
+        a.inspection.vehicle_code.localeCompare(b.inspection.vehicle_code, "es", {
+          numeric: true,
+        }),
+      );
+  }, [latestByVehicle, reportType]);
+
+  const openReportModal = (nextReportType: ReportType) => {
+    setReportType(nextReportType);
+    setSelectedReportVehicle("all");
+  };
+
+  const closeReportModal = () => {
+    if (generatingReport) return;
+
+    setReportType(null);
+    setSelectedReportVehicle("all");
+  };
+
+  const generateReportPdf = async () => {
+    if (!reportType) return;
+
+    const selectedItems =
+      selectedReportVehicle === "all"
+        ? reportVehicles
+        : reportVehicles.filter(
+            (item) => item.inspection.id === selectedReportVehicle,
+          );
+
+    if (selectedItems.length === 0) {
+      toast.error("No hay vehículos con problemas para generar el informe");
+      return;
+    }
+
+    try {
+      setGeneratingReport(true);
+
+      const { default: jsPDF } = await import("jspdf");
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      const bottomMargin = 16;
+      let y = 16;
+
+      const addPageIfNeeded = (neededHeight = 20) => {
+        if (y + neededHeight <= pageHeight - bottomMargin) return;
+
+        doc.addPage();
+        y = 16;
+      };
+
+      const addText = (
+        text: string,
+        x: number,
+        options?: {
+          fontSize?: number;
+          bold?: boolean;
+          color?: [number, number, number];
+          maxWidth?: number;
+          lineGap?: number;
+        },
+      ) => {
+        const fontSize = options?.fontSize ?? 10;
+        const maxWidth = options?.maxWidth ?? pageWidth - marginX * 2;
+        const lineGap = options?.lineGap ?? 5;
+
+        doc.setFontSize(fontSize);
+        doc.setFont("helvetica", options?.bold ? "bold" : "normal");
+
+        if (options?.color) {
+          doc.setTextColor(...options.color);
+        } else {
+          doc.setTextColor(20, 20, 20);
+        }
+
+        const lines = doc.splitTextToSize(text, maxWidth);
+        addPageIfNeeded(lines.length * lineGap);
+
+        doc.text(lines, x, y);
+        y += lines.length * lineGap;
+      };
+
+      doc.setFillColor(0, 162, 127);
+      doc.rect(0, 0, pageWidth, 10, "F");
+
+      y = 18;
+
+      addText(getReportTitle(reportType), marginX, {
+        fontSize: 15,
+        bold: true,
+      });
+
+      addText(`Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}`, marginX, {
+        fontSize: 9,
+        color: [90, 90, 90],
+      });
+
+      addText(
+        `Vehículos incluidos: ${selectedItems.length}`,
+        marginX,
+        {
+          fontSize: 9,
+          color: [90, 90, 90],
+        },
+      );
+
+      y += 3;
+
+      selectedItems.forEach((item, index) => {
+        const inspection = item.inspection;
+        const problems = item.problems;
+
+        addPageIfNeeded(55);
+
+        if (index > 0) {
+          doc.setDrawColor(220, 220, 220);
+          doc.line(marginX, y, pageWidth - marginX, y);
+          y += 7;
+        }
+
+        addText(
+          `${inspection.vehicle_code} - ${inspection.vehicle || "Sin vehículo"}`,
+          marginX,
+          {
+            fontSize: 12,
+            bold: true,
+          },
+        );
+
+        addText(
+          `Dominio: ${inspection.license_plate || "-"}   |   Dirección: ${
+            inspection.area || "-"
+          }   |   Última checklist: ${formatDate(inspection.inspection_date)}`,
+          marginX,
+          {
+            fontSize: 9,
+            color: [90, 90, 90],
+          },
+        );
+
+        addText(
+          `Estado general: ${
+            inspection.state_percent ?? "-"
+          }%   |   Seguridad: ${inspection.security_score}`,
+          marginX,
+          {
+            fontSize: 9,
+            color: [90, 90, 90],
+          },
+        );
+
+        y += 2;
+
+        addText("Elementos a revisar / reparar:", marginX, {
+          fontSize: 10,
+          bold: true,
+        });
+
+        problems.forEach((problem) => {
+          const bullet =
+            problem.value === "bad"
+              ? `• ${problem.label}: ${problem.problem}`
+              : `• ${problem.label}: ${problem.problem}`;
+
+          addText(bullet, marginX + 3, {
+            fontSize: 9,
+            maxWidth: pageWidth - marginX * 2 - 3,
+          });
+        });
+
+        if (inspection.observations?.trim()) {
+          y += 1;
+
+          addText(`Observaciones: ${inspection.observations.trim()}`, marginX, {
+            fontSize: 9,
+            color: [70, 70, 70],
+          });
+        }
+
+        y += 3;
+
+        addText("Firma / recepción taller: ________________________________", marginX, {
+          fontSize: 9,
+          color: [90, 90, 90],
+        });
+
+        y += 4;
+      });
+
+      const totalPages = doc.getNumberOfPages();
+
+      for (let page = 1; page <= totalPages; page += 1) {
+        doc.setPage(page);
+        doc.setFontSize(7);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `Página ${page} de ${totalPages}`,
+          pageWidth - marginX,
+          pageHeight - 7,
+          { align: "right" },
+        );
+      }
+
+      const fileName = `${getReportFileName(reportType)}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+
+      doc.save(fileName);
+      toast.success("Informe generado correctamente");
+      closeReportModal();
+    } catch (error) {
+      console.error("Error generating vehicle report:", error);
+      toast.error("No se pudo generar el informe");
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const applyCommonFilters = (
+    source: VehicleSecurityInspection[],
+    options?: {
+      includeStatus?: boolean;
+      includeDates?: boolean;
+    },
+  ) => {
+    const includeStatus = options?.includeStatus ?? true;
+    const includeDates = options?.includeDates ?? true;
+
     const normalizedSearch = normalizeText(search);
     const normalizedPlate = normalizeText(plateFilter);
     const normalizedVehicle = normalizeText(vehicleFilter);
     const normalizedDirection = normalizeText(directionFilter);
 
-    return baseInspections.filter((inspection) => {
-      const inspectionStatus = getSecurityStatus(inspection.security_score);
+    return source.filter((inspection) => {
+      const inspectionStatus = getSecurityStatus(inspection.state_percent);
 
       const matchesSearch =
         !normalizedSearch ||
@@ -319,10 +704,12 @@ export function VehicleSecurityClient() {
         normalizeText(inspection.area) === normalizedDirection;
 
       const matchesDate =
+        !includeDates ||
         (!dateFromFilter && !dateToFilter) ||
         dateInRange(inspection.inspection_date, dateFromFilter, dateToFilter);
 
       const matchesStatus =
+        !includeStatus ||
         securityStatusFilter === "Todos" ||
         inspectionStatus === securityStatusFilter;
 
@@ -336,6 +723,13 @@ export function VehicleSecurityClient() {
         matchesStatus
       );
     });
+  };
+
+  const filteredInspections = useMemo(() => {
+    return applyCommonFilters(baseInspections, {
+      includeStatus: true,
+      includeDates: true,
+    });
   }, [
     baseInspections,
     search,
@@ -348,19 +742,51 @@ export function VehicleSecurityClient() {
     securityStatusFilter,
   ]);
 
-  const totalInspections = filteredInspections.length;
+  const latestStatsBase = useMemo(() => {
+    return applyCommonFilters(latestByVehicle, {
+      includeStatus: false,
+      includeDates: true,
+    });
+  }, [
+    latestByVehicle,
+    search,
+    codeFilter,
+    plateFilter,
+    vehicleFilter,
+    directionFilter,
+    dateFromFilter,
+    dateToFilter,
+  ]);
 
-  const goodVehicles = filteredInspections.filter(
-    (inspection) => inspection.security_score <= 1,
+  const historyStatsBase = useMemo(() => {
+    return applyCommonFilters(sortedInspections, {
+      includeStatus: false,
+      includeDates: true,
+    });
+  }, [
+    sortedInspections,
+    search,
+    codeFilter,
+    plateFilter,
+    vehicleFilter,
+    directionFilter,
+    dateFromFilter,
+    dateToFilter,
+  ]);
+
+  const totalCardValue =
+    viewMode === "latest" ? latestStatsBase.length : historyStatsBase.length;
+
+  const goodVehicles = latestStatsBase.filter(
+    (inspection) => getSecurityStatus(inspection.state_percent) === "Bueno",
   ).length;
 
-  const regularVehicles = filteredInspections.filter(
-    (inspection) =>
-      inspection.security_score >= 2 && inspection.security_score <= 3,
+  const regularVehicles = latestStatsBase.filter(
+    (inspection) => getSecurityStatus(inspection.state_percent) === "Regular",
   ).length;
 
-  const criticalVehicles = filteredInspections.filter(
-    (inspection) => inspection.security_score >= 4,
+  const criticalVehicles = latestStatsBase.filter(
+    (inspection) => getSecurityStatus(inspection.state_percent) === "Crítico",
   ).length;
 
   const activeFilters = hasActiveFilters({
@@ -390,9 +816,12 @@ export function VehicleSecurityClient() {
   const handleCardFilter = (status: SecurityFilter) => {
     setSecurityStatusFilter(status);
 
-    if (status !== "Todos") {
-      setViewMode("latest");
+    if (status === "Todos") {
+      setViewMode("history");
+      return;
     }
+
+    setViewMode("latest");
   };
 
   const handleDelete = async () => {
@@ -462,6 +891,28 @@ export function VehicleSecurityClient() {
               Actualizar
             </Button>
 
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openReportModal("lights")}
+              disabled={loading || latestByVehicle.length === 0}
+              className="gap-2 rounded-xl"
+            >
+              <FileText className="h-4 w-4" />
+              Informe luces
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openReportModal("body")}
+              disabled={loading || latestByVehicle.length === 0}
+              className="gap-2 rounded-xl"
+            >
+              <FileText className="h-4 w-4" />
+              Informe chapa
+            </Button>
+
             <Button asChild className="gap-2 rounded-xl">
               <Link href="/dashboard/taller/ordenes-trabajo/criticidad/estado-general/nuevo">
                 <PlusCircle className="h-4 w-4" />
@@ -478,7 +929,7 @@ export function VehicleSecurityClient() {
                 ? "Últimas checklist"
                 : "Checklists cargados"
             }
-            value={totalInspections}
+            value={totalCardValue}
             description={
               viewMode === "latest" ? "Una por vehículo" : "Historial completo"
             }
@@ -489,7 +940,7 @@ export function VehicleSecurityClient() {
           <SummaryCard
             title="Vehículos buenos"
             value={goodVehicles}
-            description="Seguridad 0 a 1"
+            description="% Estado 80 o superior"
             active={securityStatusFilter === "Bueno"}
             onClick={() => handleCardFilter("Bueno")}
           />
@@ -497,7 +948,7 @@ export function VehicleSecurityClient() {
           <SummaryCard
             title="Vehículos regulares"
             value={regularVehicles}
-            description="Seguridad 2 a 3"
+            description="% Estado mayor a 70 y menor a 80"
             active={securityStatusFilter === "Regular"}
             onClick={() => handleCardFilter("Regular")}
           />
@@ -505,7 +956,7 @@ export function VehicleSecurityClient() {
           <SummaryCard
             title="Vehículos críticos"
             value={criticalVehicles}
-            description="Seguridad 4 o superior"
+            description="% Estado 70 o menor"
             active={securityStatusFilter === "Crítico"}
             onClick={() => handleCardFilter("Crítico")}
           />
@@ -644,11 +1095,15 @@ export function VehicleSecurityClient() {
 
                   <select
                     value={securityStatusFilter}
-                    onChange={(event) =>
-                      setSecurityStatusFilter(
-                        event.target.value as SecurityFilter,
-                      )
-                    }
+                    onChange={(event) => {
+                      const nextStatus = event.target.value as SecurityFilter;
+
+                      setSecurityStatusFilter(nextStatus);
+
+                      if (nextStatus !== "Todos") {
+                        setViewMode("latest");
+                      }
+                    }}
                     className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
                   >
                     <option value="Todos">Todos</option>
@@ -697,7 +1152,9 @@ export function VehicleSecurityClient() {
                     className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
                   >
                     <option value="history">Todo el historial</option>
-                    <option value="latest">Última checklist por vehículo</option>
+                    <option value="latest">
+                      Última checklist por vehículo
+                    </option>
                   </select>
                 </div>
 
@@ -776,7 +1233,7 @@ export function VehicleSecurityClient() {
                     <tbody>
                       {filteredInspections.map((inspection) => {
                         const status = getSecurityStatus(
-                          inspection.security_score,
+                          inspection.state_percent,
                         );
 
                         const isLatest = isLatestInspectionForVehicle(
@@ -864,7 +1321,7 @@ export function VehicleSecurityClient() {
 
                 <div className="space-y-3 lg:hidden">
                   {filteredInspections.map((inspection) => {
-                    const status = getSecurityStatus(inspection.security_score);
+                    const status = getSecurityStatus(inspection.state_percent);
 
                     const isLatest = isLatestInspectionForVehicle(
                       inspection,
@@ -960,6 +1417,112 @@ export function VehicleSecurityClient() {
           </CardContent>
         </Card>
       </div>
+
+      {reportType && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xl rounded-2xl border bg-background p-5 shadow-xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold">
+                {reportType === "lights"
+                  ? "Generar informe de luces"
+                  : "Generar informe de chapa"}
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Se toma la última checklist de cada vehículo. Podés generar un
+                informe general o elegir un vehículo puntual.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Vehículo
+                </label>
+
+                <select
+                  value={selectedReportVehicle}
+                  onChange={(event) =>
+                    setSelectedReportVehicle(event.target.value)
+                  }
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
+                >
+                  <option value="all">
+                    Todos los vehículos con problemas detectados (
+                    {reportVehicles.length})
+                  </option>
+
+                  {reportVehicles.map((item) => (
+                    <option
+                      key={item.inspection.id}
+                      value={item.inspection.id}
+                    >
+                      {item.inspection.vehicle_code} -{" "}
+                      {item.inspection.vehicle || "Sin vehículo"} -{" "}
+                      {item.inspection.license_plate || "Sin dominio"} (
+                      {item.problems.length} problema
+                      {item.problems.length === 1 ? "" : "s"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {reportVehicles.length === 0 && (
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                  No se detectaron problemas para este tipo de informe en las
+                  últimas checklists.
+                </div>
+              )}
+
+              {reportVehicles.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-xl border bg-muted/20 p-3 text-sm">
+                  <p className="mb-2 font-semibold">
+                    Vehículos con problemas detectados:
+                  </p>
+
+                  <div className="space-y-1">
+                    {reportVehicles.map((item) => (
+                      <p key={item.inspection.id}>
+                        • <strong>{item.inspection.vehicle_code}</strong> -{" "}
+                        {item.inspection.vehicle || "-"} -{" "}
+                        {item.inspection.license_plate || "-"}:{" "}
+                        {item.problems.length} ítem
+                        {item.problems.length === 1 ? "" : "s"} a revisar
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeReportModal}
+                disabled={generatingReport}
+                className="rounded-xl"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={generateReportPdf}
+                disabled={generatingReport || reportVehicles.length === 0}
+                className="gap-2 rounded-xl"
+              >
+                {generatingReport ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                Generar PDF
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AlertDialog
         open={!!inspectionToDelete}

@@ -43,7 +43,8 @@ type VehicleCriticalityStatus =
   | "REGULAR"
   | "MALO"
   | "SIN DATOS"
-  | "SIN CHECKLIST";
+  | "SIN CHECKLIST"
+  | "DADO DE BAJA";
 
 type StatusFilter = "Todos" | VehicleCriticalityStatus;
 
@@ -77,6 +78,7 @@ type VehicleCriticalityRow = {
   replacement_score: number;
   security_score: number;
   has_checklist: boolean;
+  is_retired: boolean;
   total_criticality: number | null;
   notes: string;
   status_label: VehicleCriticalityStatus;
@@ -93,6 +95,93 @@ const normalizeText = (value: unknown) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeVehicleCode = (value: unknown) =>
+  normalizeText(value).replace(/[\s.\-]/g, "");
+
+const RETIRED_VEHICLES = [
+  { code: "S.P.3", vehicle: "F-100 doble cabina roja", licensePlate: "WOE320" },
+  { code: "S.P.4", vehicle: "Chevrolet C10 Pick Up", licensePlate: "WWE612" },
+  { code: "R.E. P.C.1", vehicle: "Pala JCB Deutz", licensePlate: "BLS045" },
+  { code: "R.E. P.C.2", vehicle: "Pala JCB Deutz", licensePlate: "BXI010" },
+  { code: "R.E. P.C.3", vehicle: "Pala Yineng", licensePlate: "CWV092" },
+  {
+    code: "R.E. P.C.6",
+    vehicle: "Pala Cargadora Klia CA 200",
+    licensePlate: "MGP001",
+  },
+  {
+    code: "R.E. P.C.7",
+    vehicle: "Pala Cargadora Michigan",
+    licensePlate: "TRO131",
+  },
+  { code: "R.E. P.C.9", vehicle: "Topadora M.F. D600", licensePlate: "POI050" },
+  { code: "R.E. P.C.10", vehicle: "Topadora Komatsu", licensePlate: "BYN180" },
+  { code: "B 2", vehicle: "Volcador Ford 7000", licensePlate: "TJN736" },
+  { code: "B 3", vehicle: "Volcador Ford 7000", licensePlate: "XFX605" },
+  { code: "B 1", vehicle: "Volcador Ford F-600", licensePlate: "XFX603" },
+  {
+    code: "R.E. V.5",
+    vehicle: "Volc.Mercedes Benz 1215",
+    licensePlate: "AFU926",
+  },
+  {
+    code: "R.E. V.1",
+    vehicle: "Volcador Grúa Vw 17-190",
+    licensePlate: "AB904NS",
+  },
+  { code: "R.3", vehicle: "Chevrolet", licensePlate: "XGA020" },
+  { code: "R.6", vehicle: "Chevrolet 610", licensePlate: "XFT688" },
+  {
+    code: "A.P.U.1",
+    vehicle: "Chevrolet (camión regador)",
+    licensePlate: "XFX607",
+  },
+  {
+    code: "A.P.U.6",
+    vehicle: "Cuatriciclo Motomel Rojo",
+    licensePlate: "JUI693 (056)",
+  },
+  { code: "A.P.U.11", vehicle: "Tractor Tai - Shan", licensePlate: "" },
+  { code: "A.P.U.13", vehicle: "Desmalezador Z - Beast", licensePlate: "" },
+  { code: "A.P.U.3", vehicle: "Tractor Tai - Shan", licensePlate: "POI091" },
+  { code: "A.P.U.4", vehicle: "Tractor Tai - Shan", licensePlate: "PAT092" },
+  { code: "P.C.3", vehicle: "Ford 7000", licensePlate: "XFT689" },
+  {
+    code: "S.P.1",
+    vehicle: "Ford F-100 Blanca (ex Roja)",
+    licensePlate: "USA005",
+  },
+  { code: "R.D.1", vehicle: "Recolector Ford 7000", licensePlate: "XFX600" },
+  {
+    code: "A.P.U.8",
+    vehicle: "Tractor Massey Fergunson 1185",
+    licensePlate: "",
+  },
+  {
+    code: "A.P.U.12",
+    vehicle: "Tractor Yard Machine by MTD",
+    licensePlate: "",
+  },
+  { code: "A.P.U.14", vehicle: "Ford 150 cabina simple", licensePlate: "SYE917" },
+];
+
+const RETIRED_VEHICLE_CODES = new Set(
+  RETIRED_VEHICLES.map((vehicle) => normalizeVehicleCode(vehicle.code)),
+);
+
+const NON_VEHICLE_CODES = new Set(
+  ["Regadores (C)", "Regadores C"].map(normalizeVehicleCode),
+);
+
+const isRetiredVehicle = (vehicleCode: unknown) =>
+  RETIRED_VEHICLE_CODES.has(normalizeVehicleCode(vehicleCode));
+
+const isNonVehicleCode = (vehicleCode: unknown) =>
+  NON_VEHICLE_CODES.has(normalizeVehicleCode(vehicleCode));
+
+const shouldExcludeFromCriticality = (vehicleCode: unknown) =>
+  isRetiredVehicle(vehicleCode) || isNonVehicleCode(vehicleCode);
 
 const toNumber = (value: unknown) => {
   const numberValue = Number(value);
@@ -159,7 +248,9 @@ const getMechanicalReliabilityScore = (count: number) => {
 const getCriticalityStatus = (
   criticality: number | null,
   hasChecklist: boolean,
+  isRetired: boolean,
 ): VehicleCriticalityStatus => {
+  if (isRetired) return "DADO DE BAJA";
   if (!hasChecklist) return "SIN CHECKLIST";
   if (criticality === null) return "SIN DATOS";
   if (criticality >= 13) return "MALO";
@@ -177,6 +268,8 @@ const getStatusLabel = (status: VehicleCriticalityStatus) => {
       return "CRÍTICO";
     case "SIN CHECKLIST":
       return "SIN CHECKLIST";
+    case "DADO DE BAJA":
+      return "DADO DE BAJA";
     case "SIN DATOS":
     default:
       return "SIN DATOS";
@@ -193,6 +286,8 @@ const getStatusBadgeClass = (status: VehicleCriticalityStatus) => {
       return "border-red-200 bg-red-100 text-red-800";
     case "SIN CHECKLIST":
       return "border-orange-200 bg-orange-100 text-orange-800";
+    case "DADO DE BAJA":
+      return "border-slate-300 bg-slate-100 text-slate-800";
     case "SIN DATOS":
     default:
       return "border-slate-200 bg-slate-100 text-slate-700";
@@ -206,8 +301,19 @@ const getScoreBadgeClass = (score: number) => {
 };
 
 const getTotalBadgeClass = (total: number | null) => {
-  if (total === null) return "border-orange-200 bg-orange-100 text-orange-800";
-  return getScoreBadgeClass(total);
+  if (total === null) {
+    return "border-orange-200 bg-orange-100 text-orange-800";
+  }
+
+  if (total >= 13) {
+    return "border-red-200 bg-red-100 text-red-800";
+  }
+
+  if (total >= 10) {
+    return "border-yellow-200 bg-yellow-100 text-yellow-800";
+  }
+
+  return "border-green-200 bg-green-100 text-green-800";
 };
 
 const hasActiveFilters = ({
@@ -321,7 +427,6 @@ export function VehicleCriticalityClient() {
 
     inspections.forEach((inspection) => {
       const vehicleCode = String(inspection.vehicle_code || "").trim();
-
       if (!vehicleCode) return;
 
       vehicleCodes.add(normalizeText(vehicleCode));
@@ -330,13 +435,13 @@ export function VehicleCriticalityClient() {
     return vehicleCodes;
   }, [inspections]);
 
-  const rows = useMemo<VehicleCriticalityRow[]>((() => {
+  const rows = useMemo<VehicleCriticalityRow[]>(() => {
     const sixMonthsAgo = getSixMonthsAgo();
     const workOrdersByVehicle = new Map<string, WorkOrder[]>();
 
     workOrders.forEach((order) => {
       const vehicleCode = String(order.vehicle_code || "").trim();
-      if (!vehicleCode) return;
+      if (!vehicleCode || isNonVehicleCode(vehicleCode)) return;
 
       const currentOrders = workOrdersByVehicle.get(vehicleCode) || [];
       currentOrders.push(order);
@@ -346,108 +451,132 @@ export function VehicleCriticalityClient() {
     const vehicleCodes = new Set<string>();
 
     settings.forEach((setting) => {
-      if (setting.vehicle_code?.trim()) {
-        vehicleCodes.add(setting.vehicle_code.trim());
+      const vehicleCode = setting.vehicle_code?.trim();
+
+      if (vehicleCode && !shouldExcludeFromCriticality(vehicleCode)) {
+        vehicleCodes.add(vehicleCode);
       }
     });
 
     workOrdersByVehicle.forEach((_orders, vehicleCode) => {
-      vehicleCodes.add(vehicleCode);
+      if (!shouldExcludeFromCriticality(vehicleCode)) {
+        vehicleCodes.add(vehicleCode);
+      }
     });
 
-    return Array.from(vehicleCodes)
-      .map((vehicleCode) => {
-        const orders = workOrdersByVehicle.get(vehicleCode) || [];
+    const activeRows = Array.from(vehicleCodes).map((vehicleCode) => {
+      const orders = workOrdersByVehicle.get(vehicleCode) || [];
+      const setting = settings.find(
+        (item) => normalizeText(item.vehicle_code) === normalizeText(vehicleCode),
+      );
+
+      const latestOrder = [...orders].sort((a, b) => {
+        const dateA = getDateValue(a.entry_date)?.getTime() ?? 0;
+        const dateB = getDateValue(b.entry_date)?.getTime() ?? 0;
+        return dateB - dateA;
+      })[0];
+
+      const validOtCount = orders.filter((order) => {
+        const date = getDateValue(order.entry_date);
+        if (!date || date < sixMonthsAgo) return false;
+
+        const failureType = normalizeText(order.failure_type);
+        const repairType = normalizeText(order.repair_type);
+
+        return (
+          !failureType.includes("mantenimiento") &&
+          !repairType.includes("mantenimiento")
+        );
+      }).length;
+
+      const mechanicalScore = getMechanicalReliabilityScore(validOtCount);
+      const serviceCriticality = toNumber(setting?.service_criticality);
+      const replacementScore = toNumber(setting?.replacement_score);
+      const securityScore = toNumber(setting?.security_score);
+      const hasChecklist = vehiclesWithChecklist.has(normalizeText(vehicleCode));
+      const totalCriticality = hasChecklist
+        ? mechanicalScore + serviceCriticality + replacementScore + securityScore
+        : null;
+
+      const matchedVehicle = getVehicleFromCode(vehicleCode);
+
+      return {
+        vehicle_code: vehicleCode,
+        vehicle:
+          setting?.vehicle ||
+          getVehicleLabelFromOrder(latestOrder) ||
+          matchedVehicle?.vehicle ||
+          "-",
+        license_plate:
+          setting?.license_plate ||
+          getLicensePlateLabelFromOrder(latestOrder) ||
+          matchedVehicle?.licensePlate ||
+          "-",
+        work_orders_count: validOtCount,
+        mechanical_reliability_score: mechanicalScore,
+        service_criticality: serviceCriticality,
+        replacement_score: replacementScore,
+        security_score: securityScore,
+        has_checklist: hasChecklist,
+        is_retired: false,
+        total_criticality: totalCriticality,
+        notes: setting?.notes || "",
+        status_label: getCriticalityStatus(totalCriticality, hasChecklist, false),
+      };
+    });
+
+    const retiredRows: VehicleCriticalityRow[] = RETIRED_VEHICLES.map(
+      (retiredVehicle) => {
         const setting = settings.find(
           (item) =>
-            normalizeText(item.vehicle_code) === normalizeText(vehicleCode),
+            normalizeVehicleCode(item.vehicle_code) ===
+            normalizeVehicleCode(retiredVehicle.code),
         );
-
-        const latestOrder = [...orders].sort((a, b) => {
-          const dateA = getDateValue(a.entry_date)?.getTime() ?? 0;
-          const dateB = getDateValue(b.entry_date)?.getTime() ?? 0;
-          return dateB - dateA;
-        })[0];
-
-        const validOtCount = orders.filter((order) => {
-          const date = getDateValue(order.entry_date);
-          if (!date || date < sixMonthsAgo) return false;
-
-          const failureType = normalizeText(order.failure_type);
-          const repairType = normalizeText(order.repair_type);
-
-          return (
-            !failureType.includes("mantenimiento") &&
-            !repairType.includes("mantenimiento")
-          );
-        }).length;
-
-        const mechanicalScore = getMechanicalReliabilityScore(validOtCount);
-        const serviceCriticality = toNumber(setting?.service_criticality);
-        const replacementScore = toNumber(setting?.replacement_score);
-        const securityScore = toNumber(setting?.security_score);
-        const hasChecklist = vehiclesWithChecklist.has(
-          normalizeText(vehicleCode),
-        );
-
-        const totalCriticality = hasChecklist
-          ? mechanicalScore +
-            serviceCriticality +
-            replacementScore +
-            securityScore
-          : null;
-
-        const matchedVehicle = getVehicleFromCode(vehicleCode);
 
         return {
-          vehicle_code: vehicleCode,
-          vehicle:
-            setting?.vehicle ||
-            getVehicleLabelFromOrder(latestOrder) ||
-            matchedVehicle?.vehicle ||
-            "-",
+          vehicle_code: retiredVehicle.code,
+          vehicle: setting?.vehicle || retiredVehicle.vehicle || "-",
           license_plate:
-            setting?.license_plate ||
-            getLicensePlateLabelFromOrder(latestOrder) ||
-            matchedVehicle?.licensePlate ||
-            "-",
-          work_orders_count: validOtCount,
-          mechanical_reliability_score: mechanicalScore,
-          service_criticality: serviceCriticality,
-          replacement_score: replacementScore,
-          security_score: securityScore,
-          has_checklist: hasChecklist,
-          total_criticality: totalCriticality,
-          notes: setting?.notes || "",
-          status_label: getCriticalityStatus(totalCriticality, hasChecklist),
+            setting?.license_plate || retiredVehicle.licensePlate || "-",
+          work_orders_count: 0,
+          mechanical_reliability_score: 0,
+          service_criticality: 0,
+          replacement_score: 0,
+          security_score: 0,
+          has_checklist: false,
+          is_retired: true,
+          total_criticality: null,
+          notes: "Vehículo dado de baja. Excluido del cálculo de criticidad.",
+          status_label: "DADO DE BAJA",
         };
-      })
-      .sort((a, b) => {
-        if (a.total_criticality === null && b.total_criticality !== null) {
-          return 1;
-        }
+      },
+    );
 
-        if (a.total_criticality !== null && b.total_criticality === null) {
-          return -1;
-        }
+    return [...activeRows, ...retiredRows].sort((a, b) => {
+      if (a.is_retired && !b.is_retired) return 1;
+      if (!a.is_retired && b.is_retired) return -1;
 
-        if (
-          a.total_criticality !== null &&
-          b.total_criticality !== null &&
-          a.total_criticality !== b.total_criticality
-        ) {
-          return b.total_criticality - a.total_criticality;
-        }
+      if (a.total_criticality === null && b.total_criticality !== null) {
+        return 1;
+      }
 
-        return a.vehicle_code.localeCompare(b.vehicle_code, "es", {
-          numeric: true,
-        });
+      if (a.total_criticality !== null && b.total_criticality === null) {
+        return -1;
+      }
+
+      if (
+        a.total_criticality !== null &&
+        b.total_criticality !== null &&
+        a.total_criticality !== b.total_criticality
+      ) {
+        return b.total_criticality - a.total_criticality;
+      }
+
+      return a.vehicle_code.localeCompare(b.vehicle_code, "es", {
+        numeric: true,
       });
-  }) as () => VehicleCriticalityRow[], [
-    workOrders,
-    settings,
-    vehiclesWithChecklist,
-  ]);
+    });
+  }, [workOrders, settings, vehiclesWithChecklist]);
 
   const vehicleCodes = useMemo(() => {
     const codes = new Set<string>();
@@ -476,9 +605,7 @@ export function VehicleCriticalityClient() {
         normalizeText(row.vehicle_code).includes(normalizedSearch) ||
         normalizeText(row.vehicle).includes(normalizedSearch) ||
         normalizeText(row.license_plate).includes(normalizedSearch) ||
-        normalizeText(getStatusLabel(row.status_label)).includes(
-          normalizedSearch,
-        );
+        normalizeText(getStatusLabel(row.status_label)).includes(normalizedSearch);
 
       const matchesCode =
         codeFilter === "Todos" || row.vehicle_code === codeFilter;
@@ -492,11 +619,13 @@ export function VehicleCriticalityClient() {
         normalizeText(row.vehicle).includes(normalizedVehicle);
 
       const matchesMinTotal =
+        row.is_retired ||
         minTotal === null ||
         !Number.isFinite(minTotal) ||
         (row.total_criticality !== null && row.total_criticality >= minTotal);
 
       const matchesMaxTotal =
+        row.is_retired ||
         maxTotal === null ||
         !Number.isFinite(maxTotal) ||
         (row.total_criticality !== null && row.total_criticality <= maxTotal);
@@ -520,32 +649,36 @@ export function VehicleCriticalityClient() {
     maxTotalFilter,
   ]);
 
-  const filteredRows = useMemo(() => {
-    return baseFilteredRows.filter((row) => {
-      const matchesStatus =
-        statusFilter === "Todos" || row.status_label === statusFilter;
+  const activeBaseRows = baseFilteredRows.filter((row) => !row.is_retired);
+  const retiredBaseRows = baseFilteredRows.filter((row) => row.is_retired);
 
-      return matchesStatus;
-    });
+  const filteredRows = useMemo(() => {
+    if (statusFilter === "Todos") {
+      return baseFilteredRows.filter((row) => !row.is_retired);
+    }
+
+    return baseFilteredRows.filter((row) => row.status_label === statusFilter);
   }, [baseFilteredRows, statusFilter]);
 
-  const totalVehicles = baseFilteredRows.length;
+  const totalVehicles = activeBaseRows.length;
 
-  const goodVehicles = baseFilteredRows.filter(
+  const goodVehicles = activeBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "BUENO",
   ).length;
 
-  const regularVehicles = baseFilteredRows.filter(
+  const regularVehicles = activeBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "REGULAR",
   ).length;
 
-  const badVehicles = baseFilteredRows.filter(
+  const badVehicles = activeBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "MALO",
   ).length;
 
-  const withoutChecklistVehicles = baseFilteredRows.filter(
+  const withoutChecklistVehicles = activeBaseRows.filter(
     (row) => !row.has_checklist,
   ).length;
+
+  const retiredVehicles = retiredBaseRows.length;
 
   const activeFilters = hasActiveFilters({
     search,
@@ -577,6 +710,8 @@ export function VehicleCriticalityClient() {
   };
 
   const startEditing = (row: VehicleCriticalityRow) => {
+    if (row.is_retired) return;
+
     setEditingVehicleCode(row.vehicle_code);
     setEditingValues({
       replacement_score: String(row.replacement_score),
@@ -677,10 +812,29 @@ export function VehicleCriticalityClient() {
         value: withoutChecklistVehicles,
         color: "#f97316",
       },
+      {
+        key: "DADO DE BAJA",
+        name: "Dados de baja",
+        value: retiredVehicles,
+        color: "#64748b",
+      },
     ];
 
     return data.filter((item) => item.value > 0);
-  }, [goodVehicles, regularVehicles, badVehicles, withoutChecklistVehicles]);
+  }, [
+    goodVehicles,
+    regularVehicles,
+    badVehicles,
+    withoutChecklistVehicles,
+    retiredVehicles,
+  ]);
+
+  const chartTotal =
+    goodVehicles +
+    regularVehicles +
+    badVehicles +
+    withoutChecklistVehicles +
+    retiredVehicles;
 
   return (
     <div className="space-y-6">
@@ -723,11 +877,11 @@ export function VehicleCriticalityClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <SummaryCard
           title="Vehículos analizados"
           value={totalVehicles}
-          description="Según filtros aplicados"
+          description="Activos según filtros"
           active={statusFilter === "Todos"}
           onClick={() => handleCardFilter("Todos")}
         />
@@ -759,16 +913,24 @@ export function VehicleCriticalityClient() {
         <SummaryCard
           title="Sin checklist"
           value={withoutChecklistVehicles}
-          description="No se puede calcular seguridad"
+          description="Activos sin checklist"
           active={statusFilter === "SIN CHECKLIST"}
           onClick={() => handleCardFilter("SIN CHECKLIST")}
+        />
+
+        <SummaryCard
+          title="Dados de baja"
+          value={retiredVehicles}
+          description="Excluidos del cálculo"
+          active={statusFilter === "DADO DE BAJA"}
+          onClick={() => handleCardFilter("DADO DE BAJA")}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <CriticalityChartCard
           data={chartData}
-          total={totalVehicles}
+          total={chartTotal}
           loading={loading}
         />
 
@@ -790,13 +952,17 @@ export function VehicleCriticalityClient() {
               </p>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Si el vehículo no tiene checklist, no se calcula la criticidad
-                total porque no se puede determinar la seguridad.
+                Los vehículos dados de baja quedan visibles para control, pero
+                no entran en el cálculo de criticidad.
               </p>
             </div>
 
             <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-              {filteredRows.length} de {baseFilteredRows.length} vehículos
+              {filteredRows.length} de{" "}
+              {statusFilter === "DADO DE BAJA"
+                ? retiredBaseRows.length
+                : activeBaseRows.length}{" "}
+              vehículos
             </Badge>
           </div>
 
@@ -825,9 +991,7 @@ export function VehicleCriticalityClient() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium">
-                  Código
-                </label>
+                <label className="mb-1 block text-xs font-medium">Código</label>
 
                 <select
                   value={codeFilter}
@@ -845,9 +1009,7 @@ export function VehicleCriticalityClient() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium">
-                  Estado
-                </label>
+                <label className="mb-1 block text-xs font-medium">Estado</label>
 
                 <select
                   value={statusFilter}
@@ -861,6 +1023,7 @@ export function VehicleCriticalityClient() {
                   <option value="REGULAR">Regular</option>
                   <option value="MALO">Crítico</option>
                   <option value="SIN CHECKLIST">Sin checklist</option>
+                  <option value="DADO DE BAJA">Dado de baja</option>
                 </select>
               </div>
 
@@ -995,10 +1158,7 @@ export function VehicleCriticalityClient() {
                       const isSaving = savingVehicleCode === row.vehicle_code;
 
                       return (
-                        <tr
-                          key={row.vehicle_code}
-                          className="border-t align-top"
-                        >
+                        <tr key={row.vehicle_code} className="border-t align-top">
                           <td className="px-3 py-3 font-semibold">
                             {row.vehicle_code}
                           </td>
@@ -1008,39 +1168,52 @@ export function VehicleCriticalityClient() {
                           <td className="px-3 py-3">{row.license_plate}</td>
 
                           <td className="px-3 py-3 text-center">
-                            {row.work_orders_count}
+                            {row.is_retired ? "--" : row.work_orders_count}
                           </td>
 
-                          <ReadOnlyScoreCell
-                            value={row.mechanical_reliability_score}
-                          />
+                          {row.is_retired ? (
+                            <>
+                              <MutedCell />
+                              <MutedCell />
+                              <MutedCell />
+                              <MutedCell />
+                            </>
+                          ) : (
+                            <>
+                              <ReadOnlyScoreCell
+                                value={row.mechanical_reliability_score}
+                              />
 
-                          <ReadOnlyScoreCell value={row.service_criticality} />
+                              <ReadOnlyScoreCell
+                                value={row.service_criticality}
+                              />
 
-                          <EditableReplacementCell
-                            isEditing={isEditing}
-                            value={row.replacement_score}
-                            inputValue={editingValues.replacement_score}
-                            onChange={(value) =>
-                              updateEditingValue("replacement_score", value)
-                            }
-                          />
+                              <EditableReplacementCell
+                                isEditing={isEditing}
+                                value={row.replacement_score}
+                                inputValue={editingValues.replacement_score}
+                                onChange={(value) =>
+                                  updateEditingValue("replacement_score", value)
+                                }
+                              />
 
-                          <td className="px-3 py-3 text-center">
-                            {row.has_checklist ? (
-                              <Badge
-                                className={`${getScoreBadgeClass(
-                                  row.security_score,
-                                )} border`}
-                              >
-                                {row.security_score}
-                              </Badge>
-                            ) : (
-                              <Badge className="border border-orange-200 bg-orange-100 text-orange-800">
-                                --
-                              </Badge>
-                            )}
-                          </td>
+                              <td className="px-3 py-3 text-center">
+                                {row.has_checklist ? (
+                                  <Badge
+                                    className={`${getScoreBadgeClass(
+                                      row.security_score,
+                                    )} border`}
+                                  >
+                                    {row.security_score}
+                                  </Badge>
+                                ) : (
+                                  <Badge className="border border-orange-200 bg-orange-100 text-orange-800">
+                                    --
+                                  </Badge>
+                                )}
+                              </td>
+                            </>
+                          )}
 
                           <td className="px-3 py-3 text-center">
                             <Badge
@@ -1063,7 +1236,11 @@ export function VehicleCriticalityClient() {
                           </td>
 
                           <td className="px-3 py-3">
-                            {isEditing ? (
+                            {row.is_retired ? (
+                              <div className="text-center text-xs text-muted-foreground">
+                                Excluido
+                              </div>
+                            ) : isEditing ? (
                               <div className="flex justify-center gap-2">
                                 <Button
                                   type="button"
@@ -1142,128 +1319,139 @@ export function VehicleCriticalityClient() {
                           </Badge>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <MobileScore
-                            label="OT 6 meses"
-                            value={row.work_orders_count}
-                          />
-                          <MobileScore
-                            label="Conf. mecánica"
-                            value={row.mechanical_reliability_score}
-                          />
-                          <MobileScore
-                            label="Crit. servicio"
-                            value={row.service_criticality}
-                          />
-
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Seguridad
-                            </p>
-
-                            {row.has_checklist ? (
-                              <Badge
-                                className={`${getScoreBadgeClass(
-                                  row.security_score,
-                                )} mt-1 border`}
-                              >
-                                {row.security_score}
-                              </Badge>
-                            ) : (
-                              <Badge className="mt-1 border border-orange-200 bg-orange-100 text-orange-800">
-                                --
-                              </Badge>
-                            )}
+                        {row.is_retired ? (
+                          <div className="rounded-xl border bg-muted/20 p-3 text-sm text-muted-foreground">
+                            Vehículo dado de baja. Excluido del cálculo de
+                            criticidad.
                           </div>
-
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Reemplazo
-                            </p>
-
-                            {isEditing ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={5}
-                                value={editingValues.replacement_score}
-                                onChange={(event) =>
-                                  updateEditingValue(
-                                    "replacement_score",
-                                    event.target.value,
-                                  )
-                                }
-                                className="mt-1 h-9 rounded-lg"
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <MobileScore
+                                label="OT 6 meses"
+                                value={row.work_orders_count}
                               />
-                            ) : (
-                              <Badge
-                                className={`${getScoreBadgeClass(
-                                  row.replacement_score,
-                                )} mt-1 border`}
-                              >
-                                {row.replacement_score}
-                              </Badge>
-                            )}
-                          </div>
 
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Total
-                            </p>
+                              <MobileScore
+                                label="Conf. mecánica"
+                                value={row.mechanical_reliability_score}
+                              />
 
-                            <Badge
-                              className={`${getTotalBadgeClass(
-                                row.total_criticality,
-                              )} mt-1 border`}
-                            >
-                              {row.total_criticality ?? "--"}
-                            </Badge>
-                          </div>
-                        </div>
+                              <MobileScore
+                                label="Crit. servicio"
+                                value={row.service_criticality}
+                              />
 
-                        <div className="flex justify-end border-t pt-3">
-                          {isEditing ? (
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => saveEditing(row.vehicle_code)}
-                                disabled={isSaving}
-                                className="h-8 gap-1 rounded-lg"
-                              >
-                                {isSaving ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Seguridad
+                                </p>
+
+                                {row.has_checklist ? (
+                                  <Badge
+                                    className={`${getScoreBadgeClass(
+                                      row.security_score,
+                                    )} mt-1 border`}
+                                  >
+                                    {row.security_score}
+                                  </Badge>
                                 ) : (
-                                  <Check className="h-4 w-4" />
+                                  <Badge className="mt-1 border border-orange-200 bg-orange-100 text-orange-800">
+                                    --
+                                  </Badge>
                                 )}
-                                Guardar
-                              </Button>
+                              </div>
 
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={cancelEditing}
-                                disabled={isSaving}
-                                className="h-8 gap-1 rounded-lg"
-                              >
-                                <X className="h-4 w-4" />
-                                Cancelar
-                              </Button>
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Reemplazo
+                                </p>
+
+                                {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={5}
+                                    value={editingValues.replacement_score}
+                                    onChange={(event) =>
+                                      updateEditingValue(
+                                        "replacement_score",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="mt-1 h-9 rounded-lg"
+                                  />
+                                ) : (
+                                  <Badge
+                                    className={`${getScoreBadgeClass(
+                                      row.replacement_score,
+                                    )} mt-1 border`}
+                                  >
+                                    {row.replacement_score}
+                                  </Badge>
+                                )}
+                              </div>
+
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Total
+                                </p>
+
+                                <Badge
+                                  className={`${getTotalBadgeClass(
+                                    row.total_criticality,
+                                  )} mt-1 border`}
+                                >
+                                  {row.total_criticality ?? "--"}
+                                </Badge>
+                              </div>
                             </div>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => startEditing(row)}
-                              className="h-8 gap-1 rounded-lg"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Editar reemplazo
-                            </Button>
-                          )}
-                        </div>
+
+                            <div className="flex justify-end border-t pt-3">
+                              {isEditing ? (
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => saveEditing(row.vehicle_code)}
+                                    disabled={isSaving}
+                                    className="h-8 gap-1 rounded-lg"
+                                  >
+                                    {isSaving ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                    Guardar
+                                  </Button>
+
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={cancelEditing}
+                                    disabled={isSaving}
+                                    className="h-8 gap-1 rounded-lg"
+                                  >
+                                    <X className="h-4 w-4" />
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => startEditing(row)}
+                                  className="h-8 gap-1 rounded-lg"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Editar reemplazo
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -1274,6 +1462,14 @@ export function VehicleCriticalityClient() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function MutedCell() {
+  return (
+    <td className="px-3 py-3 text-center">
+      <span className="text-muted-foreground">--</span>
+    </td>
   );
 }
 
@@ -1437,7 +1633,7 @@ function CriticalityChartCard({
               </ResponsiveContainer>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
               {data.map((item) => {
                 const percent =
                   total > 0 ? ((item.value / total) * 100).toFixed(1) : "0.0";
@@ -1522,8 +1718,18 @@ function CriticalityLegendCard() {
 
           <p>
             <strong className="text-foreground">Sin checklist:</strong> si el
-            vehículo nunca tuvo checklist cargada, no se calcula la criticidad
-            total porque no se puede determinar la seguridad.
+            vehículo activo nunca tuvo checklist cargada, no se calcula la
+            criticidad total porque no se puede determinar la seguridad.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Dados de baja:</strong> quedan
+            visibles para control, pero se excluyen del cálculo de criticidad.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Regadores (C):</strong> se
+            excluye porque no representa un vehículo individual.
           </p>
         </div>
 
@@ -1612,6 +1818,16 @@ function CriticalityLegendCard() {
               <p>
                 <strong className="text-foreground">Sin checklist:</strong> no
                 se calcula criticidad total.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Badge className="border border-slate-300 bg-slate-100 text-slate-800">
+                Baja
+              </Badge>
+              <p>
+                <strong className="text-foreground">Dado de baja:</strong>{" "}
+                excluido del cálculo.
               </p>
             </div>
           </div>

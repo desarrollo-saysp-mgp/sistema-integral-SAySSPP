@@ -70,6 +70,7 @@ type WorkOrderFormData = {
 };
 
 type WorkOrderForCriticality = {
+  order_number?: string | number | null;
   vehicle_code?: string | null;
   entry_date?: string | null;
   failure_type?: string | null;
@@ -131,6 +132,8 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
 
+const FIRST_AUTOMATIC_WORK_ORDER_NUMBER = 2000;
+
 const initialFormData: WorkOrderFormData = {
   order_number: "",
   entry_date: "",
@@ -172,6 +175,23 @@ const toNumber = (value: unknown) => {
   if (!Number.isFinite(numberValue)) return 0;
 
   return numberValue;
+};
+
+const getNextWorkOrderNumber = (workOrders: WorkOrderForCriticality[]) => {
+  const maxNumber = workOrders.reduce((max, order) => {
+    const cleanOrderNumber = String(order.order_number ?? "").trim();
+    const numericOrderNumber = Number(cleanOrderNumber);
+
+    if (!Number.isFinite(numericOrderNumber)) return max;
+
+    return Math.max(max, numericOrderNumber);
+  }, 0);
+
+  if (maxNumber < FIRST_AUTOMATIC_WORK_ORDER_NUMBER) {
+    return String(FIRST_AUTOMATIC_WORK_ORDER_NUMBER);
+  }
+
+  return String(maxNumber + 1);
 };
 
 const getDateValue = (dateString?: string | null) => {
@@ -324,6 +344,7 @@ export function WorkOrderCreateClient() {
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [criticalityLoading, setCriticalityLoading] = useState(false);
+  const [orderNumberLoading, setOrderNumberLoading] = useState(false);
   const [criticalityByVehicleCode, setCriticalityByVehicleCode] =
     useState<VehicleCriticalityByCode>({});
 
@@ -337,6 +358,49 @@ export function WorkOrderCreateClient() {
       recognitionRef.current?.abort();
       recognitionRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    const fetchNextOrderNumber = async () => {
+      try {
+        setOrderNumberLoading(true);
+
+        const response = await fetch("/api/work-orders", {
+          cache: "no-store",
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "No se pudo calcular el próximo número de OT",
+          );
+        }
+
+        const workOrders: WorkOrderForCriticality[] = result.data || [];
+        const nextOrderNumber = getNextWorkOrderNumber(workOrders);
+
+        setFormData((prev) => {
+          if (prev.order_number.trim()) return prev;
+
+          return {
+            ...prev,
+            order_number: nextOrderNumber,
+          };
+        });
+      } catch (error) {
+        console.error("Error loading next work order number:", error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo calcular el próximo número de OT",
+        );
+      } finally {
+        setOrderNumberLoading(false);
+      }
+    };
+
+    fetchNextOrderNumber();
   }, []);
 
   useEffect(() => {
@@ -707,6 +771,7 @@ export function WorkOrderCreateClient() {
         },
         body: JSON.stringify({
           ...formData,
+          order_number: formData.order_number.trim(),
           entry_date: formData.entry_date || null,
           exit_date: formData.exit_date || null,
           spare_part_code: null,
@@ -765,13 +830,22 @@ export function WorkOrderCreateClient() {
         <CardContent className="space-y-6 pt-0">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <Field label="N° orden de trabajo">
-              <Input
-                value={formData.order_number}
-                onChange={(event) =>
-                  handleChange("order_number", event.target.value)
-                }
-                placeholder="Ej: 1"
-              />
+              <div className="space-y-1">
+                <Input
+                  value={formData.order_number}
+                  onChange={(event) =>
+                    handleChange("order_number", event.target.value)
+                  }
+                  placeholder="Ej: 2000"
+                  disabled={orderNumberLoading}
+                />
+
+                <p className="text-xs text-muted-foreground">
+                  {orderNumberLoading
+                    ? "Calculando próximo número..."
+                    : "Se completa automáticamente, pero podés editarlo si hace falta."}
+                </p>
+              </div>
             </Field>
 
             <DateField
