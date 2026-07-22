@@ -287,7 +287,13 @@ const getInitialFormData = (order: WorkOrderWithSupplies): WorkOrderFormData => 
   };
 };
 
-export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies }) {
+export function WorkOrderEditClient({
+  order,
+  returnTo = WORK_ORDERS_REGISTER_PATH,
+}: {
+  order: WorkOrderWithSupplies;
+  returnTo?: string;
+}) {
   const router = useRouter();
 
   const [formData, setFormData] = useState<WorkOrderFormData>(
@@ -864,7 +870,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies })
       }
 
       toast.success("Orden de trabajo actualizada correctamente");
-      router.push(WORK_ORDERS_REGISTER_PATH);
+      router.push(returnTo);
       router.refresh();
     } catch (error) {
       console.error("Error updating work order:", error);
@@ -894,7 +900,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies })
 
       toast.success("Orden de trabajo eliminada correctamente");
       setIsDeleteDialogOpen(false);
-      router.push(WORK_ORDERS_REGISTER_PATH);
+      router.push(returnTo);
       router.refresh();
     } catch (error) {
       console.error("Error deleting work order:", error);
@@ -915,7 +921,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies })
           <Button
             type="button"
             variant="ghost"
-            onClick={() => router.push(WORK_ORDERS_REGISTER_PATH)}
+            onClick={() => router.push(returnTo)}
             className="-ml-2 gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1236,7 +1242,7 @@ export function WorkOrderEditClient({ order }: { order: WorkOrderWithSupplies })
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(WORK_ORDERS_REGISTER_PATH)}
+              onClick={() => router.push(returnTo)}
               disabled={saving || deleting}
               className="w-full sm:w-auto"
             >

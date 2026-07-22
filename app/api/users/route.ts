@@ -9,7 +9,8 @@ type SupportedRole =
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR"
-  | "Taller";
+  | "Taller"
+  | "Suministros";
 
 const VALID_ROLES: SupportedRole[] = [
   "Admin",
@@ -20,6 +21,7 @@ const VALID_ROLES: SupportedRole[] = [
   "FC_RRHH",
   "FC_SECTOR",
   "Taller",
+  "Suministros",
 ];
 
 function getRoleConfig(role: SupportedRole, email?: string) {
@@ -34,6 +36,7 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "rrhh",
           "fleet",
           "work_orders",
+          "stock_inventory",
           "fuel",
           "kilometers",
           "tires",
@@ -55,6 +58,7 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "rrhh",
           "fleet",
           "work_orders",
+          "stock_inventory",
           "fuel",
           "kilometers",
           "tires",
@@ -133,6 +137,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         fc_sectors: [],
       };
 
+    case "Suministros":
+      return {
+        modules: ["stock_inventory"],
+        is_readonly: false,
+        default_module: "stock_inventory",
+        fc_sectors: [],
+      };
+
     default:
       return {
         modules: [],
@@ -156,16 +168,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: currentUserError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
 
+    if (currentUserError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo obtener el perfil del usuario" },
+        { status: 403 },
+      );
+    }
+
     if (
-      !currentUser ||
-      (currentUser.role !== "Admin" &&
-        currentUser.role !== "AdminLectura")
+      currentUser.role !== "Admin" &&
+      currentUser.role !== "AdminLectura"
     ) {
       return NextResponse.json(
         {
@@ -177,8 +195,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search");
+    const search = searchParams.get("search")?.trim();
     const role = searchParams.get("role") as SupportedRole | null;
+
+    if (role && !VALID_ROLES.includes(role)) {
+      return NextResponse.json(
+        { error: "El rol utilizado como filtro no es válido" },
+        { status: 400 },
+      );
+    }
 
     let query = supabase
       .from("users")
@@ -186,7 +211,9 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (search) {
-      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      query = query.or(
+        `full_name.ilike.%${search}%,email.ilike.%${search}%`,
+      );
     }
 
     if (role) {
@@ -197,6 +224,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Error fetching users:", error);
+
       return NextResponse.json(
         { error: "Error al cargar usuarios" },
         { status: 500 },
@@ -206,6 +234,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: users });
   } catch (error) {
     console.error("Unexpected error in GET /api/users:", error);
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
@@ -226,13 +255,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: currentUserError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (
+      currentUserError ||
+      !currentUser ||
+      currentUser.role !== "Admin"
+    ) {
       return NextResponse.json(
         { error: "No autorizado. Solo administradores pueden crear usuarios" },
         { status: 403 },
@@ -240,6 +273,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
     const { full_name, email, role, password } = body as {
       full_name?: string;
       email?: string;
@@ -247,7 +281,10 @@ export async function POST(request: NextRequest) {
       password?: string;
     };
 
-    if (!full_name || !email || !role || !password) {
+    const normalizedFullName = full_name?.trim();
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedFullName || !normalizedEmail || !role || !password) {
       return NextResponse.json(
         {
           error:
@@ -261,7 +298,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR" o "Taller"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller" o "Suministros"',
         },
         { status: 400 },
       );
@@ -278,16 +315,17 @@ export async function POST(request: NextRequest) {
 
     const { data: newAuthUser, error: authCreateError } =
       await adminClient.auth.admin.createUser({
-        email,
+        email: normalizedEmail,
         password,
         email_confirm: true,
         user_metadata: {
-          full_name,
+          full_name: normalizedFullName,
         },
       });
 
     if (authCreateError || !newAuthUser.user) {
       console.error("Error creating auth user:", authCreateError);
+
       return NextResponse.json(
         {
           error:
@@ -298,13 +336,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const roleConfig = getRoleConfig(role, email);
+    const roleConfig = getRoleConfig(role, normalizedEmail);
 
     const { data: newUser, error: dbError } = await supabase
       .from("users")
       .update({
-        full_name,
-        email,
+        full_name: normalizedFullName,
+        email: normalizedEmail,
         role,
         modules: roleConfig.modules,
         is_readonly: roleConfig.is_readonly,
@@ -327,11 +365,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { data: newUser, message: "Usuario creado exitosamente" },
+      {
+        data: newUser,
+        message: "Usuario creado exitosamente",
+      },
       { status: 201 },
     );
   } catch (error) {
     console.error("Unexpected error in POST /api/users:", error);
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },

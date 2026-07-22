@@ -14,7 +14,8 @@ export interface Database {
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR"
-          | "Taller";
+          | "Taller"
+          | "Suministros";
           modules: string[] | null;
           is_readonly: boolean | null;
           default_module: string | null;
@@ -34,7 +35,8 @@ export interface Database {
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR"
-          | "Taller";
+          | "Taller"
+          | "Suministros";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -54,7 +56,8 @@ export interface Database {
           | "AdminLectura"
           | "FC_RRHH"
           | "FC_SECTOR"
-          | "Taller";
+          | "Taller"
+          | "Suministros";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -339,10 +342,209 @@ export interface Database {
           spare_part_detail?: string | null;
         };
       };
+
+
+      supply_categories: {
+        Row: {
+          id: string;
+          name: string;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
+      supply_products: {
+        Row: {
+          id: string;
+          category_id: string;
+          name: string;
+          unit: string;
+          minimum_stock: number;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          category_id: string;
+          name: string;
+          unit?: string;
+          minimum_stock?: number;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          category_id?: string;
+          name?: string;
+          unit?: string;
+          minimum_stock?: number;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
+      supply_recipients: {
+        Row: {
+          id: string;
+          full_name: string;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          full_name?: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
+      supply_areas: {
+        Row: {
+          id: string;
+          name: string;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
+      supply_movements: {
+        Row: {
+          id: string;
+          movement_date: string;
+          movement_type:
+            | "INITIAL"
+            | "ENTRY"
+            | "DELIVERY"
+            | "ADJUSTMENT_IN"
+            | "ADJUSTMENT_OUT";
+          product_id: string;
+          quantity: number;
+          recipient_id: string | null;
+          area_id: string | null;
+          reference: string | null;
+          observations: string | null;
+          legacy_destination: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          movement_date?: string;
+          movement_type:
+            | "INITIAL"
+            | "ENTRY"
+            | "DELIVERY"
+            | "ADJUSTMENT_IN"
+            | "ADJUSTMENT_OUT";
+          product_id: string;
+          quantity: number;
+          recipient_id?: string | null;
+          area_id?: string | null;
+          reference?: string | null;
+          observations?: string | null;
+          legacy_destination?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          movement_date?: string;
+          movement_type?:
+            | "INITIAL"
+            | "ENTRY"
+            | "DELIVERY"
+            | "ADJUSTMENT_IN"
+            | "ADJUSTMENT_OUT";
+          product_id?: string;
+          quantity?: number;
+          recipient_id?: string | null;
+          area_id?: string | null;
+          reference?: string | null;
+          observations?: string | null;
+          legacy_destination?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
 
     Views: {
-      [_ in never]: never;
+      supply_current_stock: {
+        Row: {
+          product_id: string;
+          product_name: string;
+          unit: string;
+          minimum_stock: number;
+          product_active: boolean;
+          category_id: string;
+          category_name: string;
+          category_active: boolean;
+          current_stock: number;
+          initial_stock: number;
+          total_entries: number;
+          total_deliveries: number;
+          total_adjustments_in: number;
+          total_adjustments_out: number;
+          low_stock: boolean;
+        };
+      };
     };
 
     Functions: {
@@ -390,6 +592,52 @@ export type WorkOrderInsert =
 export type WorkOrderUpdate =
   Database["public"]["Tables"]["work_orders"]["Update"];
 
+
+export type SupplyCategory =
+  Database["public"]["Tables"]["supply_categories"]["Row"];
+export type SupplyCategoryInsert =
+  Database["public"]["Tables"]["supply_categories"]["Insert"];
+export type SupplyCategoryUpdate =
+  Database["public"]["Tables"]["supply_categories"]["Update"];
+
+export type SupplyProduct =
+  Database["public"]["Tables"]["supply_products"]["Row"];
+export type SupplyProductInsert =
+  Database["public"]["Tables"]["supply_products"]["Insert"];
+export type SupplyProductUpdate =
+  Database["public"]["Tables"]["supply_products"]["Update"];
+
+export type SupplyRecipient =
+  Database["public"]["Tables"]["supply_recipients"]["Row"];
+export type SupplyRecipientInsert =
+  Database["public"]["Tables"]["supply_recipients"]["Insert"];
+export type SupplyRecipientUpdate =
+  Database["public"]["Tables"]["supply_recipients"]["Update"];
+
+export type SupplyArea =
+  Database["public"]["Tables"]["supply_areas"]["Row"];
+export type SupplyAreaInsert =
+  Database["public"]["Tables"]["supply_areas"]["Insert"];
+export type SupplyAreaUpdate =
+  Database["public"]["Tables"]["supply_areas"]["Update"];
+
+export type SupplyMovement =
+  Database["public"]["Tables"]["supply_movements"]["Row"];
+export type SupplyMovementInsert =
+  Database["public"]["Tables"]["supply_movements"]["Insert"];
+export type SupplyMovementUpdate =
+  Database["public"]["Tables"]["supply_movements"]["Update"];
+
+export type SupplyCurrentStock =
+  Database["public"]["Views"]["supply_current_stock"]["Row"];
+
+export type SupplyMovementType =
+  | "INITIAL"
+  | "ENTRY"
+  | "DELIVERY"
+  | "ADJUSTMENT_IN"
+  | "ADJUSTMENT_OUT";
+
 export type ComplaintWithDetails = Complaint & {
   service: Service | null;
   cause: Cause | null;
@@ -411,4 +659,5 @@ export type UserRole =
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR"
-  | "Taller";
+  | "Taller"
+  | "Suministros";

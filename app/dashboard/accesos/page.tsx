@@ -8,7 +8,8 @@ type ModuleKey =
   | "complaints"
   | "purchase_requests"
   | "general_dashboard"
-  | "work_orders";
+  | "work_orders"
+  | "stock_inventory";
 
 type AccessItem = {
   key: ModuleKey;
@@ -26,6 +27,7 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/complaints/home",
     available: true,
   },
+
   purchase_requests: {
     key: "purchase_requests",
     title: "Formularios de Compra",
@@ -33,6 +35,7 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/solicitud-compra",
     available: true,
   },
+
   general_dashboard: {
     key: "general_dashboard",
     title: "Tablero General",
@@ -40,11 +43,21 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/tablero-general",
     available: true,
   },
+
   work_orders: {
     key: "work_orders",
     title: "Órdenes de Trabajo",
     description: "Carga y seguimiento de órdenes de trabajo del taller.",
     href: "/dashboard/taller/ordenes-trabajo",
+    available: true,
+  },
+
+  stock_inventory: {
+    key: "stock_inventory",
+    title: "Stock, Inventario y Compras",
+    description:
+      "Administración de stock, inventario, compras y entrega de productos.",
+    href: "/dashboard/suministros",
     available: true,
   },
 };
@@ -92,12 +105,16 @@ export default async function AccesosPage() {
   }
 
   const allowedRoles = ["admin", "adminlectura"];
+
   const userRole = normalizeText(profile.role);
   const userEmail = normalizeText(profile.email || user.email);
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
   const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
   const isTallerUser = userRole === "taller";
+  const isSuministrosUser = userRole === "suministros";
+
+  const hasAllowedRole = allowedRoles.includes(userRole);
 
   const rawModules: string[] = Array.isArray(profile.modules)
     ? profile.modules
@@ -105,11 +122,9 @@ export default async function AccesosPage() {
 
   const modules = rawModules.map((module) => normalizeModule(module));
 
-  const hasAllowedRole = allowedRoles.includes(userRole);
-
   const baseAccesses = modules
     .map((moduleKey) => MODULE_CONFIG[moduleKey as ModuleKey])
-    .filter(Boolean);
+    .filter((item): item is AccessItem => Boolean(item));
 
   const accesses = [...baseAccesses];
 
@@ -117,11 +132,16 @@ export default async function AccesosPage() {
     (item) => item.key === "general_dashboard",
   );
 
+  const alreadyHasStockInventory = accesses.some(
+    (item) => item.key === "stock_inventory",
+  );
+
   /*
     Admin/AdminLectura: ven Tablero General.
     GIRSU: ve Tablero GIRSU.
     Arbolado: ve Tablero Arbolado.
-    Taller: solo work_orders.
+    Taller: solo Órdenes de Trabajo.
+    Suministros: solo Stock, Inventario y Compras.
   */
   if (
     (hasAllowedRole || isGirsuUser || isArboladoUser) &&
@@ -130,9 +150,24 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.general_dashboard);
   }
 
+  /*
+    El módulo de Stock, Inventario y Compras estará disponible
+    para Admin, AdminLectura y Suministros.
+  */
+  if (
+    (hasAllowedRole || isSuministrosUser) &&
+    !alreadyHasStockInventory
+  ) {
+    accesses.push(MODULE_CONFIG.stock_inventory);
+  }
+
   const filteredAccesses = accesses.filter((item) => {
     if (isTallerUser) {
       return item.key === "work_orders";
+    }
+
+    if (isSuministrosUser) {
+      return item.key === "stock_inventory";
     }
 
     if (isGirsuUser || isArboladoUser) {
@@ -143,6 +178,10 @@ export default async function AccesosPage() {
       return hasAllowedRole;
     }
 
+    if (item.key === "stock_inventory") {
+      return hasAllowedRole;
+    }
+
     return true;
   });
 
@@ -150,6 +189,7 @@ export default async function AccesosPage() {
     <div className="container mx-auto space-y-8 p-6">
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Accesos del sistema</h1>
+
         <p className="text-muted-foreground">
           Seleccioná el módulo al que querés ingresar.
         </p>
