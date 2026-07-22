@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { WorkOrder } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,23 +185,117 @@ const getDateTimeValue = (dateString?: string | null) => {
   return new Date(year, month - 1, day).getTime();
 };
 
+const getSafePageParam = (value: string | null) => {
+  const page = Number(value || "1");
+
+  if (!Number.isFinite(page) || page < 1) return 1;
+
+  return Math.floor(page);
+};
+
+const setParamIfValid = (
+  params: URLSearchParams,
+  key: string,
+  value: string,
+  defaultValue = "",
+) => {
+  const cleanValue = value.trim();
+
+  if (!cleanValue || cleanValue === defaultValue) return;
+
+  params.set(key, cleanValue);
+};
+
 export function WorkOrdersClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const didMountFiltersRef = useRef(false);
+
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] = useState("");
-  const [areaFilter, setAreaFilter] = useState(ALL_VALUE);
-  const [statusFilter, setStatusFilter] = useState(ALL_VALUE);
-  const [dateFromFilter, setDateFromFilter] = useState("");
-  const [dateToFilter, setDateToFilter] = useState("");
-  const [repairTypeFilter, setRepairTypeFilter] = useState(ALL_VALUE);
-  const [vehicleFilter, setVehicleFilter] = useState(ALL_VALUE);
-  const [vehicleCodeFilter, setVehicleCodeFilter] = useState(ALL_VALUE);
-  const [failureTypeFilter, setFailureTypeFilter] = useState(ALL_VALUE);
-  const [driverFilter, setDriverFilter] = useState(ALL_VALUE);
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [areaFilter, setAreaFilter] = useState(
+    () => searchParams.get("area") || ALL_VALUE,
+  );
+  const [statusFilter, setStatusFilter] = useState(
+    () => searchParams.get("status") || ALL_VALUE,
+  );
+  const [dateFromFilter, setDateFromFilter] = useState(
+    () => searchParams.get("date_from") || "",
+  );
+  const [dateToFilter, setDateToFilter] = useState(
+    () => searchParams.get("date_to") || "",
+  );
+  const [repairTypeFilter, setRepairTypeFilter] = useState(
+    () => searchParams.get("repair") || ALL_VALUE,
+  );
+  const [vehicleFilter, setVehicleFilter] = useState(
+    () => searchParams.get("vehicle") || ALL_VALUE,
+  );
+  const [vehicleCodeFilter, setVehicleCodeFilter] = useState(
+    () => searchParams.get("code") || ALL_VALUE,
+  );
+  const [failureTypeFilter, setFailureTypeFilter] = useState(
+    () => searchParams.get("failure") || ALL_VALUE,
+  );
+  const [driverFilter, setDriverFilter] = useState(
+    () => searchParams.get("driver") || ALL_VALUE,
+  );
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() =>
+    getSafePageParam(searchParams.get("page")),
+  );
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("CERRADO");
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
+  const listQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+
+    setParamIfValid(params, "q", search);
+    setParamIfValid(params, "area", areaFilter, ALL_VALUE);
+    setParamIfValid(params, "status", statusFilter, ALL_VALUE);
+    setParamIfValid(params, "date_from", dateFromFilter);
+    setParamIfValid(params, "date_to", dateToFilter);
+    setParamIfValid(params, "repair", repairTypeFilter, ALL_VALUE);
+    setParamIfValid(params, "vehicle", vehicleFilter, ALL_VALUE);
+    setParamIfValid(params, "code", vehicleCodeFilter, ALL_VALUE);
+    setParamIfValid(params, "failure", failureTypeFilter, ALL_VALUE);
+    setParamIfValid(params, "driver", driverFilter, ALL_VALUE);
+
+    if (currentPage > 1) {
+      params.set("page", String(currentPage));
+    }
+
+    return params.toString();
+  }, [
+    search,
+    areaFilter,
+    statusFilter,
+    dateFromFilter,
+    dateToFilter,
+    repairTypeFilter,
+    vehicleFilter,
+    vehicleCodeFilter,
+    failureTypeFilter,
+    driverFilter,
+    currentPage,
+  ]);
+
+  const listReturnPath = useMemo(() => {
+    return listQueryString
+      ? `/dashboard/taller/ordenes-trabajo?${listQueryString}`
+      : "/dashboard/taller/ordenes-trabajo";
+  }, [listQueryString]);
+
+  const getOrderHref = (order: WorkOrder, action: "view" | "edit") => {
+    const params = new URLSearchParams();
+    params.set("returnTo", listReturnPath);
+
+    return `/dashboard/taller/ordenes-trabajo/${order.id}/${action}?${params.toString()}`;
+  };
 
   const fetchWorkOrders = async () => {
     try {
@@ -229,6 +324,12 @@ export function WorkOrdersClient() {
   useEffect(() => {
     fetchWorkOrders();
   }, []);
+
+  useEffect(() => {
+    const nextUrl = listQueryString ? `${pathname}?${listQueryString}` : pathname;
+
+    router.replace(nextUrl, { scroll: false });
+  }, [listQueryString, pathname, router]);
 
   const areaOptions = useMemo(() => {
     return getUniqueOptions(workOrders.map((order) => order.requesting_area));
@@ -369,7 +470,13 @@ export function WorkOrdersClient() {
   );
 
   useEffect(() => {
+    if (!didMountFiltersRef.current) {
+      didMountFiltersRef.current = true;
+      return;
+    }
+
     setCurrentPage(1);
+    setSelectedOrderIds([]);
   }, [
     search,
     areaFilter,
@@ -650,6 +757,62 @@ export function WorkOrdersClient() {
     const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
 
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleBulkStatusUpdate = async () => {
+    if (selectedOrderIds.length === 0) {
+      toast.error("Seleccioná al menos una OT para actualizar");
+      return;
+    }
+
+    if (!bulkStatus) {
+      toast.error("Seleccioná un estado válido");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Confirmás cambiar ${selectedOrderIds.length} OT al estado ${bulkStatus}?`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setBulkUpdating(true);
+
+      const response = await fetch("/api/work-orders/bulk-update", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ids: selectedOrderIds,
+          status: bulkStatus,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al actualizar OT seleccionadas");
+      }
+
+      toast.success(
+        `${result.count ?? selectedOrderIds.length} OT actualizada(s) correctamente`,
+      );
+
+      setSelectedOrderIds([]);
+      await fetchWorkOrders();
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating selected work orders:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar OT seleccionadas",
+      );
+    } finally {
+      setBulkUpdating(false);
+    }
   };
 
   const exportToExcel = () => {
@@ -1100,10 +1263,49 @@ export function WorkOrdersClient() {
             </div>
           </div>
           {hasSelectedOrders && (
-            <p className="text-sm text-muted-foreground">
-              {selectedWorkOrders.length} OT seleccionada(s). Al exportar o
-              enviar por WhatsApp se usarán solo esas OT.
-            </p>
+            <div className="flex flex-col gap-3 rounded-xl border bg-primary/5 p-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {selectedWorkOrders.length} OT seleccionada(s)
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Al exportar, enviar por WhatsApp o cambiar estado se usarán solo esas OT.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="min-w-[220px]">
+                  <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                    <SelectTrigger className="h-9 rounded-xl bg-background">
+                      <SelectValue placeholder="Cambiar estado a" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleBulkStatusUpdate}
+                  disabled={bulkUpdating || selectedOrderIds.length === 0}
+                  className="h-9 rounded-xl"
+                >
+                  {bulkUpdating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Actualizando...
+                    </>
+                  ) : (
+                    "Aplicar estado"
+                  )}
+                </Button>
+              </div>
+            </div>
           )}
         </CardHeader>
 
@@ -1241,7 +1443,7 @@ export function WorkOrdersClient() {
                             className="gap-2"
                           >
                             <Link
-                              href={`/dashboard/taller/ordenes-trabajo/${order.id}/view`}
+                              href={getOrderHref(order, "view")}
                             >
                               <Eye className="h-4 w-4" />
                               Ver
@@ -1255,7 +1457,7 @@ export function WorkOrdersClient() {
                             className="gap-2"
                           >
                             <Link
-                              href={`/dashboard/taller/ordenes-trabajo/${order.id}/edit`}
+                              href={getOrderHref(order, "edit")}
                             >
                               <Pencil className="h-4 w-4" />
                               Editar
@@ -1426,7 +1628,7 @@ export function WorkOrdersClient() {
                                 className="transition-all hover:bg-accent hover:text-primary active:scale-95"
                               >
                                 <Link
-                                  href={`/dashboard/taller/ordenes-trabajo/${order.id}/view`}
+                                  href={getOrderHref(order, "view")}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Link>
@@ -1440,7 +1642,7 @@ export function WorkOrdersClient() {
                                 className="transition-all hover:bg-accent hover:text-primary active:scale-95"
                               >
                                 <Link
-                                  href={`/dashboard/taller/ordenes-trabajo/${order.id}/edit`}
+                                  href={getOrderHref(order, "edit")}
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Link>

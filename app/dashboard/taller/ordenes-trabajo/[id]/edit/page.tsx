@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { WorkOrderEditClient } from "@/components/taller/WorkOrderEditClient";
 
+const WORK_ORDERS_PATH = "/dashboard/taller/ordenes-trabajo";
+
 const canAccessWorkOrders = (profile: {
   role: string;
   modules: string[] | null;
@@ -14,12 +16,39 @@ const canAccessWorkOrders = (profile: {
   );
 };
 
+const getSafeReturnTo = (value?: string | string[] | null) => {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (!rawValue) return WORK_ORDERS_PATH;
+
+  try {
+    const decodedValue = decodeURIComponent(rawValue);
+
+    if (!decodedValue.startsWith(WORK_ORDERS_PATH)) {
+      return WORK_ORDERS_PATH;
+    }
+
+    return decodedValue;
+  } catch {
+    if (rawValue.startsWith(WORK_ORDERS_PATH)) {
+      return rawValue;
+    }
+
+    return WORK_ORDERS_PATH;
+  }
+};
+
 export default async function WorkOrderEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ returnTo?: string | string[] }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const returnTo = getSafeReturnTo(resolvedSearchParams.returnTo);
+
   const supabase = await createClient();
 
   const {
@@ -47,7 +76,7 @@ export default async function WorkOrderEditPage({
     .single();
 
   if (error || !order) {
-    redirect("/dashboard/taller/ordenes-trabajo");
+    redirect(returnTo);
   }
 
   return (
@@ -59,7 +88,7 @@ export default async function WorkOrderEditPage({
         </p>
       </div>
 
-      <WorkOrderEditClient order={order} />
+      <WorkOrderEditClient order={order} returnTo={returnTo} />
     </div>
   );
 }
