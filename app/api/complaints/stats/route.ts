@@ -13,6 +13,7 @@ type ComplaintRow = {
   zone: string | null;
   status: string;
   complaint_date: string;
+  contact_method: string | null;
   form_variant: string | null;
   service_id?: number | null;
   service: RelatedItem | RelatedItem[] | null;
@@ -100,6 +101,9 @@ const getGroupKey = (complaint: ComplaintRow, groupByParam: string) => {
     case "status":
       return normalizeValue(complaint.status);
 
+    case "contact_method":
+      return normalizeValue(complaint.contact_method);
+
     default:
       return normalizeValue(complaint.address);
   }
@@ -149,6 +153,11 @@ const getGroupedStats = (complaints: ComplaintRow[], groupByParam: string) => {
 
     case "status":
       return groupBy(complaints, (item) => getGroupKey(item, "status"));
+
+    case "contact_method":
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "contact_method"),
+      );
 
     default:
       return groupBy(complaints, (item) => getGroupKey(item, "street")).slice(
@@ -278,6 +287,7 @@ export async function GET(request: NextRequest) {
           zone,
           status,
           complaint_date,
+          contact_method,
           form_variant,
           service_id,
           service:services(id, name),
@@ -411,6 +421,10 @@ export async function GET(request: NextRequest) {
       getGroupKey(item, "zone"),
     ).slice(0, 16);
 
+    const byContactMethod = groupBy(allComplaints, (item) =>
+      getGroupKey(item, "contact_method"),
+    );
+
     const grouped = getGroupedStats(allComplaints, groupByParam);
 
     const oldestInProgress = allComplaints
@@ -481,6 +495,7 @@ export async function GET(request: NextRequest) {
         byCause,
         byStatus,
         byZone,
+        byContactMethod,
         oldestInProgress,
         detail: {
           group: detailGroup,

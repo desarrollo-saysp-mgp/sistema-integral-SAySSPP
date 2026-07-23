@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ type AlertItem = {
 
 export default function AlertsBell() {
   const router = useRouter();
+  const loadingRef = useRef(false);
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -36,8 +37,11 @@ export default function AlertsBell() {
     setMounted(true);
   }, []);
 
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
+    if (loadingRef.current) return;
+
     try {
+      loadingRef.current = true;
       setLoading(true);
 
       const response = await fetch("/api/alerts", {
@@ -45,17 +49,28 @@ export default function AlertsBell() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudieron cargar las alertas");
+        console.warn("No se pudieron cargar alertas:", response.status);
+        setAlerts([]);
+        return;
       }
 
       const data = await response.json();
-      setAlerts(data.alerts ?? []);
+
+      setAlerts(
+        Array.isArray(data.alerts)
+          ? data.alerts
+          : Array.isArray(data.data)
+            ? data.data
+            : [],
+      );
     } catch (error) {
-      console.error("Error cargando alertas:", error);
+      console.warn("Error cargando alertas:", error);
+      setAlerts([]);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleViewAllAlerts = () => {
     setNavigating(true);
@@ -64,14 +79,14 @@ export default function AlertsBell() {
   };
 
   useEffect(() => {
-    loadAlerts();
+    void loadAlerts();
 
-    const interval = setInterval(() => {
-      loadAlerts();
+    const interval = window.setInterval(() => {
+      void loadAlerts();
     }, 60000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => window.clearInterval(interval);
+  }, [loadAlerts]);
 
   const total = alerts.length;
 
@@ -143,7 +158,7 @@ export default function AlertsBell() {
 
               <button
                 type="button"
-                onClick={loadAlerts}
+                onClick={() => void loadAlerts()}
                 className="shrink-0 rounded-md px-2 py-1 text-xs text-[#6B7280] hover:bg-gray-100"
               >
                 {loading ? "Actualizando..." : "Actualizar"}

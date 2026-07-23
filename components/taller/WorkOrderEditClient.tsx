@@ -870,7 +870,7 @@ export function WorkOrderEditClient({
       }
 
       toast.success("Orden de trabajo actualizada correctamente");
-      router.push(returnTo);
+      router.replace(returnTo);
       router.refresh();
     } catch (error) {
       console.error("Error updating work order:", error);
@@ -900,7 +900,7 @@ export function WorkOrderEditClient({
 
       toast.success("Orden de trabajo eliminada correctamente");
       setIsDeleteDialogOpen(false);
-      router.push(returnTo);
+      router.replace(returnTo);
       router.refresh();
     } catch (error) {
       console.error("Error deleting work order:", error);
@@ -921,7 +921,7 @@ export function WorkOrderEditClient({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => router.push(returnTo)}
+            onClick={() => router.replace(returnTo)}
             className="-ml-2 gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1242,7 +1242,7 @@ export function WorkOrderEditClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(returnTo)}
+              onClick={() => router.replace(returnTo)}
               disabled={saving || deleting}
               className="w-full sm:w-auto"
             >
