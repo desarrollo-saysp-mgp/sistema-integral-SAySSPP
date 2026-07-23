@@ -54,6 +54,7 @@ type StatsData = {
   byCause: StatItem[];
   byStatus: StatItem[];
   byZone: StatItem[];
+  byContactMethod: StatItem[];
   oldestInProgress: DetailComplaintItem[];
   detail?: {
     group: string | null;
@@ -78,7 +79,14 @@ type CurrentUser = {
   module?: string;
 };
 
-type DetailGroup = "street" | "service" | "cause" | "zone" | "status" | "delay";
+type DetailGroup =
+  | "street"
+  | "service"
+  | "cause"
+  | "zone"
+  | "status"
+  | "contact_method"
+  | "delay";
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
@@ -144,6 +152,7 @@ const getDetailGroupLabel = (group: DetailGroup) => {
   if (group === "service") return "servicio";
   if (group === "cause") return "causa";
   if (group === "zone") return "zona";
+  if (group === "contact_method") return "medio de contacto";
   if (group === "delay") return "demora";
   return "estado";
 };
@@ -980,6 +989,7 @@ export default function StatsPage() {
         byCause: [],
         byStatus: [],
         byZone: [],
+        byContactMethod: [],
         oldestInProgress: [],
       });
       setLoading(false);
@@ -996,6 +1006,7 @@ export default function StatsPage() {
         byCause: [],
         byStatus: [],
         byZone: [],
+        byContactMethod: [],
         oldestInProgress: [],
       });
       setLoading(false);
@@ -1200,6 +1211,13 @@ export default function StatsPage() {
         doc,
         title: "Reclamos por zona",
         data: stats.byZone,
+        startY: currentY,
+      });
+
+      currentY = addChartToPdf({
+        doc,
+        title: "Reclamos por medio de contacto",
+        data: stats.byContactMethod ?? [],
         startY: currentY,
       });
 
@@ -1596,14 +1614,19 @@ export default function StatsPage() {
               </CardContent>
             </Card>
 
-            <div className="xl:col-span-2">
-              <StatBars
-                title="Reclamos por estado"
-                data={stats?.byStatus ?? []}
-                group="status"
-                onItemClick={openDetailModal}
-              />
-            </div>
+            <StatBars
+              title="Reclamos por estado"
+              data={stats?.byStatus ?? []}
+              group="status"
+              onItemClick={openDetailModal}
+            />
+
+            <StatBars
+              title="Reclamos por medio de contacto"
+              data={stats?.byContactMethod ?? []}
+              group="contact_method"
+              onItemClick={openDetailModal}
+            />
           </div>
         )}
       </div>

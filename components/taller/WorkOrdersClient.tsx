@@ -210,7 +210,6 @@ export function WorkOrdersClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const didMountFiltersRef = useRef(false);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -250,6 +249,34 @@ export function WorkOrdersClient() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState("CERRADO");
   const [bulkUpdating, setBulkUpdating] = useState(false);
+
+  const filtersKey = useMemo(() => {
+    return [
+      search,
+      areaFilter,
+      statusFilter,
+      dateFromFilter,
+      dateToFilter,
+      repairTypeFilter,
+      vehicleFilter,
+      vehicleCodeFilter,
+      failureTypeFilter,
+      driverFilter,
+    ].join("||");
+  }, [
+    search,
+    areaFilter,
+    statusFilter,
+    dateFromFilter,
+    dateToFilter,
+    repairTypeFilter,
+    vehicleFilter,
+    vehicleCodeFilter,
+    failureTypeFilter,
+    driverFilter,
+  ]);
+
+  const previousFiltersKeyRef = useRef(filtersKey);
 
   const listQueryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -326,10 +353,16 @@ export function WorkOrdersClient() {
   }, []);
 
   useEffect(() => {
+    const currentUrl = searchParams.toString()
+      ? `${pathname}?${searchParams.toString()}`
+      : pathname;
+
     const nextUrl = listQueryString ? `${pathname}?${listQueryString}` : pathname;
 
+    if (currentUrl === nextUrl) return;
+
     router.replace(nextUrl, { scroll: false });
-  }, [listQueryString, pathname, router]);
+  }, [listQueryString, pathname, router, searchParams]);
 
   const areaOptions = useMemo(() => {
     return getUniqueOptions(workOrders.map((order) => order.requesting_area));
@@ -470,31 +503,28 @@ export function WorkOrdersClient() {
   );
 
   useEffect(() => {
-    if (!didMountFiltersRef.current) {
-      didMountFiltersRef.current = true;
+    if (previousFiltersKeyRef.current === filtersKey) return;
+
+    previousFiltersKeyRef.current = filtersKey;
+    setCurrentPage(1);
+    setSelectedOrderIds([]);
+  }, [filtersKey]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (filteredWorkOrders.length === 0) {
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+
       return;
     }
 
-    setCurrentPage(1);
-    setSelectedOrderIds([]);
-  }, [
-    search,
-    areaFilter,
-    statusFilter,
-    dateFromFilter,
-    dateToFilter,
-    repairTypeFilter,
-    vehicleFilter,
-    vehicleCodeFilter,
-    failureTypeFilter,
-    driverFilter,
-  ]);
-
-  useEffect(() => {
     if (currentPage > totalPages) {
-      setCurrentPage(1);
+      setCurrentPage(totalPages);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages, loading, filteredWorkOrders.length]);
 
   useEffect(() => {
     setSelectedOrderIds((prev) =>
@@ -832,13 +862,9 @@ export function WorkOrdersClient() {
         "Tipo de reparación": order.repair_type || "-",
         "Requiere repuesto": order.requires_spare_part || "-",
         "Detalle de repuesto": order.spare_part_detail || "-",
-        "Proveedor/es": formatProviders(order.provider),
-        Moneda: getAmountCurrency(order),
-        Monto: order.amount ?? "-",
-        "Monto formateado": formatOrderMoney(order),
+        Observaciones: cleanObservations(order.observations),
         Chofer: order.driver || "-",
         Estado: order.status || "-",
-        Observaciones: cleanObservations(order.observations),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(formattedData);
@@ -918,8 +944,7 @@ export function WorkOrdersClient() {
         getLicensePlateLabel(order),
         order.failure_type || "-",
         order.repair_type || "-",
-        formatProviders(order.provider),
-        formatOrderMoney(order),
+        cleanObservations(order.observations),
         order.status || "-",
       ]);
 
@@ -935,8 +960,7 @@ export function WorkOrdersClient() {
             "Dominio",
             "Falla",
             "Reparación",
-            "Proveedor/es",
-            "Monto",
+            "Observaciones",
             "Estado",
           ],
         ],
@@ -970,14 +994,13 @@ export function WorkOrdersClient() {
           3: { cellWidth: 20 },
           4: { cellWidth: 42 },
           5: { cellWidth: 20 },
-          6: { cellWidth: 26 },
+          6: { cellWidth: 24 },
           7: { cellWidth: 24 },
-          8: { cellWidth: 34 },
+          8: { cellWidth: 62 },
           9: { cellWidth: 24 },
-          10: { cellWidth: 24 },
         },
         didParseCell: (data: CellHookData) => {
-          if (data.section === "body" && data.column.index === 10) {
+          if (data.section === "body" && data.column.index === 9) {
             const status = String(data.cell.raw ?? "");
             const colors = getPdfStatusColors(status);
 
@@ -1422,15 +1445,15 @@ export function WorkOrdersClient() {
                             value={order.repair_type || "-"}
                           />
 
-                          <Info
-                            label="Proveedor/es"
-                            value={formatProviders(order.provider)}
-                          />
-
-                          <Info
-                            label="Monto"
-                            value={formatOrderMoney(order)}
-                          />
+                          <div className="col-span-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Observaciones
+                            </p>
+                            <ObservationPreview
+                              value={order.observations}
+                              className="max-w-full"
+                            />
+                          </div>
 
                           <Info label="Chofer" value={order.driver || "-"} />
                         </div>
@@ -1523,11 +1546,7 @@ export function WorkOrdersClient() {
                       </th>
 
                       <th className="px-3 py-3 text-left font-semibold">
-                        Proveedor/es
-                      </th>
-
-                      <th className="px-3 py-3 text-left font-semibold">
-                        Monto
+                        Observaciones
                       </th>
 
                       <th className="px-3 py-3 text-left font-semibold">
@@ -1600,12 +1619,8 @@ export function WorkOrdersClient() {
                             {order.requires_spare_part || "-"}
                           </td>
 
-                          <td className="px-3 py-3">
-                            {formatProviders(order.provider)}
-                          </td>
-
-                          <td className="px-3 py-3">
-                            {formatOrderMoney(order)}
+                          <td className="max-w-[420px] px-3 py-3 align-top">
+                            <ObservationPreview value={order.observations} />
                           </td>
 
                           <td className="px-3 py-3">
@@ -1818,6 +1833,25 @@ function DateFilter({
         className="h-9 w-full rounded-xl"
       />
     </div>
+  );
+}
+
+function ObservationPreview({
+  value,
+  className = "",
+}: {
+  value?: string | null;
+  className?: string;
+}) {
+  const observation = cleanObservations(value);
+
+  return (
+    <p
+      title={observation}
+      className={`line-clamp-2 max-w-[420px] cursor-help text-sm leading-5 ${className}`}
+    >
+      {observation}
+    </p>
   );
 }
 

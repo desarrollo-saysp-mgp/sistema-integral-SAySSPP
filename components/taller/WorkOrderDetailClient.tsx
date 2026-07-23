@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { WorkOrder } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,7 @@ type PdfStatusColors = {
   textColor: [number, number, number];
 };
 
+const WORK_ORDERS_REGISTER_PATH = "/dashboard/taller/ordenes-trabajo";
 const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
 
 const cleanValue = (value?: string | number | null) => {
@@ -103,6 +105,26 @@ const getCriticalityBadgeClass = (criticality?: string | number | null) => {
   return "border-green-200 bg-green-100 text-green-800";
 };
 
+const getSafeReturnTo = (value?: string | null) => {
+  if (!value) return WORK_ORDERS_REGISTER_PATH;
+
+  try {
+    const decodedValue = decodeURIComponent(value);
+
+    if (!decodedValue.startsWith(WORK_ORDERS_REGISTER_PATH)) {
+      return WORK_ORDERS_REGISTER_PATH;
+    }
+
+    return decodedValue;
+  } catch {
+    if (value.startsWith(WORK_ORDERS_REGISTER_PATH)) {
+      return value;
+    }
+
+    return WORK_ORDERS_REGISTER_PATH;
+  }
+};
+
 const formatProviders = (value?: string | null) => {
   const providers = String(value || "")
     .split("|")
@@ -141,9 +163,24 @@ const getSupplyItemsForDisplay = (order: WorkOrderWithSupplies) => {
 
 export function WorkOrderDetailClient({
   order,
+  returnTo: returnToProp,
 }: {
   order: WorkOrderWithSupplies;
+  returnTo?: string;
 }) {
+  const searchParams = useSearchParams();
+
+  const returnTo = useMemo(() => {
+    return getSafeReturnTo(returnToProp || searchParams.get("returnTo"));
+  }, [returnToProp, searchParams]);
+
+  const editHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("returnTo", returnTo);
+
+    return `/dashboard/taller/ordenes-trabajo/${order.id}/edit?${params.toString()}`;
+  }, [order.id, returnTo]);
+
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportingMode, setExportingMode] = useState<PdfExportMode | null>(
     null,
@@ -626,7 +663,7 @@ export function WorkOrderDetailClient({
       <div className="space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <Button asChild variant="ghost" className="-ml-2 gap-2">
-            <Link href="/dashboard/taller/ordenes-trabajo">
+            <Link href={returnTo}>
               <ArrowLeft className="h-4 w-4" />
               Volver al registro
             </Link>
@@ -644,7 +681,7 @@ export function WorkOrderDetailClient({
             </Button>
 
             <Button asChild className="gap-2">
-              <Link href={`/dashboard/taller/ordenes-trabajo/${order.id}/edit`}>
+              <Link href={editHref}>
                 <Pencil className="h-4 w-4" />
                 Editar OT
               </Link>

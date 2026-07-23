@@ -167,20 +167,31 @@ export function SuministrosDashboardClient({
 
     const supabase = createClient();
 
+    let mounted = true;
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
+    /*
+      El nombre incluye un identificador único para evitar conflictos
+      con React Strict Mode y el Hot Reload de Next.js.
+    */
+    const channelName = `suministros-panel-${crypto.randomUUID()}`;
+
     const refreshAfterChange = () => {
+      if (!mounted) return;
+
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
       }
 
       refreshTimeout = setTimeout(() => {
-        void loadStockSummary(true);
-      }, 250);
+        if (mounted) {
+          void loadStockSummary(true);
+        }
+      }, 300);
     };
 
     const channel = supabase
-      .channel("suministros-panel-principal-tiempo-real")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -208,15 +219,36 @@ export function SuministrosDashboardClient({
         },
         refreshAfterChange,
       )
-      .subscribe((status) => {
+      .subscribe((status, subscriptionError) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Realtime de Suministros conectado.");
+        }
+
         if (status === "CHANNEL_ERROR") {
-          console.error(
-            "No se pudo conectar el panel de Suministros a Realtime.",
+          /*
+            Usamos warn para que Next.js no muestre el overlay rojo
+            por un problema temporal de conexión.
+          */
+          console.warn(
+            "Realtime de Suministros tuvo un error de conexión.",
+            subscriptionError,
           );
+        }
+
+        if (status === "TIMED_OUT") {
+          console.warn(
+            "La conexión Realtime de Suministros demoró demasiado.",
+          );
+        }
+
+        if (status === "CLOSED") {
+          console.log("Canal Realtime de Suministros cerrado.");
         }
       });
 
     return () => {
+      mounted = false;
+
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
       }
@@ -247,10 +279,10 @@ export function SuministrosDashboardClient({
 
   const visibleCards = isReadonly
     ? MODULE_CARDS.filter(
-        (item) =>
-          item.href === "/dashboard/suministros/stock" ||
-          item.href === "/dashboard/suministros/historial",
-      )
+      (item) =>
+        item.href === "/dashboard/suministros/stock" ||
+        item.href === "/dashboard/suministros/historial",
+    )
     : MODULE_CARDS;
 
   if (loading) {
@@ -413,10 +445,7 @@ export function SuministrosDashboardClient({
         </div>
       </section>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Los cambios realizados desde otra cuenta se actualizan
-        automáticamente.
-      </p>
+
     </div>
   );
 }
