@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { VEHICLE_OPTIONS } from "@/lib/taller/options";
 import { getVehicleDirection } from "@/lib/taller/vehicle-directions";
 import { Button } from "@/components/ui/button";
@@ -150,6 +150,21 @@ const normalizeText = (value: unknown) =>
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
 
+const ESTADO_GENERAL_PATH =
+    "/dashboard/taller/ordenes-trabajo/criticidad/estado-general";
+
+const getSafeReturnTo = (value: string | null) => {
+    if (!value) return ESTADO_GENERAL_PATH;
+
+    const decoded = decodeURIComponent(value);
+
+    if (!decoded.startsWith(ESTADO_GENERAL_PATH)) {
+        return ESTADO_GENERAL_PATH;
+    }
+
+    return decoded;
+};
+
 const getVehicleByCode = (code: string) => {
     return VEHICLE_OPTIONS.find(
         (vehicle) => normalizeText(vehicle.code) === normalizeText(code),
@@ -162,6 +177,8 @@ export function VehicleSecurityEditClient({
     inspection: VehicleSecurityInspection;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
 
     const [saving, setSaving] = useState(false);
 
@@ -269,7 +286,7 @@ export function VehicleSecurityEditClient({
                 `Checklist actualizado. Seguridad calculada: ${result.result.security_score}`,
             );
 
-            router.push("/dashboard/taller/ordenes-trabajo/criticidad/estado-general");
+            router.replace(returnTo);
             router.refresh();
         } catch (error) {
             console.error("Error updating checklist:", error);
@@ -288,7 +305,7 @@ export function VehicleSecurityEditClient({
         <div className="space-y-6">
             <div>
                 <Button asChild variant="ghost" className="-ml-2 mb-3 gap-2">
-                    <Link href="/dashboard/taller/ordenes-trabajo/criticidad/estado-general">
+                    <Link href={returnTo}>
                         <ArrowLeft className="h-4 w-4" />
                         Volver a Estado general
                     </Link>
@@ -456,7 +473,7 @@ export function VehicleSecurityEditClient({
 
             <div className="flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-end">
                 <Button asChild type="button" variant="outline" className="rounded-xl">
-                    <Link href="/dashboard/taller/ordenes-trabajo/criticidad/estado-general">
+                    <Link href={returnTo}>
                         Cancelar
                     </Link>
                 </Button>
