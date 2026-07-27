@@ -59,7 +59,14 @@ const statusOptions = [
   "CERRADO",
 ];
 
+type SortField = "date" | "order_number";
+type SortDirection = "asc" | "desc";
 type AmountCurrency = "ARS" | "USD";
+
+const sortFieldOptions: Array<{ value: SortField; label: string }> = [
+  { value: "date", label: "Fecha de ingreso" },
+  { value: "order_number", label: "N° de OT" },
+];
 
 type PdfStatusColors = {
   fillColor: [number, number, number];
@@ -185,6 +192,48 @@ const getDateTimeValue = (dateString?: string | null) => {
   return new Date(year, month - 1, day).getTime();
 };
 
+const compareNullableNumbers = (
+  valueA: number,
+  valueB: number,
+  direction: SortDirection,
+) => {
+  const hasValueA = Number.isFinite(valueA) && valueA !== 0;
+  const hasValueB = Number.isFinite(valueB) && valueB !== 0;
+
+  if (!hasValueA && !hasValueB) return 0;
+  if (!hasValueA) return 1;
+  if (!hasValueB) return -1;
+
+  const result = valueA - valueB;
+  return direction === "asc" ? result : -result;
+};
+
+const compareOrderNumbers = (
+  orderNumberA: string | number | null | undefined,
+  orderNumberB: string | number | null | undefined,
+  direction: SortDirection,
+) => {
+  const valueA = String(orderNumberA || "").trim();
+  const valueB = String(orderNumberB || "").trim();
+
+  if (!valueA && !valueB) return 0;
+  if (!valueA) return 1;
+  if (!valueB) return -1;
+
+  const numberA = Number(valueA);
+  const numberB = Number(valueB);
+
+  let result = 0;
+
+  if (Number.isFinite(numberA) && Number.isFinite(numberB)) {
+    result = numberA - numberB;
+  } else {
+    result = valueA.localeCompare(valueB, "es", { numeric: true });
+  }
+
+  return direction === "asc" ? result : -result;
+};
+
 const getSafePageParam = (value: string | null) => {
   const page = Number(value || "1");
 
@@ -242,6 +291,14 @@ export function WorkOrdersClient() {
   const [driverFilter, setDriverFilter] = useState(
     () => searchParams.get("driver") || ALL_VALUE,
   );
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const value = searchParams.get("sort_by");
+
+    return value === "order_number" ? "order_number" : "date";
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
+    return searchParams.get("sort_dir") === "asc" ? "asc" : "desc";
+  });
 
   const [currentPage, setCurrentPage] = useState(() =>
     getSafePageParam(searchParams.get("page")),
@@ -262,6 +319,8 @@ export function WorkOrdersClient() {
       vehicleCodeFilter,
       failureTypeFilter,
       driverFilter,
+      sortField,
+      sortDirection,
     ].join("||");
   }, [
     search,
@@ -274,6 +333,8 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    sortField,
+    sortDirection,
   ]);
 
   const previousFiltersKeyRef = useRef(filtersKey);
@@ -292,6 +353,14 @@ export function WorkOrdersClient() {
     setParamIfValid(params, "failure", failureTypeFilter, ALL_VALUE);
     setParamIfValid(params, "driver", driverFilter, ALL_VALUE);
 
+    if (sortField !== "date") {
+      params.set("sort_by", sortField);
+    }
+
+    if (sortDirection !== "desc") {
+      params.set("sort_dir", sortDirection);
+    }
+
     if (currentPage > 1) {
       params.set("page", String(currentPage));
     }
@@ -308,6 +377,8 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    sortField,
+    sortDirection,
     currentPage,
   ]);
 
@@ -463,25 +534,23 @@ export function WorkOrdersClient() {
     });
 
     return filtered.sort((a, b) => {
-      const dateA = getDateTimeValue(a.entry_date);
-      const dateB = getDateTimeValue(b.entry_date);
-
-      if (dateA !== dateB) {
-        return dateB - dateA;
-      }
-
-      const orderNumberA = Number(a.order_number);
-      const orderNumberB = Number(b.order_number);
-
-      if (Number.isFinite(orderNumberA) && Number.isFinite(orderNumberB)) {
-        return orderNumberB - orderNumberA;
-      }
-
-      return String(b.order_number || "").localeCompare(
-        String(a.order_number || ""),
-        "es",
-        { numeric: true },
+      const dateComparison = compareNullableNumbers(
+        getDateTimeValue(a.entry_date),
+        getDateTimeValue(b.entry_date),
+        sortDirection,
       );
+
+      const orderComparison = compareOrderNumbers(
+        a.order_number,
+        b.order_number,
+        sortDirection,
+      );
+
+      if (sortField === "order_number") {
+        return orderComparison || dateComparison;
+      }
+
+      return dateComparison || orderComparison;
     });
   }, [
     workOrders,
@@ -495,6 +564,8 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    sortField,
+    sortDirection,
   ]);
 
   const totalPages = Math.max(
@@ -573,7 +644,9 @@ export function WorkOrdersClient() {
     vehicleFilter !== ALL_VALUE ||
     vehicleCodeFilter !== ALL_VALUE ||
     failureTypeFilter !== ALL_VALUE ||
-    driverFilter !== ALL_VALUE;
+    driverFilter !== ALL_VALUE ||
+    sortField !== "date" ||
+    sortDirection !== "desc";
 
   const clearFilters = () => {
     setSearch("");
@@ -586,6 +659,8 @@ export function WorkOrdersClient() {
     setVehicleCodeFilter(ALL_VALUE);
     setFailureTypeFilter(ALL_VALUE);
     setDriverFilter(ALL_VALUE);
+    setSortField("date");
+    setSortDirection("desc");
     setSelectedOrderIds([]);
     setCurrentPage(1);
   };
@@ -1345,6 +1420,15 @@ export function WorkOrdersClient() {
             </div>
           ) : (
             <>
+              <div className="mb-3 flex justify-end">
+                <SortToolbar
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSortFieldChange={setSortField}
+                  onSortDirectionChange={setSortDirection}
+                />
+              </div>
+
               <div className="space-y-3 md:hidden">
                 <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-3 shadow-sm">
                   <div>
@@ -1809,6 +1893,95 @@ function FilterSelect({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+function SortToolbar({
+  sortField,
+  sortDirection,
+  onSortFieldChange,
+  onSortDirectionChange,
+}: {
+  sortField: SortField;
+  sortDirection: SortDirection;
+  onSortFieldChange: (value: SortField) => void;
+  onSortDirectionChange: (value: SortDirection) => void;
+}) {
+  return (
+    <div className="w-full rounded-xl border bg-card p-2 shadow-sm sm:w-auto">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="sm:w-[210px]">
+          <SortFieldSelect
+            value={sortField}
+            onValueChange={onSortFieldChange}
+          />
+        </div>
+
+        <div className="sm:w-[180px]">
+          <SortDirectionControl
+            value={sortDirection}
+            onValueChange={onSortDirectionChange}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SortFieldSelect({
+  value,
+  onValueChange,
+}: {
+  value: SortField;
+  onValueChange: (value: SortField) => void;
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">Ordenar por</p>
+
+      <Select
+        value={value}
+        onValueChange={(nextValue) => onValueChange(nextValue as SortField)}
+      >
+        <SelectTrigger className="h-9 w-full min-w-0 rounded-xl">
+          <SelectValue placeholder="Ordenar por" />
+        </SelectTrigger>
+
+        <SelectContent>
+          {sortFieldOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function SortDirectionControl({
+  value,
+  onValueChange,
+}: {
+  value: SortDirection;
+  onValueChange: (value: SortDirection) => void;
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">Orden</p>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onValueChange(value === "asc" ? "desc" : "asc")}
+        className="h-9 w-full justify-between rounded-xl px-3 font-normal"
+      >
+        <span>{value === "asc" ? "Ascendente" : "Descendente"}</span>
+        <span className="text-xs text-muted-foreground">
+          {value === "asc" ? "A → Z" : "Z → A"}
+        </span>
+      </Button>
     </div>
   );
 }
