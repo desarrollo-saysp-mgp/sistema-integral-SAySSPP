@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
+  BarChart3,
   Boxes,
   History,
   Loader2,
@@ -84,6 +85,13 @@ const MODULE_CARDS: ModuleCard[] = [
       "Revisá todas las entradas, entregas y ajustes realizados.",
     href: "/dashboard/suministros/historial",
     icon: History,
+  },
+  {
+    title: "Estadísticas",
+    description:
+      "Analizá el stock, las entradas, las entregas y el consumo mediante gráficos interactivos.",
+    href: "/dashboard/suministros/estadisticas",
+    icon: BarChart3,
   },
 ];
 
@@ -281,7 +289,8 @@ export function SuministrosDashboardClient({
     ? MODULE_CARDS.filter(
       (item) =>
         item.href === "/dashboard/suministros/stock" ||
-        item.href === "/dashboard/suministros/historial",
+        item.href === "/dashboard/suministros/historial" ||
+        item.href === "/dashboard/suministros/estadisticas",
     )
     : MODULE_CARDS;
 
