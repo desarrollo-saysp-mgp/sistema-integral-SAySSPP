@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -135,6 +136,21 @@ const CHECKLIST_SECTIONS: ChecklistSection[] = [
     },
 ];
 
+const ESTADO_GENERAL_PATH =
+    "/dashboard/taller/ordenes-trabajo/criticidad/estado-general";
+
+const getSafeReturnTo = (value: string | null) => {
+    if (!value) return ESTADO_GENERAL_PATH;
+
+    const decoded = decodeURIComponent(value);
+
+    if (!decoded.startsWith(ESTADO_GENERAL_PATH)) {
+        return ESTADO_GENERAL_PATH;
+    }
+
+    return decoded;
+};
+
 const cleanValue = (value?: string | number | null) => {
     if (value === null || value === undefined || value === "") return "-";
     return String(value);
@@ -246,6 +262,10 @@ export function VehicleSecurityViewClient({
 }: {
     inspection: VehicleSecurityInspection;
 }) {
+    const searchParams = useSearchParams();
+    const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
+    const encodedReturnTo = encodeURIComponent(returnTo);
+
     const exportChecklistPdf = async () => {
         try {
             const { default: jsPDF } = await import("jspdf");
@@ -549,7 +569,7 @@ export function VehicleSecurityViewClient({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <Button asChild variant="ghost" className="-ml-2 mb-3 gap-2">
-                        <Link href="/dashboard/taller/ordenes-trabajo/criticidad/estado-general">
+                        <Link href={returnTo}>
                             <ArrowLeft className="h-4 w-4" />
                             Volver a Estado general
                         </Link>
@@ -577,7 +597,7 @@ export function VehicleSecurityViewClient({
 
                     <Button asChild className="gap-2 rounded-xl">
                         <Link
-                            href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit`}
+                            href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit?returnTo=${encodedReturnTo}`}
                         >
                             <Pencil className="h-4 w-4" />
                             Editar checklist

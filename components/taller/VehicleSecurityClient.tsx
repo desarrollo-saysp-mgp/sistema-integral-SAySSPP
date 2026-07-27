@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -108,6 +109,21 @@ type VehicleSecurityInspection = {
 type SecurityFilter = "Todos" | "Bueno" | "Regular" | "Crítico";
 type ViewMode = "history" | "latest";
 type ReportType = "lights" | "body";
+
+const ESTADO_GENERAL_PATH =
+  "/dashboard/taller/ordenes-trabajo/criticidad/estado-general";
+
+const getValidSecurityFilter = (value: string | null): SecurityFilter => {
+  if (value === "Bueno" || value === "Regular" || value === "Crítico") {
+    return value;
+  }
+
+  return "Todos";
+};
+
+const getValidViewMode = (value: string | null): ViewMode => {
+  return value === "latest" ? "latest" : "history";
+};
 
 type ChecklistReportField = {
   key: keyof VehicleSecurityInspection;
@@ -316,21 +332,39 @@ const getInspectionProblems = (
 };
 
 export function VehicleSecurityClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [inspections, setInspections] = useState<VehicleSecurityInspection[]>(
     [],
   );
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] = useState("");
-  const [codeFilter, setCodeFilter] = useState("Todos");
-  const [plateFilter, setPlateFilter] = useState("");
-  const [vehicleFilter, setVehicleFilter] = useState("");
-  const [directionFilter, setDirectionFilter] = useState("Todas");
-  const [dateFromFilter, setDateFromFilter] = useState("");
-  const [dateToFilter, setDateToFilter] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [codeFilter, setCodeFilter] = useState(
+    () => searchParams.get("code") || "Todos",
+  );
+  const [plateFilter, setPlateFilter] = useState(
+    () => searchParams.get("plate") || "",
+  );
+  const [vehicleFilter, setVehicleFilter] = useState(
+    () => searchParams.get("vehicle") || "",
+  );
+  const [directionFilter, setDirectionFilter] = useState(
+    () => searchParams.get("direction") || "Todas",
+  );
+  const [dateFromFilter, setDateFromFilter] = useState(
+    () => searchParams.get("date_from") || "",
+  );
+  const [dateToFilter, setDateToFilter] = useState(
+    () => searchParams.get("date_to") || "",
+  );
   const [securityStatusFilter, setSecurityStatusFilter] =
-    useState<SecurityFilter>("Todos");
-  const [viewMode, setViewMode] = useState<ViewMode>("history");
+    useState<SecurityFilter>(() => getValidSecurityFilter(searchParams.get("status")));
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    getValidViewMode(searchParams.get("view")),
+  );
 
   const [inspectionToDelete, setInspectionToDelete] =
     useState<VehicleSecurityInspection | null>(null);
@@ -339,6 +373,53 @@ export function VehicleSecurityClient() {
   const [reportType, setReportType] = useState<ReportType | null>(null);
   const [selectedReportVehicle, setSelectedReportVehicle] = useState("all");
   const [generatingReport, setGeneratingReport] = useState(false);
+
+  const estadoGeneralUrl = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (search.trim()) params.set("search", search.trim());
+    if (codeFilter !== "Todos") params.set("code", codeFilter);
+    if (plateFilter.trim()) params.set("plate", plateFilter.trim());
+    if (vehicleFilter.trim()) params.set("vehicle", vehicleFilter.trim());
+    if (directionFilter !== "Todas") params.set("direction", directionFilter);
+    if (dateFromFilter) params.set("date_from", dateFromFilter);
+    if (dateToFilter) params.set("date_to", dateToFilter);
+    if (securityStatusFilter !== "Todos") {
+      params.set("status", securityStatusFilter);
+    }
+    if (viewMode !== "history") params.set("view", viewMode);
+
+    const queryString = params.toString();
+
+    return `${ESTADO_GENERAL_PATH}${queryString ? `?${queryString}` : ""}`;
+  }, [
+    search,
+    codeFilter,
+    plateFilter,
+    vehicleFilter,
+    directionFilter,
+    dateFromFilter,
+    dateToFilter,
+    securityStatusFilter,
+    viewMode,
+  ]);
+
+  const encodedReturnTo = useMemo(
+    () => encodeURIComponent(estadoGeneralUrl),
+    [estadoGeneralUrl],
+  );
+
+  const currentUrl = useMemo(() => {
+    const currentQueryString = searchParams.toString();
+
+    return `${pathname}${currentQueryString ? `?${currentQueryString}` : ""}`;
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (currentUrl === estadoGeneralUrl) return;
+
+    router.replace(estadoGeneralUrl, { scroll: false });
+  }, [currentUrl, estadoGeneralUrl, router]);
 
   const fetchInspections = async () => {
     try {
@@ -900,7 +981,9 @@ export function VehicleSecurityClient() {
             </Button>
 
             <Button asChild className="gap-2 rounded-xl">
-              <Link href="/dashboard/taller/ordenes-trabajo/criticidad/estado-general/nuevo">
+              <Link
+                  href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/nuevo?returnTo=${encodedReturnTo}`}
+                >
                 <PlusCircle className="h-4 w-4" />
                 Nuevo checklist
               </Link>
@@ -1293,6 +1376,7 @@ export function VehicleSecurityClient() {
                             <td className="px-3 py-3">
                               <Actions
                                 inspection={inspection}
+                                encodedReturnTo={encodedReturnTo}
                                 onDelete={() =>
                                   setInspectionToDelete(inspection)
                                 }
@@ -1388,6 +1472,7 @@ export function VehicleSecurityClient() {
                           <div className="flex justify-end border-t pt-3">
                             <Actions
                               inspection={inspection}
+                              encodedReturnTo={encodedReturnTo}
                               onDelete={() =>
                                 setInspectionToDelete(inspection)
                               }
@@ -1547,9 +1632,11 @@ export function VehicleSecurityClient() {
 
 function Actions({
   inspection,
+  encodedReturnTo,
   onDelete,
 }: {
   inspection: VehicleSecurityInspection;
+  encodedReturnTo: string;
   onDelete: () => void;
 }) {
   return (
@@ -1563,7 +1650,7 @@ function Actions({
         title="Ver checklist"
       >
         <Link
-          href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/view`}
+          href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/view?returnTo=${encodedReturnTo}`}
         >
           <Eye className="h-4 w-4" />
         </Link>
@@ -1578,7 +1665,7 @@ function Actions({
         title="Editar checklist"
       >
         <Link
-          href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit`}
+          href={`/dashboard/taller/ordenes-trabajo/criticidad/estado-general/${inspection.id}/edit?returnTo=${encodedReturnTo}`}
         >
           <Pencil className="h-4 w-4" />
         </Link>
