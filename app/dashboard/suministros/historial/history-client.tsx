@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  FileDown,
   History,
   Loader2,
   RefreshCw,
@@ -240,6 +241,7 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -686,6 +688,150 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
     setPage(1);
   };
 
+  const exportFilteredPdf = async () => {
+    if (filteredAndSortedMovements.length === 0) {
+      showToast("error", "No hay movimientos para exportar.");
+      return;
+    }
+
+    setExportingPdf(true);
+
+    try {
+      const [{ jsPDF }, autoTableModule] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
+      const autoTable =
+        autoTableModule.default ??
+        (autoTableModule as unknown as {
+          autoTable?: typeof autoTableModule.default;
+        }).autoTable;
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const generatedAt = new Date();
+      const periodLabel =
+        dateFrom || dateTo
+          ? `${dateFrom ? formatDate(dateFrom) : "Sin inicio"} al ${
+              dateTo ? formatDate(dateTo) : "Sin fin"
+            }`
+          : "Todos los períodos";
+
+      const movementLabel =
+        movementType === "all"
+          ? "Todos los movimientos"
+          : getMovementLabel(movementType);
+
+      const categoryLabel =
+        categoryId === "all"
+          ? "Todas las categorías"
+          : categories.find((category) => category.id === categoryId)?.name ??
+            "Categoría seleccionada";
+
+      const searchLabel = search.trim() || "Sin búsqueda";
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Historial de Suministros", 14, 15);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Generado: ${generatedAt.toLocaleString("es-AR")}`, 14, 21);
+      doc.text(`Período: ${periodLabel}`, 14, 26);
+      doc.text(`Movimiento: ${movementLabel}`, 14, 31);
+      doc.text(`Categoría: ${categoryLabel}`, 105, 26);
+      doc.text(`Búsqueda: ${searchLabel}`, 105, 31);
+
+      doc.setFont("helvetica", "bold");
+      doc.text(
+        `Movimientos: ${summary.total} | Entradas: ${summary.entries} | Entregas: ${summary.deliveries} | Ajustes: ${summary.adjustments}`,
+        14,
+        37,
+      );
+
+      const body = filteredAndSortedMovements.map((movement) => [
+        formatDate(movement.movement_date),
+        getMovementLabel(movement.movement_type),
+        movement.product_name,
+        movement.category_name,
+        `${isIncomingMovement(movement.movement_type) ? "+" : "-"}${formatQuantity(
+          movement.quantity,
+        )} ${movement.unit}`,
+        movement.destination,
+        movement.created_by_name,
+        movement.reference || "—",
+      ]);
+
+      autoTable(doc, {
+        startY: 42,
+        head: [[
+          "Fecha",
+          "Movimiento",
+          "Producto",
+          "Categoría",
+          "Cantidad",
+          "Destino",
+          "Usuario",
+          "Referencia",
+        ]],
+        body,
+        styles: {
+          font: "helvetica",
+          fontSize: 7.5,
+          cellPadding: 2,
+          overflow: "linebreak",
+          valign: "middle",
+        },
+        headStyles: { fontStyle: "bold" },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 38 },
+          4: { cellWidth: 27, halign: "right" },
+          5: { cellWidth: 48 },
+          6: { cellWidth: 34 },
+          7: { cellWidth: 48 },
+        },
+        margin: { left: 10, right: 10, bottom: 14 },
+        didDrawPage: () => {
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+          doc.text(
+            `Página ${doc.getNumberOfPages()}`,
+            doc.internal.pageSize.getWidth() - 25,
+            doc.internal.pageSize.getHeight() - 7,
+          );
+        },
+      });
+
+      const fileDate = generatedAt
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, "-");
+
+      doc.save(`historial-suministros-${fileDate}.pdf`);
+
+      showToast(
+        "success",
+        `${filteredAndSortedMovements.length} movimientos exportados a PDF.`,
+      );
+    } catch (exportError) {
+      console.error("Error exportando historial a PDF:", exportError);
+      showToast(
+        "error",
+        "No se pudo generar el PDF. Verificá que jsPDF y jspdf-autotable estén instalados.",
+      );
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const openDetail = (movement: HistoryMovement) => {
     setSelectedMovement(movement);
     setDetailOpen(true);
@@ -730,20 +876,39 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
         </div>
 
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void loadHistory(true)}
-            disabled={refreshing}
-          >
-            {refreshing ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 size-4" />
-            )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void exportFilteredPdf()}
+              disabled={
+                exportingPdf || filteredAndSortedMovements.length === 0
+              }
+            >
+              {exportingPdf ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <FileDown className="mr-2 size-4" />
+              )}
 
-            Actualizar
-          </Button>
+              Exportar PDF
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadHistory(true)}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 size-4" />
+              )}
+
+              Actualizar
+            </Button>
+          </div>
 
           {lastUpdated && (
             <p className="text-xs text-muted-foreground">
