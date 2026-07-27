@@ -350,14 +350,25 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
           const area = getRelation(movement.area);
           const creator = getRelation(movement.creator);
 
-          const recipientName = recipient?.full_name ?? "";
-          const areaName = area?.name ?? "";
           const legacyDestination = movement.legacy_destination ?? "";
+          const importedMovement =
+            movement.reference?.startsWith("IMPORT_") === true;
+          const importedDelivery =
+            importedMovement && movement.movement_type === "DELIVERY";
+
+          // En las entregas históricas importadas:
+          // legacy_destination contiene la persona
+          // observations contiene la dirección o área
+          const recipientName =
+            recipient?.full_name ??
+            (importedDelivery ? legacyDestination : "");
+
+          const areaName =
+            area?.name ??
+            (importedDelivery ? movement.observations ?? "" : "");
 
           const destination =
-            [recipientName, areaName].filter(Boolean).join(" · ") ||
-            legacyDestination ||
-            "—";
+            [recipientName, areaName].filter(Boolean).join(" · ") || "—";
 
           return {
             id: movement.id,
@@ -373,8 +384,14 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
             area_name: areaName,
             destination,
             reference: movement.reference ?? "",
-            observations: movement.observations ?? "",
-            created_by_name: creator?.full_name ?? "Usuario no disponible",
+            observations: importedDelivery
+              ? ""
+              : movement.observations ?? "",
+            created_by_name:
+              creator?.full_name ??
+              (movement.reference?.startsWith("IMPORT_")
+                ? "Datos importados"
+                : "Usuario no disponible"),
             created_at: movement.created_at,
           } satisfies HistoryMovement;
         });
@@ -1230,18 +1247,20 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
                     selectedMovement.created_at,
                   )}
                 />
-                <DetailItem
-                  label="Persona autorizada"
-                  value={selectedMovement.recipient_name || "—"}
-                />
-                <DetailItem
-                  label="Dirección o área"
-                  value={selectedMovement.area_name || "—"}
-                />
-                <DetailItem
-                  label="Destino histórico"
-                  value={selectedMovement.destination}
-                />
+
+                {selectedMovement.movement_type === "DELIVERY" && (
+                  <>
+                    <DetailItem
+                      label="Persona autorizada"
+                      value={selectedMovement.recipient_name || "—"}
+                    />
+                    <DetailItem
+                      label="Dirección o área"
+                      value={selectedMovement.area_name || "—"}
+                    />
+                  </>
+                )}
+
                 <DetailItem
                   label="Registrado por"
                   value={selectedMovement.created_by_name}
