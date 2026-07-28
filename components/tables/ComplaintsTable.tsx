@@ -951,7 +951,7 @@ export function ComplaintsTable({
           "Dirección",
           "Servicio",
           "Causa",
-          "Desde Cuándo",
+          "Observación",
           "Fecha resolución",
           "Estado",
         ],
@@ -965,6 +965,12 @@ export function ComplaintsTable({
             : undefined,
         );
 
+        const currentStatus = getComplaintStatus(item);
+        const isResolved = currentStatus === "Resuelto";
+        const resolutionDateForPdf = isResolved
+          ? display.resolutionDateLabel
+          : "-";
+
         if (isArboladoUser) {
           return [
             getVisibleComplaintNumber(item),
@@ -974,9 +980,9 @@ export function ComplaintsTable({
             display.departmentLabel,
             display.levelLabel,
             display.descriptionLabel,
-            display.resolutionDateLabel,
+            resolutionDateForPdf,
             display.agentLabel,
-            item.status,
+            currentStatus,
           ];
         }
 
@@ -990,7 +996,7 @@ export function ComplaintsTable({
             display.causeLabel,
             display.zoneLabel,
             display.sinceWhenLabel,
-            item.status,
+            currentStatus,
           ];
         }
 
@@ -1001,9 +1007,9 @@ export function ComplaintsTable({
           display.addressLabel,
           display.serviceLabel,
           display.causeLabel,
-          display.sinceWhenLabel,
-          display.resolutionDateLabel,
-          item.status,
+          display.detailLabel,
+          resolutionDateForPdf,
+          currentStatus,
         ];
       });
 
@@ -1066,12 +1072,12 @@ export function ComplaintsTable({
               }
             : {
                 0: { cellWidth: 12 },
-                1: { cellWidth: 20 },
-                2: { cellWidth: 35 },
-                3: { cellWidth: 55 },
-                4: { cellWidth: 35 },
-                5: { cellWidth: 38 },
-                6: { cellWidth: 26 },
+                1: { cellWidth: 18 },
+                2: { cellWidth: 28 },
+                3: { cellWidth: 48 },
+                4: { cellWidth: 27 },
+                5: { cellWidth: 30 },
+                6: { cellWidth: 58 },
                 7: { cellWidth: 24 },
                 8: { cellWidth: 22 },
               },

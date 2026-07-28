@@ -67,7 +67,8 @@ const isServiciosPublicosService = (serviceName?: string | null) => {
     name.includes("barrido") ||
     name.includes("riego") ||
     name.includes("motonivelacion") ||
-    name.includes("canales y desagues")
+    name.includes("canales y desagues") ||
+    name.includes("jornadas integrales")
   );
 };
 
@@ -81,8 +82,42 @@ const isGirsuService = (serviceName?: string | null) => {
     name.includes("rec especial") ||
     name.includes("inspeccion") ||
     name.includes("rec. contenedores") ||
-    name.includes("rec contenedores")
+    name.includes("rec contenedores") ||
+    name.includes("rec. escuelas y jardines") ||
+    name.includes("rec escuelas y jardines")
   );
+};
+
+const isArboladoService = (serviceName?: string | null) => {
+  const name = normalizeText(serviceName);
+  return name.includes("arbol");
+};
+
+const isZyvService = (serviceName?: string | null) => {
+  const name = normalizeText(serviceName);
+  return name.includes("zoonosis") || name.includes("vectores");
+};
+
+const getServiceDirectionName = (serviceName?: string | null) => {
+  if (isServiciosPublicosService(serviceName)) return "Servicios Públicos";
+  if (isGirsuService(serviceName)) return "GIRSU";
+  if (isArboladoService(serviceName)) return "Arbolado y Parques Urbanos";
+  if (isZyvService(serviceName)) return "Zoonosis y Vectores";
+  return "Sin dirección";
+};
+
+const getComplaintDirection = (complaint: ComplaintRow) => {
+  const formVariant = normalizeText(complaint.form_variant);
+
+  if (formVariant === "arbolado") {
+    return "Arbolado y Parques Urbanos";
+  }
+
+  if (formVariant === "zyv") {
+    return "Zoonosis y Vectores";
+  }
+
+  return getServiceDirectionName(getRelatedName(complaint.service));
 };
 
 const getGroupKey = (complaint: ComplaintRow, groupByParam: string) => {
@@ -92,6 +127,9 @@ const getGroupKey = (complaint: ComplaintRow, groupByParam: string) => {
 
     case "service":
       return normalizeValue(getRelatedName(complaint.service));
+
+    case "direction":
+      return getComplaintDirection(complaint);
 
     case "cause":
       return normalizeValue(getRelatedName(complaint.cause));
@@ -139,6 +177,9 @@ const getGroupedStats = (complaints: ComplaintRow[], groupByParam: string) => {
         0,
         15,
       );
+
+    case "direction":
+      return groupBy(complaints, (item) => getGroupKey(item, "direction"));
 
     case "cause":
       return groupBy(complaints, (item) => getGroupKey(item, "cause")).slice(
@@ -209,13 +250,8 @@ export async function GET(request: NextRequest) {
     const serviceIdsParam = searchParams.get("service_ids");
     const zone = searchParams.get("zone");
     const groupByParam = searchParams.get("group_by") || "street";
+    const direction = searchParams.get("direction");
 
-    /*
-      Estos dos parámetros son para el modal interactivo.
-      Ejemplos:
-      /api/complaints/stats?group_by=street&detail_group=street&detail_value=Calle 302
-      /api/complaints/stats?group_by=service&detail_group=service&detail_value=Barrido
-    */
     const detailGroup = searchParams.get("detail_group");
     const detailValue = searchParams.get("detail_value");
 
@@ -251,15 +287,12 @@ export async function GET(request: NextRequest) {
 
       zyvServiceIds =
         roleServices
-          ?.filter((service) => {
-            const name = normalizeText(service.name);
-            return name.includes("zoonosis") || name.includes("vectores");
-          })
+          ?.filter((service) => isZyvService(service.name))
           .map((service) => service.id) ?? [];
 
       arboladoServiceIds =
         roleServices
-          ?.filter((service) => normalizeText(service.name).includes("arbol"))
+          ?.filter((service) => isArboladoService(service.name))
           .map((service) => service.id) ?? [];
 
       serviciosPublicosServiceIds =
@@ -298,25 +331,6 @@ export async function GET(request: NextRequest) {
         )
         .order("id", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
-
-      /*
-        FILTRO POR ROL / CUENTA:
-
-        - Cuenta Servicios Públicos:
-          solo Barrido, Riego, Motonivelación, Canales y Desagües.
-
-        - ReclamosArbolado:
-          solo Arbolado.
-
-        - ReclamosZyV:
-          solo Zoonosis / Vectores.
-
-        - Reclamos:
-          reclamos generales/importados normales.
-
-        - Admin / AdminLectura:
-          todo.
-      */
 
       if (isServiciosPublicosAccount) {
         if (serviciosPublicosServiceIds.length > 0) {
@@ -366,12 +380,6 @@ export async function GET(request: NextRequest) {
         query = query.eq("status", status);
       }
 
-      /*
-        FILTRO DE SERVICIO:
-        - service_id: un solo servicio.
-        - service_ids: varios servicios.
-      */
-
       if (serviceId && serviceId !== "all") {
         query = query.eq("service_id", Number(serviceId));
       } else if (serviceIds.length > 0) {
@@ -403,33 +411,57 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const byStreet = groupBy(allComplaints, (item) =>
+    const filteredComplaints =
+      direction && direction !== "all"
+        ? allComplaints.filter(
+            (complaint) => getComplaintDirection(complaint) === normalizeValue(direction),
+          )
+        : allComplaints;
+
+    const resolvedCount = filteredComplaints.filter(
+      (complaint) => normalizeText(complaint.status) === "resuelto",
+    ).length;
+
+    const openCount = allComplaints.filter(
+      (complaint) => normalizeText(complaint.status) === "en proceso",
+    ).length;
+
+    const resolvedPercentage =
+      filteredComplaints.length > 0
+        ? Number(((resolvedCount / filteredComplaints.length) * 100).toFixed(1))
+        : 0;
+
+    const byDirection = groupBy(filteredComplaints, (item) =>
+      getGroupKey(item, "direction"),
+    );
+
+    const byStreet = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "street"),
     ).slice(0, 15);
 
-    const byService = groupBy(allComplaints, (item) =>
+    const byService = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "service"),
     ).slice(0, 15);
 
-    const byCause = groupBy(allComplaints, (item) =>
+    const byCause = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "cause"),
     ).slice(0, 15);
 
-    const byStatus = groupBy(allComplaints, (item) =>
+    const byStatus = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "status"),
     );
 
-    const byZone = groupBy(allComplaints, (item) =>
+    const byZone = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "zone"),
     ).slice(0, 16);
 
-    const byContactMethod = groupBy(allComplaints, (item) =>
+    const byContactMethod = groupBy(filteredComplaints, (item) =>
       getGroupKey(item, "contact_method"),
     );
 
-    const grouped = getGroupedStats(allComplaints, groupByParam);
+    const grouped = getGroupedStats(filteredComplaints, groupByParam);
 
-    const oldestInProgress = allComplaints
+    const oldestInProgress = filteredComplaints
       .filter((complaint) => normalizeText(complaint.status) === "en proceso")
       .map((complaint) => ({
         id: complaint.id,
@@ -459,7 +491,7 @@ export async function GET(request: NextRequest) {
 
     const detailRows =
       detailGroup && detailValue
-        ? allComplaints
+        ? filteredComplaints
             .filter(
               (complaint) =>
                 getGroupKey(complaint, detailGroup) === normalizeValue(detailValue),
@@ -491,9 +523,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: {
-        total: allComplaints.length,
+        total: filteredComplaints.length,
+        resolvedCount,
+        openCount,
+        resolvedPercentage,
         groupBy: groupByParam,
         grouped,
+        byDirection,
         byStreet,
         byService,
         byCause,
