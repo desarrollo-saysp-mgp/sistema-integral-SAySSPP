@@ -10,6 +10,7 @@ type SupportedRole =
   | "FC_RRHH"
   | "FC_SECTOR"
   | "Taller"
+  | "RNU"
   | "Suministros";
 
 const VALID_ROLES: SupportedRole[] = [
@@ -21,6 +22,7 @@ const VALID_ROLES: SupportedRole[] = [
   "FC_RRHH",
   "FC_SECTOR",
   "Taller",
+  "RNU",
   "Suministros",
 ];
 
@@ -298,7 +300,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller" o "Suministros"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
         },
         { status: 400 },
       );

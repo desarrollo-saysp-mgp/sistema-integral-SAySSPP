@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type ModuleKey =
@@ -9,7 +14,8 @@ type ModuleKey =
   | "purchase_requests"
   | "general_dashboard"
   | "work_orders"
-  | "stock_inventory";
+  | "stock_inventory"
+  | "rnu";
 
 type AccessItem = {
   key: ModuleKey;
@@ -58,6 +64,15 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     description:
       "Administración de stock, inventario, compras y entrega de productos.",
     href: "/dashboard/suministros",
+    available: true,
+  },
+
+  rnu: {
+    key: "rnu",
+    title: "Registro de Ingresos RNU",
+    description:
+      "Registro de visitantes e instituciones de la Reserva Natural Urbana.",
+    href: "/dashboard/rnu",
     available: true,
   },
 };
@@ -113,6 +128,7 @@ export default async function AccesosPage() {
   const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
   const isTallerUser = userRole === "taller";
   const isSuministrosUser = userRole === "suministros";
+  const isRnuUser = userRole === "rnu";
 
   const hasAllowedRole = allowedRoles.includes(userRole);
 
@@ -136,12 +152,15 @@ export default async function AccesosPage() {
     (item) => item.key === "stock_inventory",
   );
 
+  const alreadyHasRnu = accesses.some((item) => item.key === "rnu");
+
   /*
     Admin/AdminLectura: ven Tablero General.
     GIRSU: ve Tablero GIRSU.
     Arbolado: ve Tablero Arbolado.
     Taller: solo Órdenes de Trabajo.
     Suministros: solo Stock, Inventario y Compras.
+    RNU: solo Registro de Ingresos RNU.
   */
   if (
     (hasAllowedRole || isGirsuUser || isArboladoUser) &&
@@ -161,6 +180,14 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.stock_inventory);
   }
 
+  /*
+    El módulo RNU estará disponible
+    para Admin, AdminLectura y RNU.
+  */
+  if ((hasAllowedRole || isRnuUser) && !alreadyHasRnu) {
+    accesses.push(MODULE_CONFIG.rnu);
+  }
+
   const filteredAccesses = accesses.filter((item) => {
     if (isTallerUser) {
       return item.key === "work_orders";
@@ -168,6 +195,10 @@ export default async function AccesosPage() {
 
     if (isSuministrosUser) {
       return item.key === "stock_inventory";
+    }
+
+    if (isRnuUser) {
+      return item.key === "rnu";
     }
 
     if (isGirsuUser || isArboladoUser) {
@@ -179,6 +210,10 @@ export default async function AccesosPage() {
     }
 
     if (item.key === "stock_inventory") {
+      return hasAllowedRole;
+    }
+
+    if (item.key === "rnu") {
       return hasAllowedRole;
     }
 

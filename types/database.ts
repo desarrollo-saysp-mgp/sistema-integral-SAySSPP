@@ -15,6 +15,7 @@ export interface Database {
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
+          | "RNU"
           | "Suministros";
           modules: string[] | null;
           is_readonly: boolean | null;
@@ -36,7 +37,8 @@ export interface Database {
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
-          | "Suministros";
+          | "Suministros"
+          | "RNU";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -57,7 +59,8 @@ export interface Database {
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
-          | "Suministros";
+          | "Suministros"
+          | "RNU";
           modules?: string[] | null;
           is_readonly?: boolean | null;
           default_module?: string | null;
@@ -660,4 +663,5 @@ export type UserRole =
   | "FC_RRHH"
   | "FC_SECTOR"
   | "Taller"
+  | "RNU"
   | "Suministros";

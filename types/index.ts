@@ -29,6 +29,7 @@ export type UserRole =
   | "FC_RRHH"
   | "Taller"
   | "Suministros"
+  | "RNU"
   | "FC_SECTOR";
 
 export interface AuthUser {

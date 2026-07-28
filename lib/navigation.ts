@@ -8,7 +8,8 @@ export type AppModule =
   | "girsu"
   | "apu"
   | "zv"
-  | "shelter";
+  | "shelter"
+  | "rnu";
 
 type ModuleConfig = {
   key: AppModule;
@@ -28,6 +29,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/complaints/home",
     subtitle: "Gestión de Reclamos",
   },
+
   purchase_requests: {
     key: "purchase_requests",
     label: "Solicitud de Compra",
@@ -36,6 +38,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/solicitud-compra",
     subtitle: "Módulo de Solicitud de Compra",
   },
+
   rrhh: {
     key: "rrhh",
     label: "Recursos Humanos",
@@ -44,6 +47,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/rrhh",
     subtitle: "Módulo de Recursos Humanos",
   },
+
   supplies: {
     key: "supplies",
     label: "Suministros",
@@ -52,6 +56,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/suministros",
     subtitle: "Módulo de Suministros",
   },
+
   workshop: {
     key: "workshop",
     label: "Mantenimiento Taller",
@@ -60,6 +65,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/mantenimiento-taller",
     subtitle: "Módulo de Mantenimiento Taller",
   },
+
   public_services: {
     key: "public_services",
     label: "Servicios Públicos",
@@ -68,6 +74,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/servicios-publicos",
     subtitle: "Módulo de Servicios Públicos",
   },
+
   girsu: {
     key: "girsu",
     label: "GIRSU",
@@ -76,6 +83,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/girsu",
     subtitle: "Módulo de GIRSU",
   },
+
   apu: {
     key: "apu",
     label: "Arbolado / APU",
@@ -84,6 +92,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/apu",
     subtitle: "Módulo de Arbolado / APU",
   },
+
   zv: {
     key: "zv",
     label: "ZV",
@@ -92,6 +101,7 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/zv",
     subtitle: "Módulo de ZV",
   },
+
   shelter: {
     key: "shelter",
     label: "Refugio",
@@ -100,9 +110,20 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/refugio",
     subtitle: "Módulo de Refugio",
   },
+
+  rnu: {
+    key: "rnu",
+    label: "Registro de Ingresos RNU",
+    shortLabel: "RNU",
+    basePath: "/dashboard/rnu",
+    homePath: "/dashboard/rnu",
+    subtitle: "Registro de ingresos a la Reserva Natural Urbana",
+  },
 };
 
-export function getCurrentModule(pathname?: string | null): AppModule | null {
+export function getCurrentModule(
+  pathname?: string | null,
+): AppModule | null {
   if (!pathname) return null;
 
   const module = Object.values(MODULES).find((item) =>

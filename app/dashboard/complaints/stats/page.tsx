@@ -37,7 +37,8 @@ type DetailComplaintItem = {
   id: number;
   complaint_number: number | string | null;
   complaint_date: string | null;
-  address: string;
+  address: string | null;
+  street_number?: string | number | null;
   zone: string;
   status: string;
   service: string;
@@ -121,6 +122,29 @@ const formatDate = (value?: string | null) => {
     month: "2-digit",
     year: "numeric",
   });
+};
+
+const formatComplaintAddress = (complaint: {
+  address?: string | null;
+  street_number?: string | number | null;
+}) => {
+  const address = String(complaint.address || "").trim();
+  const streetNumber = String(complaint.street_number || "").trim();
+
+  if (!address && !streetNumber) return "-";
+
+  if (address && streetNumber) {
+    const normalizedAddress = normalizeText(address);
+    const normalizedStreetNumber = normalizeText(streetNumber);
+
+    if (normalizedAddress.includes(normalizedStreetNumber)) {
+      return address;
+    }
+
+    return `${address} ${streetNumber}`;
+  }
+
+  return address || streetNumber;
 };
 
 const getFilterLabel = ({
@@ -878,7 +902,7 @@ export default function StatsPage() {
         const rowValues = [
           String(item.complaint_number ?? item.id),
           formatDate(item.complaint_date),
-          item.address || "-",
+          formatComplaintAddress(item),
           item.service || "-",
           item.cause || "-",
           item.zone || "-",
@@ -1225,7 +1249,9 @@ export default function StatsPage() {
         doc,
         title: "Reclamos en proceso con mayor demora",
         data: stats.oldestInProgress.map((item) => ({
-          name: `Reclamo ${item.complaint_number ?? item.id}`,
+          name: `Reclamo ${item.complaint_number ?? item.id} · ${formatComplaintAddress(
+            item,
+          )}`,
           count: item.delay_days ?? 0,
         })),
         startY: currentY,
@@ -1595,7 +1621,7 @@ export default function StatsPage() {
                             Reclamo {item.complaint_number ?? item.id}
                           </p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {formatDate(item.complaint_date)} · {item.address} · {item.service}
+                            {formatDate(item.complaint_date)} · {formatComplaintAddress(item)} · {item.service}
                           </p>
                         </div>
 
@@ -1719,7 +1745,7 @@ export default function StatsPage() {
                           <td className="px-4 py-3">
                             {formatDate(item.complaint_date)}
                           </td>
-                          <td className="px-4 py-3">{item.address}</td>
+                          <td className="px-4 py-3">{formatComplaintAddress(item)}</td>
                           <td className="px-4 py-3">{item.service}</td>
                           <td className="px-4 py-3">{item.cause}</td>
                           <td className="px-4 py-3">{item.zone}</td>
