@@ -228,6 +228,7 @@ export function UserForm({
                 <SelectItem value="FC_SECTOR">FC Sector</SelectItem>
                 <SelectItem value="Taller">Taller</SelectItem>
                 <SelectItem value="Suministros">Suministros</SelectItem>
+                <SelectItem value="RNU">RNU</SelectItem>
               </SelectContent>
             </Select>
 

@@ -10,6 +10,7 @@ type ComplaintRow = {
   id: number;
   complaint_number: number | null;
   address: string | null;
+  street_number: string | number | null;
   zone: string | null;
   status: string;
   complaint_date: string;
@@ -284,6 +285,7 @@ export async function GET(request: NextRequest) {
           id,
           complaint_number,
           address,
+          street_number,
           zone,
           status,
           complaint_date,
@@ -434,6 +436,7 @@ export async function GET(request: NextRequest) {
         complaint_number: complaint.complaint_number,
         complaint_date: complaint.complaint_date,
         address: normalizeValue(complaint.address),
+        street_number: complaint.street_number ?? null,
         zone: normalizeValue(complaint.zone),
         status: normalizeValue(complaint.status),
         service: normalizeValue(getRelatedName(complaint.service)),
@@ -479,6 +482,7 @@ export async function GET(request: NextRequest) {
       complaint_number: complaint.complaint_number,
       complaint_date: complaint.complaint_date,
       address: normalizeValue(complaint.address),
+      street_number: complaint.street_number ?? null,
       zone: normalizeValue(complaint.zone),
       status: normalizeValue(complaint.status),
       service: normalizeValue(getRelatedName(complaint.service)),
