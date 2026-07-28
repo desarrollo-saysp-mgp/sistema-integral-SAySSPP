@@ -56,6 +56,10 @@ type StatsData = {
   byStatus: StatItem[];
   byZone: StatItem[];
   byContactMethod: StatItem[];
+  byDirection: StatItem[];
+  resolvedCount: number;
+  openCount: number;
+  resolvedPercentage: number;
   oldestInProgress: DetailComplaintItem[];
   detail?: {
     group: string | null;
@@ -87,12 +91,159 @@ type DetailGroup =
   | "zone"
   | "status"
   | "contact_method"
+  | "direction"
   | "delay";
 
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 const DETAIL_PAGE_SIZE = 20;
 const STATS_RETURN_STATE_KEY = "stats-detail-return-state";
+
+const DIRECTION_OPTIONS = [
+  "Servicios Públicos",
+  "GIRSU",
+  "Arbolado y Parques Urbanos",
+  "Zoonosis y Vectores",
+] as const;
+
+const getServiceDirectionName = (serviceName?: string | null) => {
+  const name = normalizeText(serviceName);
+
+  if (
+    name.includes("barrido") ||
+    name.includes("riego") ||
+    name.includes("motonivelacion") ||
+    name.includes("canales y desagues") ||
+    name.includes("jornadas integrales")
+  ) {
+    return "Servicios Públicos";
+  }
+
+  if (
+    name.includes("rec. domiciliaria") ||
+    name.includes("rec domiciliaria") ||
+    name.includes("rec. especial") ||
+    name.includes("rec especial") ||
+    name.includes("inspeccion") ||
+    name.includes("rec. contenedores") ||
+    name.includes("rec contenedores") ||
+    name.includes("rec. escuelas y jardines") ||
+    name.includes("rec escuelas y jardines")
+  ) {
+    return "GIRSU";
+  }
+
+  if (name.includes("arbol")) return "Arbolado y Parques Urbanos";
+  if (name.includes("zoonosis") || name.includes("vectores")) {
+    return "Zoonosis y Vectores";
+  }
+
+  return "Sin dirección";
+};
+
+const getResolvedPalette = (percentage: number) => {
+  if (percentage >= 85) {
+    return {
+      card: "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100",
+      text: "text-emerald-700",
+      icon: "text-emerald-600",
+      chip: "bg-emerald-100 text-emerald-700",
+      bar: "bg-emerald-500",
+    };
+  }
+
+  if (percentage >= 65) {
+    return {
+      card: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100",
+      text: "text-amber-700",
+      icon: "text-amber-600",
+      chip: "bg-amber-100 text-amber-700",
+      bar: "bg-amber-500",
+    };
+  }
+
+  return {
+    card: "border-red-200 bg-gradient-to-br from-red-50 via-white to-red-100",
+    text: "text-red-700",
+    icon: "text-red-600",
+    chip: "bg-red-100 text-red-700",
+    bar: "bg-red-500",
+  };
+};
+
+const getStatPalette = (name: string, index = 0) => {
+  const normalized = normalizeText(name);
+
+  if (normalized.includes("servicios publicos")) {
+    return {
+      bar: "bg-rose-500",
+      text: "text-rose-700",
+      soft: "bg-rose-50",
+      border: "border-rose-200",
+      hover: "group-hover:bg-rose-500",
+    };
+  }
+
+  if (normalized.includes("girsu")) {
+    return {
+      bar: "bg-orange-400",
+      text: "text-orange-700",
+      soft: "bg-orange-50",
+      border: "border-orange-200",
+      hover: "group-hover:bg-orange-400",
+    };
+  }
+
+  if (normalized.includes("arbolado")) {
+    return {
+      bar: "bg-emerald-500",
+      text: "text-emerald-700",
+      soft: "bg-emerald-50",
+      border: "border-emerald-200",
+      hover: "group-hover:bg-emerald-500",
+    };
+  }
+
+  if (normalized.includes("zoonosis") || normalized.includes("vectores")) {
+    return {
+      bar: "bg-sky-500",
+      text: "text-sky-700",
+      soft: "bg-sky-50",
+      border: "border-sky-200",
+      hover: "group-hover:bg-sky-500",
+    };
+  }
+
+  if (normalized.includes("resuelto") && !normalized.includes("no resuelto")) {
+    return {
+      bar: "bg-emerald-500",
+      text: "text-emerald-700",
+      soft: "bg-emerald-50",
+      border: "border-emerald-200",
+      hover: "group-hover:bg-emerald-500",
+    };
+  }
+
+  if (normalized.includes("proceso")) {
+    return {
+      bar: "bg-amber-500",
+      text: "text-amber-700",
+      soft: "bg-amber-50",
+      border: "border-amber-200",
+      hover: "group-hover:bg-amber-500",
+    };
+  }
+
+  const palettes = [
+    { bar: "bg-[#00A27F]", text: "text-[#00A27F]", soft: "bg-[#00A27F]/10", border: "border-[#00A27F]/20", hover: "group-hover:bg-[#008568]" },
+    { bar: "bg-violet-500", text: "text-violet-700", soft: "bg-violet-50", border: "border-violet-200", hover: "group-hover:bg-violet-500" },
+    { bar: "bg-cyan-500", text: "text-cyan-700", soft: "bg-cyan-50", border: "border-cyan-200", hover: "group-hover:bg-cyan-500" },
+    { bar: "bg-pink-500", text: "text-pink-700", soft: "bg-pink-50", border: "border-pink-200", hover: "group-hover:bg-pink-500" },
+    { bar: "bg-lime-500", text: "text-lime-700", soft: "bg-lime-50", border: "border-lime-200", hover: "group-hover:bg-lime-500" },
+  ];
+
+  return palettes[index % palettes.length];
+};
 
 const normalizeText = (value?: string | null) =>
   String(value ?? "")
@@ -153,18 +304,21 @@ const getFilterLabel = ({
   status,
   serviceName,
   zone,
+  direction,
 }: {
   dateFrom: string;
   dateTo: string;
   status: string;
   serviceName: string;
   zone: string;
+  direction: string;
 }) => {
   const filters: string[] = [];
 
   if (dateFrom) filters.push(`Desde: ${formatDate(dateFrom)}`);
   if (dateTo) filters.push(`Hasta: ${formatDate(dateTo)}`);
   if (status !== "all") filters.push(`Estado: ${status}`);
+  if (direction !== "all") filters.push(`Dirección: ${direction}`);
   if (serviceName !== "Todos") filters.push(`Servicio: ${serviceName}`);
   if (zone !== "all") filters.push(`Zona: ${zone}`);
 
@@ -177,6 +331,7 @@ const getDetailGroupLabel = (group: DetailGroup) => {
   if (group === "cause") return "causa";
   if (group === "zone") return "zona";
   if (group === "contact_method") return "medio de contacto";
+  if (group === "direction") return "dirección";
   if (group === "delay") return "demora";
   return "estado";
 };
@@ -200,7 +355,7 @@ function StatBars({
   );
 
   return (
-    <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
+    <Card className="overflow-hidden rounded-2xl border-border bg-card text-card-foreground shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base font-bold text-foreground">
@@ -225,28 +380,29 @@ function StatBars({
           <div className="space-y-3">
             {data.map((item) => {
               const percentage = Math.max((item.count / max) * 100, 4);
+              const palette = getStatPalette(item.name, data.indexOf(item));
 
               return (
                 <button
                   key={item.name}
                   type="button"
                   onClick={() => onItemClick(group, item)}
-                  className="group w-full rounded-xl p-2 text-left transition hover:bg-muted/70 focus:outline-none focus:ring-2 focus:ring-[#00A27F]/25"
+                  className={`group w-full rounded-xl border p-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00A27F]/25 ${palette.soft} ${palette.border}`}
                   title={`Ver reclamos de ${item.name}`}
                 >
                   <div className="mb-1 flex items-center justify-between gap-4 text-sm">
-                    <span className="truncate font-medium text-foreground group-hover:text-[#00A27F]">
+                    <span className="truncate font-semibold text-foreground">
                       {item.name}
                     </span>
 
-                    <span className="shrink-0 font-bold text-[#00A27F]">
+                    <span className={`shrink-0 font-bold ${palette.text}`}>
                       {item.count}
                     </span>
                   </div>
 
-                  <div className="h-3 overflow-hidden rounded-full bg-muted">
+                  <div className="h-3 overflow-hidden rounded-full bg-white/80 shadow-inner">
                     <div
-                      className="h-full rounded-full bg-[#00A27F] transition-all group-hover:bg-[#008568]"
+                      className={`h-full rounded-full transition-all ${palette.bar} ${palette.hover}`}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -272,6 +428,7 @@ export default function StatsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [status, setStatus] = useState("all");
+  const [direction, setDirection] = useState("all");
   const [serviceId, setServiceId] = useState("all");
   const [zone, setZone] = useState("all");
 
@@ -353,7 +510,8 @@ export default function StatsPage() {
         name.includes("barrido") ||
         name.includes("riego") ||
         name.includes("motonivelacion") ||
-        name.includes("canales y desagues")
+        name.includes("canales y desagues") ||
+        name.includes("jornadas integrales")
       );
     });
   }, [services]);
@@ -369,7 +527,9 @@ export default function StatsPage() {
         name.includes("rec especial") ||
         name.includes("inspeccion") ||
         name.includes("rec. contenedores") ||
-        name.includes("rec contenedores")
+        name.includes("rec contenedores") ||
+        name.includes("rec. escuelas y jardines") ||
+        name.includes("rec escuelas y jardines")
       );
     });
   }, [services]);
@@ -391,8 +551,15 @@ export default function StatsPage() {
       return girsuServices;
     }
 
+    if (direction !== "all") {
+      return services.filter(
+        (service) => getServiceDirectionName(service.name) === direction,
+      );
+    }
+
     return services;
   }, [
+    direction,
     isArboladoAccount,
     isServiciosPublicosAccount,
     isZyvAccount,
@@ -403,6 +570,18 @@ export default function StatsPage() {
     girsuServices,
     services,
   ]);
+
+  useEffect(() => {
+    if (serviceId === "all") return;
+
+    const selectedStillVisible = visibleServices.some(
+      (service) => String(service.id) === serviceId,
+    );
+
+    if (!selectedStillVisible) {
+      setServiceId("all");
+    }
+  }, [serviceId, visibleServices]);
 
   const effectiveServiceId = useMemo(() => {
     if (isArboladoAccount && arboladoService) {
@@ -449,6 +628,7 @@ export default function StatsPage() {
     status,
     serviceName: selectedServiceName,
     zone,
+    direction,
   });
 
   const mainStat = stats?.byStreet?.[0];
@@ -509,6 +689,7 @@ export default function StatsPage() {
     }
 
     if (zone !== "all") params.append("zone", zone);
+    if (direction !== "all") params.append("direction", direction);
 
     if (
       detailGroupParam &&
@@ -678,6 +859,7 @@ export default function StatsPage() {
           dateFrom,
           dateTo,
           status,
+          direction,
           serviceId,
           zone,
           detailGroup,
@@ -962,6 +1144,7 @@ export default function StatsPage() {
       setDateFrom(savedState.dateFrom || "");
       setDateTo(savedState.dateTo || "");
       setStatus(savedState.status || "all");
+      setDirection(savedState.direction || "all");
       setServiceId(savedState.serviceId || "all");
       setZone(savedState.zone || "all");
 
@@ -1014,6 +1197,10 @@ export default function StatsPage() {
         byStatus: [],
         byZone: [],
         byContactMethod: [],
+        byDirection: [],
+        resolvedCount: 0,
+        openCount: 0,
+        resolvedPercentage: 0,
         oldestInProgress: [],
       });
       setLoading(false);
@@ -1031,6 +1218,10 @@ export default function StatsPage() {
         byStatus: [],
         byZone: [],
         byContactMethod: [],
+        byDirection: [],
+        resolvedCount: 0,
+        openCount: 0,
+        resolvedPercentage: 0,
         oldestInProgress: [],
       });
       setLoading(false);
@@ -1046,6 +1237,7 @@ export default function StatsPage() {
     dateFrom,
     dateTo,
     status,
+    direction,
     serviceId,
     zone,
     effectiveServiceId,
@@ -1081,6 +1273,7 @@ export default function StatsPage() {
     setDateFrom("");
     setDateTo("");
     setStatus("all");
+    setDirection("all");
     setZone("all");
 
     if (isArboladoAccount && arboladoService) {
@@ -1110,11 +1303,11 @@ export default function StatsPage() {
 
     const left = 14;
     const right = pageWidth - 14;
-    const labelWidth = 62;
+    const labelWidth = 70;
     const valueWidth = 16;
     const barLeft = left + labelWidth;
     const barMaxWidth = right - barLeft - valueWidth;
-    const rowHeight = 9;
+    const rowHeight = 11;
 
     if (y + 18 > pageHeight - 16) {
       doc.addPage();
@@ -1141,11 +1334,11 @@ export default function StatsPage() {
 
       const percentage = item.count / max;
       const barWidth = Math.max(barMaxWidth * percentage, 3);
-      const label = doc.splitTextToSize(item.name, labelWidth - 3)[0];
+      const labelLines = doc.splitTextToSize(item.name, labelWidth - 3).slice(0, 2);
 
-      doc.setFontSize(8);
+      doc.setFontSize(7.2);
       doc.setTextColor(30, 41, 59);
-      doc.text(label, left, y + 4);
+      doc.text(labelLines, left, y + 3.2);
 
       doc.setFillColor(234, 243, 240);
       doc.roundedRect(barLeft, y, barMaxWidth, 5, 2, 2, "F");
@@ -1189,7 +1382,11 @@ export default function StatsPage() {
         14,
         26,
       );
-      doc.text(`Total analizado: ${stats.total}`, 14, 32);
+      doc.text(
+        `Total analizado: ${stats.total} · Resueltos: ${stats.resolvedCount ?? 0} · Abiertos: ${stats.openCount ?? 0} · % resueltos: ${stats.resolvedPercentage ?? 0}%`,
+        14,
+        32,
+      );
 
       doc.text(
         isArboladoAccount
@@ -1209,6 +1406,13 @@ export default function StatsPage() {
       doc.text(splitFilters, 14, 44);
 
       let currentY = 54 + splitFilters.length * 4;
+
+      currentY = addChartToPdf({
+        doc,
+        title: "Reclamos por dirección",
+        data: stats.byDirection ?? [],
+        startY: currentY,
+      });
 
       currentY = addChartToPdf({
         doc,
@@ -1248,12 +1452,17 @@ export default function StatsPage() {
       currentY = addChartToPdf({
         doc,
         title: "Reclamos en proceso con mayor demora",
-        data: stats.oldestInProgress.map((item) => ({
-          name: `Reclamo ${item.complaint_number ?? item.id} · ${formatComplaintAddress(
-            item,
-          )}`,
-          count: item.delay_days ?? 0,
-        })),
+        data: stats.oldestInProgress.map((item) => {
+          const address = formatComplaintAddress(item)
+            .replace(/general pico,?\s*la pampa/gi, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          return {
+            name: `Reclamo ${item.complaint_number ?? item.id} · ${address}`,
+            count: item.delay_days ?? 0,
+          };
+        }),
         startY: currentY,
       });
 
@@ -1336,7 +1545,7 @@ export default function StatsPage() {
 
         <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
           <CardContent className="p-5">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
                   Desde
@@ -1374,6 +1583,31 @@ export default function StatsPage() {
                     <SelectItem value="En proceso">En proceso</SelectItem>
                     <SelectItem value="Resuelto">Resuelto</SelectItem>
                     <SelectItem value="No resuelto">No resuelto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Dirección
+                </label>
+                <Select
+                  value={direction}
+                  onValueChange={(value) => {
+                    setDirection(value);
+                    setServiceId("all");
+                  }}
+                >
+                  <SelectTrigger className="h-12 w-full rounded-xl text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {DIRECTION_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1458,13 +1692,13 @@ export default function StatsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Card className="rounded-2xl border-border bg-card text-card-foreground shadow-sm">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <Card className="rounded-2xl border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-card-foreground shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-foreground">
+              <CardTitle className="text-sm font-bold text-sky-900">
                 Total analizado
               </CardTitle>
-              <BarChart3 className="h-5 w-5 text-[#00A27F]" />
+              <BarChart3 className="h-5 w-5 text-sky-600" />
             </CardHeader>
 
             <CardContent>
@@ -1479,32 +1713,101 @@ export default function StatsPage() {
 
           <button
             type="button"
-            disabled={loading || !mainStat}
-            onClick={() =>
-              mainStat ? openDetailModal("street", mainStat) : undefined
-            }
+            disabled={loading}
+            onClick={() => openDetailModal("status", { name: "Resuelto", count: stats?.resolvedCount ?? 0 })}
             className="text-left disabled:cursor-default"
           >
-            <Card className="h-full rounded-2xl border-border bg-card text-card-foreground shadow-sm transition hover:border-[#00A27F] hover:shadow-md">
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                <TrendingUp className="h-5 w-5 text-[#00A27F]" />
-                <CardTitle className="text-sm font-bold text-foreground">
-                  Más repetido por calle
+            <Card className="h-full rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 text-card-foreground shadow-sm transition hover:border-emerald-400 hover:shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-bold text-emerald-900">
+                  Reclamos resueltos
                 </CardTitle>
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
               </CardHeader>
 
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {loading ? "..." : mainStat?.name ?? "Sin datos"}
+                <div className="text-4xl font-bold text-foreground">
+                  {loading ? "..." : stats?.resolvedCount ?? 0}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {mainStat
-                    ? `${mainStat.count} reclamos registrados · Click para ver`
-                    : "No hay información disponible"}
+                  Cerrados dentro del filtro
                 </p>
               </CardContent>
             </Card>
           </button>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => openDetailModal("status", { name: "En proceso", count: stats?.openCount ?? 0 })}
+            className="text-left disabled:cursor-default"
+          >
+            <Card className="h-full rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 text-card-foreground shadow-sm transition hover:border-amber-400 hover:shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-bold text-amber-900">
+                  Reclamos abiertos
+                </CardTitle>
+                <Clock3 className="h-5 w-5 text-amber-600" />
+              </CardHeader>
+
+              <CardContent>
+                <div className="text-4xl font-bold text-foreground">
+                  {loading ? "..." : stats?.openCount ?? 0}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  En proceso dentro del filtro
+                </p>
+              </CardContent>
+            </Card>
+          </button>
+
+          <Card
+            className={`rounded-2xl text-card-foreground shadow-sm ${getResolvedPalette(
+              stats?.resolvedPercentage ?? 0,
+            ).card}`}
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-bold text-foreground">
+                % reclamos resueltos
+              </CardTitle>
+              <TrendingUp
+                className={`h-5 w-5 ${getResolvedPalette(
+                  stats?.resolvedPercentage ?? 0,
+                ).icon}`}
+              />
+            </CardHeader>
+
+            <CardContent>
+              <div
+                className={`text-4xl font-black ${getResolvedPalette(
+                  stats?.resolvedPercentage ?? 0,
+                ).text}`}
+              >
+                {loading ? "..." : `${stats?.resolvedPercentage ?? 0}%`}
+              </div>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/80 shadow-inner">
+                <div
+                  className={`h-full rounded-full ${getResolvedPalette(
+                    stats?.resolvedPercentage ?? 0,
+                  ).bar}`}
+                  style={{
+                    width: `${Math.min(stats?.resolvedPercentage ?? 0, 100)}%`,
+                  }}
+                />
+              </div>
+              <p
+                className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getResolvedPalette(
+                  stats?.resolvedPercentage ?? 0,
+                ).chip}`}
+              >
+                {(stats?.resolvedPercentage ?? 0) >= 85
+                  ? "Muy alto"
+                  : (stats?.resolvedPercentage ?? 0) >= 65
+                    ? "Medio"
+                    : "Bajo"}
+              </p>
+            </CardContent>
+          </Card>
 
           <button
             type="button"
@@ -1514,7 +1817,7 @@ export default function StatsPage() {
             }
             className="text-left disabled:cursor-default"
           >
-            <Card className="h-full rounded-2xl border-border bg-card text-card-foreground shadow-sm transition hover:border-[#00A27F] hover:shadow-md">
+            <Card className="h-full rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 text-card-foreground shadow-sm transition hover:border-violet-400 hover:shadow-md">
               <CardHeader className="flex flex-row items-center gap-2 pb-2">
                 <Clock3 className="h-5 w-5 text-[#00A27F]" />
                 <CardTitle className="text-sm font-bold text-foreground">
@@ -1554,6 +1857,13 @@ export default function StatsPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <StatBars
+              title="Reclamos por dirección"
+              data={stats?.byDirection ?? []}
+              group="direction"
+              onItemClick={openDetailModal}
+            />
+
             <StatBars
               title="Calles con más reclamos"
               data={stats?.byStreet ?? []}
