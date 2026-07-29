@@ -10,7 +10,9 @@ type SupportedRole =
   | "AdminLectura"
   | "FC_RRHH"
   | "FC_SECTOR"
-  | "Taller";
+  | "Taller"
+  | "Suministros"
+  | "RNU";
 
 const VALID_ROLES: SupportedRole[] = [
   "Admin",
@@ -21,6 +23,8 @@ const VALID_ROLES: SupportedRole[] = [
   "FC_RRHH",
   "FC_SECTOR",
   "Taller",
+  "Suministros",
+  "RNU",
 ];
 
 function getRoleConfig(role: SupportedRole, email?: string) {
@@ -42,6 +46,8 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "zv",
           "girsu",
           "public_services",
+          "stock_inventory",
+          "rnu",
         ],
         is_readonly: false,
         default_module: null,
@@ -63,6 +69,8 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "zv",
           "girsu",
           "public_services",
+          "stock_inventory",
+          "rnu",
         ],
         is_readonly: true,
         default_module: null,
@@ -134,6 +142,22 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         fc_sectors: [],
       };
 
+    case "Suministros":
+      return {
+        modules: ["stock_inventory"],
+        is_readonly: false,
+        default_module: "stock_inventory",
+        fc_sectors: [],
+      };
+
+    case "RNU":
+      return {
+        modules: ["rnu"],
+        is_readonly: false,
+        default_module: "rnu",
+        fc_sectors: [],
+      };
+
     default:
       return {
         modules: [],
@@ -158,7 +182,10 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      return NextResponse.json(
+        { error: "No autenticado" },
+        { status: 401 },
+      );
     }
 
     const { data: currentUser } = await supabase
@@ -169,7 +196,10 @@ export async function GET(
 
     if (!currentUser || currentUser.role !== "Admin") {
       return NextResponse.json(
-        { error: "No autorizado. Solo administradores pueden ver usuarios" },
+        {
+          error:
+            "No autorizado. Solo administradores pueden ver usuarios",
+        },
         { status: 403 },
       );
     }
@@ -189,6 +219,7 @@ export async function GET(
       }
 
       console.error("Error fetching user:", error);
+
       return NextResponse.json(
         { error: "Error al cargar usuario" },
         { status: 500 },
@@ -197,7 +228,11 @@ export async function GET(
 
     return NextResponse.json({ data: user });
   } catch (error) {
-    console.error("Unexpected error in GET /api/users/[id]:", error);
+    console.error(
+      "Unexpected error in GET /api/users/[id]:",
+      error,
+    );
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
@@ -219,7 +254,10 @@ export async function PATCH(
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      return NextResponse.json(
+        { error: "No autenticado" },
+        { status: 401 },
+      );
     }
 
     const { data: currentUser } = await supabase
@@ -230,12 +268,16 @@ export async function PATCH(
 
     if (!currentUser || currentUser.role !== "Admin") {
       return NextResponse.json(
-        { error: "No autorizado. Solo administradores pueden editar usuarios" },
+        {
+          error:
+            "No autorizado. Solo administradores pueden editar usuarios",
+        },
         { status: 403 },
       );
     }
 
     const body = await request.json();
+
     const { full_name, email, role, password } = body as {
       full_name?: string;
       email?: string;
@@ -247,7 +289,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR" o "Taller"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
         },
         { status: 400 },
       );
@@ -255,36 +297,67 @@ export async function PATCH(
 
     const adminClient = await createAdminClient();
 
+    /*
+     * Actualizar email en Supabase Auth
+     */
     if (email) {
       const { error: authUpdateError } =
-        await adminClient.auth.admin.updateUserById(id, { email });
+        await adminClient.auth.admin.updateUserById(id, {
+          email,
+        });
 
       if (authUpdateError) {
-        console.error("Error updating auth user email:", authUpdateError);
+        console.error(
+          "Error updating auth user email:",
+          authUpdateError,
+        );
+
         return NextResponse.json(
-          { error: "Error al actualizar email en autenticación" },
+          {
+            error:
+              "Error al actualizar email en autenticación",
+          },
           { status: 500 },
         );
       }
     }
 
+    /*
+     * Actualizar contraseña
+     */
     if (password) {
       const { error: passwordError } =
-        await adminClient.auth.admin.updateUserById(id, { password });
+        await adminClient.auth.admin.updateUserById(id, {
+          password,
+        });
 
       if (passwordError) {
-        console.error("Error updating user password:", passwordError);
+        console.error(
+          "Error updating user password:",
+          passwordError,
+        );
+
         return NextResponse.json(
-          { error: "Error al actualizar contraseña" },
+          {
+            error: "Error al actualizar contraseña",
+          },
           { status: 500 },
         );
       }
     }
 
+    /*
+     * Actualizar perfil en tabla users
+     */
     const userUpdate: UserUpdate = {};
 
-    if (full_name) userUpdate.full_name = full_name;
-    if (email) userUpdate.email = email;
+    if (full_name) {
+      userUpdate.full_name = full_name;
+    }
+
+    if (email) {
+      userUpdate.email = email;
+    }
 
     if (role) {
       userUpdate.role = role;
@@ -297,17 +370,24 @@ export async function PATCH(
       userUpdate.fc_sectors = config.fc_sectors;
     }
 
-    const { data: updatedUser, error: dbError } = await supabase
-      .from("users")
-      .update(userUpdate)
-      .eq("id", id)
-      .select()
-      .single();
+    const { data: updatedUser, error: dbError } =
+      await supabase
+        .from("users")
+        .update(userUpdate)
+        .eq("id", id)
+        .select()
+        .single();
 
     if (dbError) {
-      console.error("Error updating user in database:", dbError);
+      console.error(
+        "Error updating user in database:",
+        dbError,
+      );
+
       return NextResponse.json(
-        { error: "Error al actualizar usuario" },
+        {
+          error: "Error al actualizar usuario",
+        },
         { status: 500 },
       );
     }
@@ -317,7 +397,11 @@ export async function PATCH(
       message: "Usuario actualizado exitosamente",
     });
   } catch (error) {
-    console.error("Unexpected error in PATCH /api/users/[id]:", error);
+    console.error(
+      "Unexpected error in PATCH /api/users/[id]:",
+      error,
+    );
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
@@ -339,7 +423,10 @@ export async function DELETE(
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      return NextResponse.json(
+        { error: "No autenticado" },
+        { status: 401 },
+      );
     }
 
     const { data: currentUser } = await supabase
@@ -351,7 +438,8 @@ export async function DELETE(
     if (!currentUser || currentUser.role !== "Admin") {
       return NextResponse.json(
         {
-          error: "No autorizado. Solo administradores pueden eliminar usuarios",
+          error:
+            "No autorizado. Solo administradores pueden eliminar usuarios",
         },
         { status: 403 },
       );
@@ -359,33 +447,61 @@ export async function DELETE(
 
     if (authUser.id === id) {
       return NextResponse.json(
-        { error: "No puedes eliminar tu propio usuario" },
+        {
+          error:
+            "No puedes eliminar tu propio usuario",
+        },
         { status: 400 },
       );
     }
 
-    const { error: dbError } = await supabase.from("users").delete().eq("id", id);
+    /*
+     * Primero eliminar de la tabla public.users
+     */
+    const { error: dbError } = await supabase
+      .from("users")
+      .delete()
+      .eq("id", id);
 
     if (dbError) {
-      console.error("Error deleting user from database:", dbError);
+      console.error(
+        "Error deleting user from database:",
+        dbError,
+      );
+
       return NextResponse.json(
-        { error: "Error al eliminar usuario de la base de datos" },
+        {
+          error:
+            "Error al eliminar usuario de la base de datos",
+        },
         { status: 500 },
       );
     }
 
+    /*
+     * Después eliminar de Supabase Auth
+     */
     const adminClient = await createAdminClient();
 
     const { error: authDeleteError } =
       await adminClient.auth.admin.deleteUser(id);
 
     if (authDeleteError) {
-      console.error("Error deleting auth user:", authDeleteError);
+      console.error(
+        "Error deleting auth user:",
+        authDeleteError,
+      );
     }
 
-    return NextResponse.json({ message: "Usuario eliminado exitosamente" });
+    return NextResponse.json({
+      message: "Usuario eliminado exitosamente",
+    });
   } catch (error) {
-    console.error("Unexpected error in DELETE /api/users/[id]:", error);
+    console.error(
+      "Unexpected error in DELETE /api/users/[id]:",
+      error,
+    );
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
