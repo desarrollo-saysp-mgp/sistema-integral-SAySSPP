@@ -33,6 +33,31 @@ type CreateInstitutionEntryInput = {
   observations?: string;
 };
 
+type UpdateRnuEntryInput = {
+  id: string;
+  entryType: "GENERAL" | "INSTITUCION";
+
+  entryDate?: string;
+  entryTime?: string;
+  visitorCount?: number;
+  provinceLocality?: string;
+  observations?: string;
+
+  transportType?: string;
+  firstVisit?: boolean | null;
+  entryReasons?: string[];
+  facilities?: string[];
+
+  institutionName?: string;
+  ages?: string;
+  responsibleName?: string;
+  responsiblePhone?: string;
+  estimatedExitTime?: string;
+  hasVisitRequest?: boolean | null;
+  activities?: string[];
+  behavior?: string;
+};
+
 function normalizeRole(value: unknown) {
   return String(value || "")
     .trim()
@@ -52,7 +77,6 @@ function getCurrentTime() {
 
 function nullableText(value: unknown): string | null {
   const normalizedValue = String(value || "").trim();
-
   return normalizedValue || null;
 }
 
@@ -94,17 +118,23 @@ async function getAuthorizedRnuUser() {
   }
 
   const userRole = normalizeRole(profile.role);
+
   const allowedRoles = ["admin", "rnu"];
 
   if (!allowedRoles.includes(userRole)) {
-    throw new Error("No tenés permiso para registrar ingresos RNU.");
+    throw new Error("No tenés permiso para modificar registros RNU.");
   }
 
   return {
     supabase,
     user,
+    userRole,
   };
 }
+
+/* =========================================================
+   CREAR INGRESO GENERAL
+========================================================= */
 
 export async function createGeneralRnuEntry(
   input: CreateGeneralEntryInput,
@@ -116,7 +146,7 @@ export async function createGeneralRnuEntry(
 
   const visitorCount =
     Number.isInteger(input.visitorCount) &&
-    Number(input.visitorCount) > 0
+      Number(input.visitorCount) > 0
       ? Number(input.visitorCount)
       : 1;
 
@@ -128,6 +158,11 @@ export async function createGeneralRnuEntry(
 
   const entryReasons = normalizeArray(input.entryReasons);
   const facilities = normalizeArray(input.facilities);
+
+  const firstVisit =
+    typeof input.firstVisit === "boolean"
+      ? input.firstVisit
+      : null;
 
   const validTransportTypes = [
     "AUTO",
@@ -176,11 +211,6 @@ export async function createGeneralRnuEntry(
     );
   }
 
-  const firstVisit =
-    typeof input.firstVisit === "boolean"
-      ? input.firstVisit
-      : null;
-
   const { error: insertError } = await supabase
     .from("rnu_entries")
     .insert({
@@ -214,6 +244,10 @@ export async function createGeneralRnuEntry(
   redirect("/dashboard/rnu?created=general");
 }
 
+/* =========================================================
+   CREAR INSTITUCIÓN
+========================================================= */
+
 export async function createInstitutionRnuEntry(
   input: CreateInstitutionEntryInput,
 ) {
@@ -224,7 +258,7 @@ export async function createInstitutionRnuEntry(
 
   const visitorCount =
     Number.isInteger(input.visitorCount) &&
-    Number(input.visitorCount) > 0
+      Number(input.visitorCount) > 0
       ? Number(input.visitorCount)
       : 1;
 
@@ -278,13 +312,19 @@ export async function createInstitutionRnuEntry(
     );
   }
 
-  const validBehaviors = ["BUENO", "REGULAR", "MALO"];
+  const validBehaviors = [
+    "BUENO",
+    "REGULAR",
+    "MALO",
+  ];
 
   if (
     behavior !== null &&
     !validBehaviors.includes(behavior)
   ) {
-    throw new Error("El comportamiento seleccionado no es válido.");
+    throw new Error(
+      "El comportamiento seleccionado no es válido.",
+    );
   }
 
   const { error: insertError } = await supabase
@@ -323,4 +363,351 @@ export async function createInstitutionRnuEntry(
   revalidatePath("/dashboard/rnu/registros");
 
   redirect("/dashboard/rnu?created=institution");
+}
+
+/* =========================================================
+   EDITAR REGISTRO
+========================================================= */
+
+export async function updateRnuEntry(
+  input: UpdateRnuEntryInput,
+) {
+  const { supabase } = await getAuthorizedRnuUser();
+
+  const id = input.id?.trim();
+
+  if (!id) {
+    throw new Error("No se pudo identificar el registro.");
+  }
+
+  if (
+    input.entryType !== "GENERAL" &&
+    input.entryType !== "INSTITUCION"
+  ) {
+    throw new Error("El tipo de registro no es válido.");
+  }
+
+  const { data: existingEntry, error: existingError } =
+    await supabase
+      .from("rnu_entries")
+      .select("id, entry_type")
+      .eq("id", id)
+      .maybeSingle();
+
+  if (existingError) {
+    console.error(
+      "Error al verificar registro RNU:",
+      existingError,
+    );
+
+    throw new Error(
+      "No se pudo verificar el registro.",
+    );
+  }
+
+  if (!existingEntry) {
+    throw new Error(
+      "El registro ya no existe o no está disponible.",
+    );
+  }
+
+  const entryDate =
+    input.entryDate?.trim() || getCurrentDate();
+
+  const entryTime =
+    input.entryTime?.trim() || getCurrentTime();
+
+  const visitorCount =
+    Number.isInteger(input.visitorCount) &&
+      Number(input.visitorCount) > 0
+      ? Number(input.visitorCount)
+      : 1;
+
+  const provinceLocality =
+    nullableText(input.provinceLocality);
+
+  const observations =
+    nullableText(input.observations);
+
+  const facilities =
+    normalizeArray(input.facilities);
+
+  const validFacilities = [
+    "SUM",
+    "CENTRO_INTERPRETATIVO",
+  ];
+
+  if (
+    facilities.some(
+      (facility) =>
+        !validFacilities.includes(facility),
+    )
+  ) {
+    throw new Error(
+      "Una de las instalaciones seleccionadas no es válida.",
+    );
+  }
+
+  if (input.entryType === "GENERAL") {
+    const transportType =
+      nullableText(input.transportType)?.toUpperCase() ||
+      null;
+
+    const firstVisit =
+      typeof input.firstVisit === "boolean"
+        ? input.firstVisit
+        : null;
+
+    const entryReasons =
+      normalizeArray(input.entryReasons);
+
+    const validTransportTypes = [
+      "AUTO",
+      "MOTO",
+      "BICICLETA",
+      "CAMINANDO_CORRIENDO",
+    ];
+
+    if (
+      transportType !== null &&
+      !validTransportTypes.includes(transportType)
+    ) {
+      throw new Error(
+        "El medio de ingreso seleccionado no es válido.",
+      );
+    }
+
+    const validEntryReasons = [
+      "PESCA",
+      "RECREACION",
+      "PAMPA_WAKE",
+      "ACTIVIDAD_PROGRAMADA",
+      "FOTOGRAFIA_AVISTAJE",
+      "KAYAK",
+      "ACAMPE",
+    ];
+
+    if (
+      entryReasons.some(
+        (reason) =>
+          !validEntryReasons.includes(reason),
+      )
+    ) {
+      throw new Error(
+        "Uno de los motivos seleccionados no es válido.",
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("rnu_entries")
+      .update({
+        entry_type: "GENERAL",
+
+        entry_date: entryDate,
+        entry_time: entryTime,
+        visitor_count: visitorCount,
+        province_locality: provinceLocality,
+        observations,
+
+        transport_type: transportType,
+        first_visit: firstVisit,
+        entry_reasons: entryReasons,
+        facilities,
+
+        institution_name: null,
+        ages: null,
+        responsible_name: null,
+        responsible_phone: null,
+        estimated_exit_time: null,
+        has_visit_request: null,
+        activities: [],
+        behavior: null,
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      console.error(
+        "Error al actualizar ingreso general RNU:",
+        updateError,
+      );
+
+      throw new Error(
+        `No se pudo actualizar el registro: ${updateError.message}`,
+      );
+    }
+  }
+
+  if (input.entryType === "INSTITUCION") {
+    const institutionName =
+      nullableText(input.institutionName);
+
+    const ages =
+      nullableText(input.ages);
+
+    const responsibleName =
+      nullableText(input.responsibleName);
+
+    const responsiblePhone =
+      nullableText(input.responsiblePhone);
+
+    const estimatedExitTime =
+      nullableText(input.estimatedExitTime);
+
+    const hasVisitRequest =
+      typeof input.hasVisitRequest === "boolean"
+        ? input.hasVisitRequest
+        : null;
+
+    const activities =
+      normalizeArray(input.activities);
+
+    const behavior =
+      nullableText(input.behavior)?.toUpperCase() ||
+      null;
+
+    const validActivities = [
+      "KAYAK",
+      "AVISTAJE",
+      "CENTRO_ATENCION_VISITANTE",
+    ];
+
+    if (
+      activities.some(
+        (activity) =>
+          !validActivities.includes(activity),
+      )
+    ) {
+      throw new Error(
+        "Una de las actividades seleccionadas no es válida.",
+      );
+    }
+
+    const validBehaviors = [
+      "BUENO",
+      "REGULAR",
+      "MALO",
+    ];
+
+    if (
+      behavior !== null &&
+      !validBehaviors.includes(behavior)
+    ) {
+      throw new Error(
+        "El comportamiento seleccionado no es válido.",
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("rnu_entries")
+      .update({
+        entry_type: "INSTITUCION",
+
+        entry_date: entryDate,
+        entry_time: entryTime,
+        visitor_count: visitorCount,
+        province_locality: provinceLocality,
+        observations,
+
+        institution_name: institutionName,
+        ages,
+        responsible_name: responsibleName,
+        responsible_phone: responsiblePhone,
+        estimated_exit_time: estimatedExitTime,
+        has_visit_request: hasVisitRequest,
+        facilities,
+        activities,
+        behavior,
+
+        transport_type: null,
+        first_visit: null,
+        entry_reasons: [],
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      console.error(
+        "Error al actualizar institución RNU:",
+        updateError,
+      );
+
+      throw new Error(
+        `No se pudo actualizar el registro: ${updateError.message}`,
+      );
+    }
+  }
+
+  revalidatePath("/dashboard/rnu");
+  revalidatePath("/dashboard/rnu/registros");
+  revalidatePath(`/dashboard/rnu/registros/${id}`);
+  revalidatePath(
+    `/dashboard/rnu/registros/${id}/editar`,
+  );
+
+  return {
+    success: true,
+    id,
+  };
+}
+
+/* =========================================================
+   ELIMINAR REGISTRO
+========================================================= */
+
+export async function deleteRnuEntry(
+  id: string,
+) {
+  const { supabase } = await getAuthorizedRnuUser();
+
+  const entryId = id?.trim();
+
+  if (!entryId) {
+    throw new Error(
+      "No se pudo identificar el registro.",
+    );
+  }
+
+  const {
+    data: existingEntry,
+    error: findError,
+  } = await supabase
+    .from("rnu_entries")
+    .select("id")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (findError) {
+    console.error(
+      "Error al buscar el registro RNU:",
+      findError,
+    );
+
+    throw new Error(
+      "No se pudo verificar el registro que querés eliminar.",
+    );
+  }
+
+  if (!existingEntry) {
+    throw new Error(
+      "El registro ya no existe o no está disponible.",
+    );
+  }
+
+  const { error: deleteError } = await supabase
+    .from("rnu_entries")
+    .delete()
+    .eq("id", entryId);
+
+  if (deleteError) {
+    console.error(
+      "Error al eliminar registro RNU:",
+      deleteError,
+    );
+
+    throw new Error(
+      `No se pudo eliminar el registro: ${deleteError.message}`,
+    );
+  }
+
+  revalidatePath("/dashboard/rnu");
+  revalidatePath("/dashboard/rnu/registros");
 }
