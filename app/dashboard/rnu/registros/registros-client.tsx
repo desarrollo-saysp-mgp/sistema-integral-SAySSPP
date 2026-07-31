@@ -315,7 +315,7 @@ export default function RegistrosRnuClient({
 
             <div>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Generales
+                Generales hoy
               </p>
 
               <p className="text-xl font-bold sm:text-2xl">
@@ -333,7 +333,7 @@ export default function RegistrosRnuClient({
 
             <div>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Instituciones
+                Instituciones hoy
               </p>
 
               <p className="text-xl font-bold sm:text-2xl">
@@ -351,7 +351,7 @@ export default function RegistrosRnuClient({
 
             <div>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Registros
+                Registros hoy
               </p>
 
               <p className="text-xl font-bold sm:text-2xl">
