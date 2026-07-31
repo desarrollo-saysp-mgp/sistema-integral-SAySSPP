@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  BarChart3,
   Building2,
   ClipboardList,
   Users,
@@ -92,6 +93,36 @@ export default function RnuPage() {
               className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border bg-background px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-muted sm:w-auto"
             >
               Ver registros
+            </Link>
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-4">
+        <article className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Estadísticas
+                </h2>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Analizá visitantes, motivos, procedencias e ingresos
+                  institucionales.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/dashboard/rnu/estadisticas"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border bg-background px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-muted sm:w-auto"
+            >
+              Ver estadísticas
             </Link>
           </div>
         </article>
