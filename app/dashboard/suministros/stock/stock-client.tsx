@@ -65,6 +65,20 @@ type StockRow = {
   low_stock: boolean;
 };
 
+type DeliveryMovement = {
+  product_id: string;
+  movement_date: string;
+  quantity: number;
+};
+
+type ConsumptionPeriod = "3" | "6" | "12";
+
+type ConsumptionStats = {
+  monthlyAverage: number;
+  monthsOfStock: number | null;
+  deliveredQuantity: number;
+};
+
 type Category = {
   id: string;
   name: string;
@@ -159,14 +173,48 @@ const getLocalDate = () => {
     .slice(0, 10);
 };
 
+const formatDecimal = (value: number) =>
+  new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+
+const getCompletedMonthsRange = (months: number) => {
+  const now = new Date();
+  const endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+  const startDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth() - months + 1,
+    1,
+  );
+
+  const toLocalIsoDate = (date: Date) => {
+    const timezoneOffset = date.getTimezoneOffset() * 60_000;
+
+    return new Date(date.getTime() - timezoneOffset)
+      .toISOString()
+      .slice(0, 10);
+  };
+
+  return {
+    from: toLocalIsoDate(startDate),
+    to: toLocalIsoDate(endDate),
+  };
+};
+
 export function StockClient({ isReadonly }: StockClientProps) {
   const [stockRows, setStockRows] = useState<StockRow[]>([]);
+  const [deliveryMovements, setDeliveryMovements] = useState<
+    DeliveryMovement[]
+  >([]);
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState<StockStatus>("all");
   const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [consumptionPeriod, setConsumptionPeriod] =
+    useState<ConsumptionPeriod>("6");
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
@@ -281,7 +329,38 @@ export function StockClient({ isReadonly }: StockClientProps) {
           throw categoriesError;
         }
 
+        const twelveMonthRange = getCompletedMonthsRange(12);
+        const allDeliveries: DeliveryMovement[] = [];
+        let deliveryFrom = 0;
+        let hasMoreDeliveries = true;
+
+        while (hasMoreDeliveries) {
+          const deliveryTo = deliveryFrom + CHUNK_SIZE - 1;
+
+          const { data: deliveriesData, error: deliveriesError } =
+            await supabase
+              .from("supply_movements")
+              .select("product_id, movement_date, quantity")
+              .eq("movement_type", "DELIVERY")
+              .gte("movement_date", twelveMonthRange.from)
+              .lte("movement_date", twelveMonthRange.to)
+              .order("movement_date", { ascending: true })
+              .range(deliveryFrom, deliveryTo);
+
+          if (deliveriesError) {
+            throw deliveriesError;
+          }
+
+          const deliveryRows =
+            (deliveriesData ?? []) as DeliveryMovement[];
+
+          allDeliveries.push(...deliveryRows);
+          hasMoreDeliveries = deliveryRows.length === CHUNK_SIZE;
+          deliveryFrom += CHUNK_SIZE;
+        }
+
         setStockRows(allRows);
+        setDeliveryMovements(allDeliveries);
         setCategoryOptions((categoriesData ?? []) as Category[]);
         setLastUpdated(new Date());
       } catch (loadError) {
@@ -380,6 +459,46 @@ export function StockClient({ isReadonly }: StockClientProps) {
       void supabase.removeChannel(channel);
     };
   }, [loadStock]);
+
+  const consumptionStatsByProduct = useMemo(() => {
+    const months = Number(consumptionPeriod);
+    const range = getCompletedMonthsRange(months);
+    const deliveredByProduct = new Map<string, number>();
+
+    deliveryMovements.forEach((movement) => {
+      const movementDate = movement.movement_date.slice(0, 10);
+
+      if (movementDate < range.from || movementDate > range.to) {
+        return;
+      }
+
+      deliveredByProduct.set(
+        movement.product_id,
+        (deliveredByProduct.get(movement.product_id) ?? 0) +
+          Number(movement.quantity ?? 0),
+      );
+    });
+
+    const result = new Map<string, ConsumptionStats>();
+
+    stockRows.forEach((row) => {
+      const deliveredQuantity =
+        deliveredByProduct.get(row.product_id) ?? 0;
+      const monthlyAverage = deliveredQuantity / months;
+      const displayedStock = getDisplayedStock(row.current_stock);
+
+      result.set(row.product_id, {
+        deliveredQuantity,
+        monthlyAverage,
+        monthsOfStock:
+          monthlyAverage > 0
+            ? displayedStock / monthlyAverage
+            : null,
+      });
+    });
+
+    return result;
+  }, [deliveryMovements, stockRows, consumptionPeriod]);
 
   const filteredAndSortedRows = useMemo(() => {
     const normalizedSearch = normalizeText(search);
@@ -490,7 +609,7 @@ export function StockClient({ isReadonly }: StockClientProps) {
 
   useEffect(() => {
     setPage(1);
-  }, [search, category, status, sortBy]);
+  }, [search, category, status, sortBy, consumptionPeriod]);
 
   const totalPages = Math.max(
     1,
@@ -524,6 +643,7 @@ export function StockClient({ isReadonly }: StockClientProps) {
     setCategory("all");
     setStatus("all");
     setSortBy("name_asc");
+    setConsumptionPeriod("6");
     setPage(1);
   };
 
@@ -531,7 +651,8 @@ export function StockClient({ isReadonly }: StockClientProps) {
     search.trim() !== "" ||
     category !== "all" ||
     status !== "all" ||
-    sortBy !== "name_asc";
+    sortBy !== "name_asc" ||
+    consumptionPeriod !== "6";
 
   const openAddStockDialog = (row: StockRow) => {
     setSelectedStockRow(row);
@@ -920,7 +1041,7 @@ export function StockClient({ isReadonly }: StockClientProps) {
 
       <Card className="rounded-2xl">
         <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_220px_190px_minmax(250px,290px)_auto]">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_210px_180px_190px_minmax(230px,270px)_auto]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -973,6 +1094,23 @@ export function StockClient({ isReadonly }: StockClientProps) {
             </Select>
 
             <Select
+              value={consumptionPeriod}
+              onValueChange={(value) =>
+                setConsumptionPeriod(value as ConsumptionPeriod)
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Período de consumo" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="3">Consumo: últimos 3 meses</SelectItem>
+                <SelectItem value="6">Consumo: últimos 6 meses</SelectItem>
+                <SelectItem value="12">Consumo: últimos 12 meses</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
               value={sortBy}
               onValueChange={(value) =>
                 setSortBy(value as SortOption)
@@ -1018,10 +1156,23 @@ export function StockClient({ isReadonly }: StockClientProps) {
             </Button>
           </div>
 
-          <div className="text-sm text-muted-foreground">
-            {filteredAndSortedRows.length === 1
-              ? "1 producto encontrado"
-              : `${filteredAndSortedRows.length} productos encontrados`}
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {filteredAndSortedRows.length === 1
+                ? "1 producto encontrado"
+                : `${filteredAndSortedRows.length} productos encontrados`}
+            </p>
+
+            <div className="rounded-xl border bg-muted/30 px-4 py-3">
+              <p className="text-xs leading-5 text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  Consumo y cobertura estimada:
+                </span>{" "}
+                el consumo mensual se calcula según las entregas de los últimos{" "}
+                {consumptionPeriod} meses completos. Los meses de stock indican
+                cuánto tiempo podría alcanzar la existencia actual.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1045,7 +1196,7 @@ export function StockClient({ isReadonly }: StockClientProps) {
         <>
           <Card className="hidden overflow-hidden rounded-2xl md:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] text-sm">
+              <table className="w-full min-w-[1370px] text-sm">
                 <thead className="border-b bg-muted/40">
                   <tr>
                     <th className="px-5 py-4 text-left font-medium">
@@ -1059,6 +1210,12 @@ export function StockClient({ isReadonly }: StockClientProps) {
                     </th>
                     <th className="px-5 py-4 text-right font-medium">
                       Stock actual
+                    </th>
+                    <th className="px-5 py-4 text-right font-medium">
+                      Consumo mensual
+                    </th>
+                    <th className="px-5 py-4 text-right font-medium">
+                      Meses de stock
                     </th>
                     <th className="px-5 py-4 text-right font-medium">
                       Stock mínimo
@@ -1083,6 +1240,12 @@ export function StockClient({ isReadonly }: StockClientProps) {
                     const minimumStock = Number(
                       row.minimum_stock || 0,
                     );
+                    const consumptionStats =
+                      consumptionStatsByProduct.get(row.product_id);
+                    const monthlyAverage =
+                      consumptionStats?.monthlyAverage ?? 0;
+                    const monthsOfStock =
+                      consumptionStats?.monthsOfStock ?? null;
 
                     const isWithoutStock = displayedStock === 0;
                     const isLowStock =
@@ -1108,6 +1271,36 @@ export function StockClient({ isReadonly }: StockClientProps) {
 
                         <td className="px-5 py-4 text-right text-base font-semibold">
                           {formatQuantity(displayedStock)}
+                        </td>
+
+                        <td className="px-5 py-4 text-right">
+                          {monthlyAverage > 0 ? (
+                            <span className="font-medium">
+                              {formatDecimal(monthlyAverage)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Sin consumo
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4 text-right">
+                          {monthsOfStock !== null ? (
+                            <span
+                              className={
+                                monthsOfStock < 1
+                                  ? "font-semibold text-destructive"
+                                  : monthsOfStock < 2
+                                    ? "font-semibold text-amber-700 dark:text-amber-400"
+                                    : "font-medium"
+                              }
+                            >
+                              {formatDecimal(monthsOfStock)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
 
                         <td className="px-5 py-4 text-right text-muted-foreground">
@@ -1195,6 +1388,12 @@ export function StockClient({ isReadonly }: StockClientProps) {
                 row.current_stock,
               );
               const minimumStock = Number(row.minimum_stock || 0);
+              const consumptionStats =
+                consumptionStatsByProduct.get(row.product_id);
+              const monthlyAverage =
+                consumptionStats?.monthlyAverage ?? 0;
+              const monthsOfStock =
+                consumptionStats?.monthsOfStock ?? null;
 
               const isWithoutStock = displayedStock === 0;
               const isLowStock =
@@ -1230,6 +1429,36 @@ export function StockClient({ isReadonly }: StockClientProps) {
                         </p>
                         <p className="mt-1 font-medium">
                           {row.unit}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Consumo mensual
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {monthlyAverage > 0
+                            ? formatDecimal(monthlyAverage)
+                            : "Sin consumo"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Meses de stock
+                        </p>
+                        <p
+                          className={`mt-1 font-semibold ${
+                            monthsOfStock !== null && monthsOfStock < 1
+                              ? "text-destructive"
+                              : monthsOfStock !== null && monthsOfStock < 2
+                                ? "text-amber-700 dark:text-amber-400"
+                                : ""
+                          }`}
+                        >
+                          {monthsOfStock !== null
+                            ? formatDecimal(monthsOfStock)
+                            : "—"}
                         </p>
                       </div>
                     </div>
