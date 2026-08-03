@@ -12,7 +12,9 @@ import {
   Save,
   Users,
 } from "lucide-react";
+
 import { createGeneralRnuEntry } from "../actions";
+import LocalidadSelector from "@/components/rnu/LocalidadSelector";
 
 const TRANSPORT_OPTIONS = [
   {
@@ -54,7 +56,10 @@ const REASON_OPTIONS = [
 ];
 
 const FACILITY_OPTIONS = [
-  { value: "SUM", label: "SUM" },
+  {
+    value: "SUM",
+    label: "SUM",
+  },
   {
     value: "CENTRO_INTERPRETATIVO",
     label: "Centro Interpretativo",
@@ -73,15 +78,21 @@ export default function NuevoIngresoRnuPage() {
   const [entryDate, setEntryDate] = useState(getCurrentDate());
   const [entryTime, setEntryTime] = useState(getCurrentTime());
   const [visitorCount, setVisitorCount] = useState(1);
+
   const [provinceLocality, setProvinceLocality] = useState("");
+
   const [transportType, setTransportType] = useState("");
+
   const [firstVisit, setFirstVisit] = useState<boolean | null>(
     null,
   );
+
   const [entryReasons, setEntryReasons] = useState<string[]>([]);
   const [facilities, setFacilities] = useState<string[]>([]);
   const [observations, setObservations] = useState("");
+
   const [errorMessage, setErrorMessage] = useState("");
+
   const [isPending, startTransition] = useTransition();
 
   function toggleTransport(value: string) {
@@ -113,17 +124,22 @@ export default function NuevoIngresoRnuPage() {
   }
 
   function decreaseVisitors() {
-    setVisitorCount((current) => Math.max(1, current - 1));
+    setVisitorCount((current) =>
+      Math.max(1, current - 1),
+    );
   }
 
   function increaseVisitors() {
-    setVisitorCount((current) => current + 1);
+    setVisitorCount((current) =>
+      current + 1,
+    );
   }
 
-  function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
+  function handleSave() {
+    if (isPending) {
+      return;
+    }
+
     setErrorMessage("");
 
     startTransition(async () => {
@@ -157,6 +173,7 @@ export default function NuevoIngresoRnuPage() {
           className="inline-flex min-h-11 items-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold transition-colors hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" />
+
           Volver
         </Link>
       </div>
@@ -180,7 +197,17 @@ export default function NuevoIngresoRnuPage() {
         </div>
       </section>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form
+        className="space-y-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+          }
+        }}
+      >
         <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">
             Fecha y hora de ingreso
@@ -271,6 +298,7 @@ export default function NuevoIngresoRnuPage() {
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {TRANSPORT_OPTIONS.map((option) => {
               const Icon = option.icon;
+
               const isSelected =
                 transportType === option.value;
 
@@ -288,6 +316,7 @@ export default function NuevoIngresoRnuPage() {
                   }`}
                 >
                   <Icon className="h-6 w-6 shrink-0" />
+
                   {option.label}
                 </button>
               );
@@ -301,23 +330,15 @@ export default function NuevoIngresoRnuPage() {
           </h2>
 
           <div className="mt-4">
-            <label
-              htmlFor="province-locality"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label className="mb-2 block text-sm font-medium">
               Provincia / localidad
             </label>
 
-            <input
-              id="province-locality"
-              type="text"
+            <LocalidadSelector
               value={provinceLocality}
-              onChange={(event) =>
-                setProvinceLocality(event.target.value)
-              }
-              placeholder="Ejemplo: General Pico, La Pampa"
-              autoComplete="off"
-              className="min-h-12 w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
+              onChange={setProvinceLocality}
+              placeholder="Escribí una localidad..."
+              accent="emerald"
             />
           </div>
         </section>
@@ -330,7 +351,9 @@ export default function NuevoIngresoRnuPage() {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => toggleFirstVisit(true)}
+              onClick={() =>
+                toggleFirstVisit(true)
+              }
               className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
                 firstVisit === true
                   ? "border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-600/20"
@@ -342,7 +365,9 @@ export default function NuevoIngresoRnuPage() {
 
             <button
               type="button"
-              onClick={() => toggleFirstVisit(false)}
+              onClick={() =>
+                toggleFirstVisit(false)
+              }
               className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
                 firstVisit === false
                   ? "border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-600/20"
@@ -365,15 +390,18 @@ export default function NuevoIngresoRnuPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {REASON_OPTIONS.map((option) => {
-              const isSelected = entryReasons.includes(
-                option.value,
-              );
+              const isSelected =
+                entryReasons.includes(
+                  option.value,
+                );
 
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => toggleReason(option.value)}
+                  onClick={() =>
+                    toggleReason(option.value)
+                  }
                   className={`min-h-14 rounded-xl border px-4 py-3 text-left text-base font-medium transition ${
                     isSelected
                       ? "border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-600/20"
@@ -398,9 +426,10 @@ export default function NuevoIngresoRnuPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {FACILITY_OPTIONS.map((option) => {
-              const isSelected = facilities.includes(
-                option.value,
-              );
+              const isSelected =
+                facilities.includes(
+                  option.value,
+                );
 
               return (
                 <button
@@ -432,7 +461,9 @@ export default function NuevoIngresoRnuPage() {
               id="observations"
               value={observations}
               onChange={(event) =>
-                setObservations(event.target.value)
+                setObservations(
+                  event.target.value,
+                )
               }
               placeholder="Escribí una observación si es necesario..."
               rows={5}
@@ -452,7 +483,8 @@ export default function NuevoIngresoRnuPage() {
 
         <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
           <button
-            type="submit"
+            type="button"
+            onClick={handleSave}
             disabled={isPending}
             className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
