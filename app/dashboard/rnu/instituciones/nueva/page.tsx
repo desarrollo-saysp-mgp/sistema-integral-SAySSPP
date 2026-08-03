@@ -9,7 +9,9 @@ import {
   Plus,
   Save,
 } from "lucide-react";
+
 import { createInstitutionRnuEntry } from "../../actions";
+import LocalidadSelector from "@/components/rnu/LocalidadSelector";
 
 const FACILITY_OPTIONS = [
   {
@@ -71,22 +73,29 @@ export default function NuevaInstitucionRnuPage() {
   const [entryTime, setEntryTime] = useState(getCurrentTime());
   const [estimatedExitTime, setEstimatedExitTime] =
     useState("");
+
   const [hasVisitRequest, setHasVisitRequest] = useState<
     boolean | null
   >(null);
+
   const [facilities, setFacilities] = useState<string[]>([]);
   const [activities, setActivities] = useState<string[]>([]);
   const [behavior, setBehavior] = useState("");
   const [observations, setObservations] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
   const [isPending, startTransition] = useTransition();
 
   function decreaseVisitors() {
-    setVisitorCount((current) => Math.max(1, current - 1));
+    setVisitorCount((current) =>
+      Math.max(1, current - 1),
+    );
   }
 
   function increaseVisitors() {
-    setVisitorCount((current) => current + 1);
+    setVisitorCount((current) =>
+      current + 1,
+    );
   }
 
   function toggleVisitRequest(value: boolean) {
@@ -117,10 +126,11 @@ export default function NuevaInstitucionRnuPage() {
     );
   }
 
-  function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
+  function handleSave() {
+    if (isPending) {
+      return;
+    }
+
     setErrorMessage("");
 
     startTransition(async () => {
@@ -182,7 +192,17 @@ export default function NuevaInstitucionRnuPage() {
         </div>
       </section>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form
+        className="space-y-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+          }
+        }}
+      >
         <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">
             Datos de la institución
@@ -211,23 +231,15 @@ export default function NuevaInstitucionRnuPage() {
             </div>
 
             <div className="sm:col-span-2">
-              <label
-                htmlFor="province-locality"
-                className="mb-2 block text-sm font-medium"
-              >
+              <label className="mb-2 block text-sm font-medium">
                 Provincia / localidad
               </label>
 
-              <input
-                id="province-locality"
-                type="text"
+              <LocalidadSelector
                 value={provinceLocality}
-                onChange={(event) =>
-                  setProvinceLocality(event.target.value)
-                }
-                placeholder="Ejemplo: General Pico, La Pampa"
-                autoComplete="address-level2"
-                className="min-h-12 w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
+                onChange={setProvinceLocality}
+                placeholder="Escribí una localidad..."
+                accent="sky"
               />
             </div>
 
@@ -409,7 +421,9 @@ export default function NuevaInstitucionRnuPage() {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => toggleVisitRequest(true)}
+              onClick={() =>
+                toggleVisitRequest(true)
+              }
               className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
                 hasVisitRequest === true
                   ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
@@ -421,7 +435,9 @@ export default function NuevaInstitucionRnuPage() {
 
             <button
               type="button"
-              onClick={() => toggleVisitRequest(false)}
+              onClick={() =>
+                toggleVisitRequest(false)
+              }
               className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
                 hasVisitRequest === false
                   ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
@@ -444,9 +460,8 @@ export default function NuevaInstitucionRnuPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {FACILITY_OPTIONS.map((option) => {
-              const isSelected = facilities.includes(
-                option.value,
-              );
+              const isSelected =
+                facilities.includes(option.value);
 
               return (
                 <button
@@ -479,9 +494,8 @@ export default function NuevaInstitucionRnuPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {ACTIVITY_OPTIONS.map((option) => {
-              const isSelected = activities.includes(
-                option.value,
-              );
+              const isSelected =
+                activities.includes(option.value);
 
               return (
                 <button
@@ -514,7 +528,8 @@ export default function NuevaInstitucionRnuPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {BEHAVIOR_OPTIONS.map((option) => {
-              const isSelected = behavior === option.value;
+              const isSelected =
+                behavior === option.value;
 
               return (
                 <button
@@ -566,7 +581,8 @@ export default function NuevaInstitucionRnuPage() {
 
         <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
           <button
-            type="submit"
+            type="button"
+            onClick={handleSave}
             disabled={isPending}
             className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >

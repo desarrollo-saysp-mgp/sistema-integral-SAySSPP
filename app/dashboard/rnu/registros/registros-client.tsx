@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Eye,
   Pencil,
@@ -22,6 +29,8 @@ type Props = {
   initialEntries: RnuEntry[];
   userRole: string;
 };
+
+const ITEMS_PER_PAGE = 20;
 
 const REASON_LABELS: Record<string, string> = {
   PESCA: "Pesca",
@@ -109,6 +118,7 @@ export default function RegistrosRnuClient({
   const [type, setType] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
@@ -215,11 +225,83 @@ export default function RegistrosRnuClient({
     to,
   ]);
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredEntries.length / ITEMS_PER_PAGE,
+    ),
+  );
+
+  const paginatedEntries = useMemo(() => {
+    const start =
+      (currentPage - 1) * ITEMS_PER_PAGE;
+
+    const end = start + ITEMS_PER_PAGE;
+
+    return filteredEntries.slice(start, end);
+  }, [filteredEntries, currentPage]);
+
+  const firstVisibleRecord =
+    filteredEntries.length === 0
+      ? 0
+      : (currentPage - 1) *
+          ITEMS_PER_PAGE +
+        1;
+
+  const lastVisibleRecord = Math.min(
+    currentPage * ITEMS_PER_PAGE,
+    filteredEntries.length,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, type, from, to]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  function getPageNumbers() {
+    if (totalPages <= 7) {
+      return Array.from(
+        { length: totalPages },
+        (_, index) => index + 1,
+      );
+    }
+
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5];
+    }
+
+    if (currentPage >= totalPages - 3) {
+      return [
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
+    }
+
+    return [
+      currentPage - 2,
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      currentPage + 2,
+    ];
+  }
+
+  const pageNumbers = getPageNumbers();
+
   function clearFilters() {
     setSearch("");
     setType("");
     setFrom("");
     setTo("");
+    setCurrentPage(1);
   }
 
   function handleDelete(
@@ -488,7 +570,7 @@ export default function RegistrosRnuClient({
         <>
           {/* CELULAR + TABLET */}
           <div className="grid grid-cols-1 gap-4 xl:hidden md:grid-cols-2">
-            {filteredEntries.map(
+            {paginatedEntries.map(
               (entry) => {
                 const isInstitution =
                   entry.entry_type ===
@@ -671,7 +753,7 @@ export default function RegistrosRnuClient({
               </thead>
 
               <tbody>
-                {filteredEntries.map(
+                {paginatedEntries.map(
                   (entry) => {
                     const isInstitution =
                       entry.entry_type ===
@@ -779,6 +861,80 @@ export default function RegistrosRnuClient({
               </tbody>
             </table>
           </div>
+
+          <section className="mt-5 rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-center text-sm text-muted-foreground sm:text-left">
+                Mostrando{" "}
+                <span className="font-semibold text-foreground">
+                  {firstVisibleRecord}
+                </span>{" "}
+                a{" "}
+                <span className="font-semibold text-foreground">
+                  {lastVisibleRecord}
+                </span>{" "}
+                de{" "}
+                <span className="font-semibold text-foreground">
+                  {filteredEntries.length}
+                </span>{" "}
+                registros
+              </p>
+
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((page) =>
+                      Math.max(1, page - 1),
+                    )
+                  }
+                  disabled={currentPage === 1}
+                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border bg-background px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {pageNumbers.map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage(pageNumber)
+                    }
+                    className={`hidden h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition-colors sm:inline-flex ${
+                      currentPage === pageNumber
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "bg-background hover:bg-muted"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+
+                <div className="inline-flex h-10 items-center justify-center rounded-xl border bg-muted/40 px-4 text-sm font-semibold sm:hidden">
+                  {currentPage} / {totalPages}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((page) =>
+                      Math.min(
+                        totalPages,
+                        page + 1,
+                      ),
+                    )
+                  }
+                  disabled={currentPage === totalPages}
+                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border bg-background px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Página siguiente"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </section>
         </>
       )}
     </main>
