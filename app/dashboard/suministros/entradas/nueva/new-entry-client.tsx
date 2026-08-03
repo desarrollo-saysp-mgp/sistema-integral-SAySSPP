@@ -144,7 +144,6 @@ export function NewEntryClient({
 
   const [movementDate, setMovementDate] = useState(getLocalDate());
   const [memoNumber, setMemoNumber] = useState("");
-  const [fcNumber, setFcNumber] = useState("");
   const [generalObservations, setGeneralObservations] = useState("");
   const [rows, setRows] = useState<EntryRow[]>([createEmptyRow()]);
 
@@ -658,7 +657,6 @@ export function NewEntryClient({
   const resetForm = () => {
     setMovementDate(getLocalDate());
     setMemoNumber("");
-    setFcNumber("");
     setGeneralObservations("");
     setRows([createEmptyRow()]);
     setFormError(null);
@@ -700,9 +698,6 @@ export function NewEntryClient({
         const observationParts = [
           memoNumber.trim()
             ? `Número de memo: ${memoNumber.trim()}`
-            : "",
-          fcNumber.trim()
-            ? `Número de FC: ${fcNumber.trim()}`
             : "",
           generalObservations.trim()
             ? `Observación general: ${generalObservations.trim()}`
@@ -787,7 +782,7 @@ export function NewEntryClient({
           </h1>
 
           <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-            Cargá el ingreso de productos y asociá sus números de memo y FC.
+            Cargá el ingreso de productos y asociá su número de memo.
           </p>
         </div>
       </div>
@@ -807,7 +802,7 @@ export function NewEntryClient({
             <CardTitle className="text-lg">Datos generales</CardTitle>
           </CardHeader>
 
-          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="movement-date">Fecha *</Label>
 
@@ -828,18 +823,6 @@ export function NewEntryClient({
                 value={memoNumber}
                 onChange={(event) => setMemoNumber(event.target.value)}
                 placeholder="Ejemplo: 125/2026"
-                disabled={isReadonly || saving}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fc-number">Número de FC</Label>
-
-              <Input
-                id="fc-number"
-                value={fcNumber}
-                onChange={(event) => setFcNumber(event.target.value)}
-                placeholder="Ejemplo: FC-4587"
                 disabled={isReadonly || saving}
               />
             </div>
