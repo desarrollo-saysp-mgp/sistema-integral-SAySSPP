@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   ArrowLeft,
   Building2,
+  CheckCircle2,
   Minus,
   Plus,
   Save,
@@ -54,6 +56,8 @@ const BEHAVIOR_OPTIONS = [
   },
 ];
 
+const QUICK_VISITOR_COUNTS = [1, 2, 3, 4, 5];
+
 function getCurrentDate() {
   return new Date().toLocaleDateString("en-CA");
 }
@@ -63,6 +67,8 @@ function getCurrentTime() {
 }
 
 export default function NuevaInstitucionRnuPage() {
+  const router = useRouter();
+
   const [institutionName, setInstitutionName] = useState("");
   const [provinceLocality, setProvinceLocality] = useState("");
   const [visitorCount, setVisitorCount] = useState(1);
@@ -83,6 +89,7 @@ export default function NuevaInstitucionRnuPage() {
   const [behavior, setBehavior] = useState("");
   const [observations, setObservations] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [isPending, startTransition] = useTransition();
 
@@ -132,10 +139,11 @@ export default function NuevaInstitucionRnuPage() {
     }
 
     setErrorMessage("");
+    setSuccessMessage("");
 
     startTransition(async () => {
       try {
-        await createInstitutionRnuEntry({
+        const result = await createInstitutionRnuEntry({
           institutionName,
           provinceLocality,
           visitorCount,
@@ -151,6 +159,10 @@ export default function NuevaInstitucionRnuPage() {
           behavior,
           observations,
         });
+
+        if (result?.success) {
+          setSuccessMessage("Institución registrada correctamente.");
+        }
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -191,6 +203,50 @@ export default function NuevaInstitucionRnuPage() {
           </div>
         </div>
       </section>
+
+      {successMessage ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="institution-success-title"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-sky-200 bg-background p-6 shadow-2xl sm:p-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                <CheckCircle2 className="h-11 w-11" />
+              </div>
+
+              <h2
+                id="institution-success-title"
+                className="mt-5 text-2xl font-bold tracking-tight"
+              >
+                Institución registrada
+              </h2>
+
+              <p className="mt-2 text-base font-medium text-sky-700">
+                La carga se guardó correctamente.
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Al continuar volverás al inicio del módulo RNU.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  router.push("/dashboard/rnu");
+                  router.refresh();
+                }}
+                autoFocus
+                className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-600 px-5 text-base font-semibold text-white transition-colors hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2"
+              >
+                Volver al módulo RNU
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <form
         className="space-y-5"
@@ -270,14 +326,40 @@ export default function NuevaInstitucionRnuPage() {
             Cantidad de personas
           </h2>
 
-          <div className="mt-4 flex items-center justify-center gap-4 sm:justify-start">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {QUICK_VISITOR_COUNTS.map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => setVisitorCount(count)}
+                className={`flex h-14 min-w-14 items-center justify-center rounded-xl border px-4 text-lg font-bold transition active:scale-95 ${visitorCount === count
+                    ? "border-sky-600 bg-sky-600 text-white ring-2 ring-sky-600/20"
+                    : "bg-background hover:bg-muted"
+                  }`}
+              >
+                {count}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() =>
+                setVisitorCount((current) => current + 10)
+              }
+              className="flex h-14 min-w-20 items-center justify-center rounded-xl border bg-background px-4 text-base font-bold transition hover:bg-muted active:scale-95"
+            >
+              +10
+            </button>
+          </div>
+
+          <div className="mt-4 flex items-center gap-4">
             <button
               type="button"
               onClick={decreaseVisitors}
-              className="flex h-14 w-14 items-center justify-center rounded-xl border bg-background transition-colors hover:bg-muted active:scale-95"
+              className="flex h-12 w-12 items-center justify-center rounded-xl border bg-background transition-colors hover:bg-muted active:scale-95"
               aria-label="Disminuir cantidad"
             >
-              <Minus className="h-6 w-6" />
+              <Minus className="h-5 w-5" />
             </button>
 
             <div className="flex min-w-28 items-center justify-center rounded-xl border bg-muted/40 px-6 py-3">
@@ -289,10 +371,10 @@ export default function NuevaInstitucionRnuPage() {
             <button
               type="button"
               onClick={increaseVisitors}
-              className="flex h-14 w-14 items-center justify-center rounded-xl border bg-background transition-colors hover:bg-muted active:scale-95"
+              className="flex h-12 w-12 items-center justify-center rounded-xl border bg-background transition-colors hover:bg-muted active:scale-95"
               aria-label="Aumentar cantidad"
             >
-              <Plus className="h-6 w-6" />
+              <Plus className="h-5 w-5" />
             </button>
           </div>
         </section>
@@ -348,13 +430,13 @@ export default function NuevaInstitucionRnuPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+        <section className="overflow-hidden rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">
             Fecha y horarios
           </h2>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
+          <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="min-w-0">
               <label
                 htmlFor="entry-date"
                 className="mb-2 block text-sm font-medium"
@@ -369,11 +451,11 @@ export default function NuevaInstitucionRnuPage() {
                 onChange={(event) =>
                   setEntryDate(event.target.value)
                 }
-                className="min-h-12 w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
+                className="block min-h-12 w-full min-w-0 max-w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label
                 htmlFor="entry-time"
                 className="mb-2 block text-sm font-medium"
@@ -388,11 +470,11 @@ export default function NuevaInstitucionRnuPage() {
                 onChange={(event) =>
                   setEntryTime(event.target.value)
                 }
-                className="min-h-12 w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
+                className="block min-h-12 w-full min-w-0 max-w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label
                 htmlFor="estimated-exit-time"
                 className="mb-2 block text-sm font-medium"
@@ -407,7 +489,7 @@ export default function NuevaInstitucionRnuPage() {
                 onChange={(event) =>
                   setEstimatedExitTime(event.target.value)
                 }
-                className="min-h-12 w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
+                className="block min-h-12 w-full min-w-0 max-w-full rounded-xl border bg-background px-4 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20"
               />
             </div>
           </div>
@@ -424,11 +506,10 @@ export default function NuevaInstitucionRnuPage() {
               onClick={() =>
                 toggleVisitRequest(true)
               }
-              className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
-                hasVisitRequest === true
+              className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${hasVisitRequest === true
                   ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
                   : "bg-background hover:bg-muted"
-              }`}
+                }`}
             >
               Sí
             </button>
@@ -438,11 +519,10 @@ export default function NuevaInstitucionRnuPage() {
               onClick={() =>
                 toggleVisitRequest(false)
               }
-              className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${
-                hasVisitRequest === false
+              className={`min-h-14 rounded-xl border px-4 text-base font-semibold transition ${hasVisitRequest === false
                   ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
                   : "bg-background hover:bg-muted"
-              }`}
+                }`}
             >
               No
             </button>
@@ -470,11 +550,10 @@ export default function NuevaInstitucionRnuPage() {
                   onClick={() =>
                     toggleFacility(option.value)
                   }
-                  className={`min-h-14 rounded-xl border px-4 py-3 text-left text-base font-medium transition ${
-                    isSelected
+                  className={`min-h-14 rounded-xl border px-4 py-3 text-left text-base font-medium transition ${isSelected
                       ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
                       : "bg-background hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {option.label}
                 </button>
@@ -504,11 +583,10 @@ export default function NuevaInstitucionRnuPage() {
                   onClick={() =>
                     toggleActivity(option.value)
                   }
-                  className={`min-h-14 rounded-xl border px-4 py-3 text-left text-base font-medium transition ${
-                    isSelected
+                  className={`min-h-14 rounded-xl border px-4 py-3 text-left text-base font-medium transition ${isSelected
                       ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
                       : "bg-background hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {option.label}
                 </button>
@@ -538,11 +616,10 @@ export default function NuevaInstitucionRnuPage() {
                   onClick={() =>
                     toggleBehavior(option.value)
                   }
-                  className={`min-h-14 rounded-xl border px-4 py-3 text-base font-semibold transition ${
-                    isSelected
+                  className={`min-h-14 rounded-xl border px-4 py-3 text-base font-semibold transition ${isSelected
                       ? "border-sky-600 bg-sky-50 text-sky-800 ring-2 ring-sky-600/20"
                       : "bg-background hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {option.label}
                 </button>

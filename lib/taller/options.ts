@@ -320,13 +320,6 @@ export const VEHICLE_OPTIONS = [
     "criticality": "12"
   },
   {
-    "code": "A.6",
-    "vehicle": "Pala cargadora New Holand L318",
-    "licensePlate": "EHB073",
-    "vehicleType": "Mini Pala cargadora",
-    "criticality": ""
-  },
-  {
     "code": "B.P2",
     "vehicle": "Mini pala cargadora Bobcat",
     "licensePlate": "FAC47",
@@ -519,6 +512,13 @@ export const VEHICLE_OPTIONS = [
     "code": "M.C. P.R.1",
     "vehicle": "Retro Pala JCB",
     "licensePlate": "FAC53",
+    "vehicleType": "Retroexcavadora",
+    "criticality": ""
+  },
+  {
+    "code": "M.C. P.R.2",
+    "vehicle": "Retroexcavadora JCB JS200LC",
+    "licensePlate": "BXI86",
     "vehicleType": "Retroexcavadora",
     "criticality": ""
   },

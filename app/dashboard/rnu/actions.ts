@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 type CreateGeneralEntryInput = {
@@ -211,7 +210,7 @@ export async function createGeneralRnuEntry(
     );
   }
 
-  const { error: insertError } = await supabase
+  const { data: createdEntry, error: insertError } = await supabase
     .from("rnu_entries")
     .insert({
       entry_type: "GENERAL",
@@ -225,23 +224,31 @@ export async function createGeneralRnuEntry(
       facilities,
       observations,
       created_by: user.id,
-    });
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
+  if (insertError || !createdEntry) {
     console.error(
       "Error al crear el ingreso general RNU:",
       insertError,
     );
 
     throw new Error(
-      `No se pudo guardar el ingreso: ${insertError.message}`,
+      `No se pudo guardar el ingreso: ${
+        insertError?.message || "No se recibió el registro creado."
+      }`,
     );
   }
 
   revalidatePath("/dashboard/rnu");
   revalidatePath("/dashboard/rnu/registros");
+  revalidatePath("/dashboard/rnu/estadisticas");
 
-  redirect("/dashboard/rnu?created=general");
+  return {
+    success: true,
+    id: createdEntry.id,
+  };
 }
 
 /* =========================================================
@@ -327,7 +334,7 @@ export async function createInstitutionRnuEntry(
     );
   }
 
-  const { error: insertError } = await supabase
+  const { data: createdEntry, error: insertError } = await supabase
     .from("rnu_entries")
     .insert({
       entry_type: "INSTITUCION",
@@ -346,23 +353,31 @@ export async function createInstitutionRnuEntry(
       activities,
       behavior,
       created_by: user.id,
-    });
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
+  if (insertError || !createdEntry) {
     console.error(
       "Error al crear ingreso institucional RNU:",
       insertError,
     );
 
     throw new Error(
-      `No se pudo guardar la institución: ${insertError.message}`,
+      `No se pudo guardar la institución: ${
+        insertError?.message || "No se recibió el registro creado."
+      }`,
     );
   }
 
   revalidatePath("/dashboard/rnu");
   revalidatePath("/dashboard/rnu/registros");
+  revalidatePath("/dashboard/rnu/estadisticas");
 
-  redirect("/dashboard/rnu?created=institution");
+  return {
+    success: true,
+    id: createdEntry.id,
+  };
 }
 
 /* =========================================================
@@ -638,6 +653,7 @@ export async function updateRnuEntry(
 
   revalidatePath("/dashboard/rnu");
   revalidatePath("/dashboard/rnu/registros");
+  revalidatePath("/dashboard/rnu/estadisticas");
   revalidatePath(`/dashboard/rnu/registros/${id}`);
   revalidatePath(
     `/dashboard/rnu/registros/${id}/editar`,
@@ -710,4 +726,5 @@ export async function deleteRnuEntry(
 
   revalidatePath("/dashboard/rnu");
   revalidatePath("/dashboard/rnu/registros");
+  revalidatePath("/dashboard/rnu/estadisticas");
 }

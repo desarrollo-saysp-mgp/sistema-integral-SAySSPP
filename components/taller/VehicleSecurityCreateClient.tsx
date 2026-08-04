@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VEHICLE_OPTIONS } from "@/lib/taller/options";
@@ -15,9 +15,12 @@ import {
 } from "@/components/ui/card";
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
   ClipboardCheck,
+  Search,
   Save,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -278,11 +281,35 @@ const normalizeVehicleCode = (value: unknown) =>
     .trim()
     .replace(/\s+/g, " ");
 
+
+const normalizeLicensePlate = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+const formatLicensePlateInput = (value: unknown) =>
+  String(value || "").trim().toUpperCase();
+
 const getVehicleByCode = (code: string) => {
   const normalizedCode = normalizeText(code);
 
   return VEHICLE_OPTIONS.find(
     (vehicle) => normalizeText(vehicle.code) === normalizedCode,
+  );
+};
+
+
+const getVehicleByLicensePlate = (licensePlate: string) => {
+  const normalizedLicensePlate = normalizeLicensePlate(licensePlate);
+
+  if (!normalizedLicensePlate) {
+    return undefined;
+  }
+
+  return VEHICLE_OPTIONS.find(
+    (vehicle) =>
+      normalizeLicensePlate(vehicle.licensePlate) === normalizedLicensePlate,
   );
 };
 
@@ -300,6 +327,8 @@ export function VehicleSecurityCreateClient() {
   const router = useRouter();
 
   const [saving, setSaving] = useState(false);
+  const [licensePlateOpen, setLicensePlateOpen] = useState(false);
+  const licensePlateContainerRef = useRef<HTMLDivElement>(null);
 
   const [form, setForm] = useState<FormState>({
     inspection_date: getTodayForInput(),
@@ -331,6 +360,73 @@ export function VehicleSecurityCreateClient() {
     );
   }, []);
 
+
+  const uniqueLicensePlateOptions = useMemo(() => {
+    const map = new Map<string, (typeof VEHICLE_OPTIONS)[number]>();
+
+    VEHICLE_OPTIONS.forEach((vehicle) => {
+      const normalizedLicensePlate = normalizeLicensePlate(
+        vehicle.licensePlate,
+      );
+
+      if (!normalizedLicensePlate) {
+        return;
+      }
+
+      if (!map.has(normalizedLicensePlate)) {
+        map.set(normalizedLicensePlate, vehicle);
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      String(a.licensePlate).localeCompare(
+        String(b.licensePlate),
+        "es",
+        { numeric: true },
+      ),
+    );
+  }, []);
+
+
+  const filteredLicensePlateOptions = useMemo(() => {
+    const query = normalizeLicensePlate(form.license_plate);
+
+    if (!query) {
+      return uniqueLicensePlateOptions.slice(0, 12);
+    }
+
+    return uniqueLicensePlateOptions
+      .filter((vehicle) => {
+        const licensePlate = normalizeLicensePlate(vehicle.licensePlate);
+        const code = normalizeText(vehicle.code);
+        const vehicleName = normalizeText(vehicle.vehicle);
+
+        return (
+          licensePlate.includes(query) ||
+          code.includes(normalizeText(form.license_plate)) ||
+          vehicleName.includes(normalizeText(form.license_plate))
+        );
+      })
+      .slice(0, 12);
+  }, [form.license_plate, uniqueLicensePlateOptions]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        licensePlateContainerRef.current &&
+        !licensePlateContainerRef.current.contains(event.target as Node)
+      ) {
+        setLicensePlateOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   const updateForm = (field: keyof FormState, value: string) => {
     setForm((prev) => ({
       ...prev,
@@ -352,6 +448,52 @@ export function VehicleSecurityCreateClient() {
     }));
   };
 
+
+  const handleLicensePlateInputChange = (licensePlate: string) => {
+    const formattedLicensePlate = formatLicensePlateInput(licensePlate);
+
+    setForm((prev) => ({
+      ...prev,
+      license_plate: formattedLicensePlate,
+      vehicle_code: "",
+      vehicle: "",
+      vehicle_type: "",
+      area: "",
+    }));
+
+    setLicensePlateOpen(true);
+  };
+
+  const selectVehicleByLicensePlate = (
+    selectedVehicle: (typeof VEHICLE_OPTIONS)[number],
+  ) => {
+    const cleanVehicleCode = normalizeVehicleCode(selectedVehicle.code);
+
+    setForm((prev) => ({
+      ...prev,
+      license_plate: selectedVehicle.licensePlate || "",
+      vehicle_code: cleanVehicleCode,
+      vehicle: selectedVehicle.vehicle || "",
+      vehicle_type: selectedVehicle.vehicleType || "",
+      area: resolveVehicleDirection(cleanVehicleCode),
+    }));
+
+    setLicensePlateOpen(false);
+  };
+
+  const clearLicensePlateSelection = () => {
+    setForm((prev) => ({
+      ...prev,
+      license_plate: "",
+      vehicle_code: "",
+      vehicle: "",
+      vehicle_type: "",
+      area: "",
+    }));
+
+    setLicensePlateOpen(false);
+  };
+
   const updateChecklist = (key: string, value: ChecklistValue) => {
     setChecklist((prev) => ({
       ...prev,
@@ -366,7 +508,9 @@ export function VehicleSecurityCreateClient() {
     }
 
     if (!form.vehicle_code) {
-      toast.error("El código de vehículo es obligatorio");
+      toast.error(
+        "Seleccioná un código o un dominio válido de la lista.",
+      );
       return;
     }
 
@@ -497,16 +641,92 @@ export function VehicleSecurityCreateClient() {
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">Dominio</label>
-            <Input
-              value={form.license_plate}
-              onChange={(event) =>
-                updateForm("license_plate", event.target.value)
-              }
-              className="h-10 rounded-xl"
-              placeholder="Dominio"
-            />
+          <div
+            ref={licensePlateContainerRef}
+            className="relative min-w-0"
+          >
+            <label
+              htmlFor="vehicle-license-plate"
+              className="mb-1 block text-sm font-medium"
+            >
+              Dominio
+            </label>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+              <Input
+                id="vehicle-license-plate"
+                value={form.license_plate}
+                onChange={(event) =>
+                  handleLicensePlateInputChange(event.target.value)
+                }
+                onFocus={() => setLicensePlateOpen(true)}
+                className="h-10 min-w-0 rounded-xl pl-9 pr-10 uppercase"
+                placeholder="Escribí una patente"
+                autoComplete="off"
+              />
+
+              {form.license_plate ? (
+                <button
+                  type="button"
+                  onClick={clearLicensePlateSelection}
+                  className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Limpiar dominio"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {licensePlateOpen ? (
+              <div className="absolute left-0 right-0 z-50 mt-2 max-h-64 overflow-y-auto rounded-xl border bg-background p-1.5 shadow-xl">
+                {filteredLicensePlateOptions.length === 0 ? (
+                  <div className="px-3 py-4 text-sm text-muted-foreground">
+                    No se encontraron dominios coincidentes.
+                  </div>
+                ) : (
+                  filteredLicensePlateOptions.map((vehicle) => {
+                    const isSelected =
+                      normalizeLicensePlate(form.license_plate) ===
+                      normalizeLicensePlate(vehicle.licensePlate);
+
+                    return (
+                      <button
+                        key={`${vehicle.code}-${vehicle.licensePlate}`}
+                        type="button"
+                        onClick={() =>
+                          selectVehicleByLicensePlate(vehicle)
+                        }
+                        className={`flex w-full items-start justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                          isSelected
+                            ? "bg-emerald-50 text-emerald-900"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold">
+                            {vehicle.licensePlate}
+                          </p>
+
+                          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                            {vehicle.code} · {vehicle.vehicle}
+                          </p>
+                        </div>
+
+                        {isSelected ? (
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            ) : null}
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Escribí parte de la patente y tocá una opción de la lista.
+            </p>
           </div>
 
           <div>
