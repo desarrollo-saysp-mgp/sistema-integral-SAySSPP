@@ -97,11 +97,16 @@ type ComplaintWithDetails = Complaint & {
   service: Service | null;
   cause: Cause | null;
   loaded_by_user: User;
+  resolution_detail?: string | null;
 };
 
 interface ComplaintsTableProps {
   complaints: ComplaintWithDetails[];
-  onStatusChange?: (complaintId: number, newStatus: string) => Promise<void>;
+  onStatusChange?: (
+    complaintId: number,
+    newStatus: string,
+    resolutionDetail?: string | null,
+  ) => Promise<void>;
 }
 
 type SortOption = "fecha_desc" | "fecha_asc" | "numero_desc" | "numero_asc";
@@ -220,6 +225,12 @@ const getComplaintDisplayData = (
 
   const detailLabel = complaint.details ?? extraObservations ?? "-";
 
+  const resolutionDetailLabel =
+    typeof complaint.resolution_detail === "string" &&
+    complaint.resolution_detail.trim()
+      ? complaint.resolution_detail.trim()
+      : "-";
+
   const addressLabel =
     `${complaint.address || "-"} ${complaint.street_number || ""}`.trim();
 
@@ -251,6 +262,7 @@ const getComplaintDisplayData = (
     zoneLabel,
     sinceWhenLabel,
     detailLabel,
+    resolutionDetailLabel,
     addressLabel,
     resolutionDateLabel,
     rawResolutionDate,
@@ -303,13 +315,19 @@ export function ComplaintsTable({
     {},
   );
 
+  const [resolutionDetailOverrides, setResolutionDetailOverrides] = useState<
+    Record<number, string | null>
+  >({});
+
   const [resolutionModalComplaint, setResolutionModalComplaint] =
     useState<ComplaintWithDetails | null>(null);
-
   const [resolutionModalDate, setResolutionModalDate] = useState("");
   const [resolutionModalSeen, setResolutionModalSeen] = useState(false);
   const [resolutionModalObservations, setResolutionModalObservations] =
     useState("");
+  const [resolutionModalDetail, setResolutionModalDetail] = useState("");
+  const [resolutionModalForceResolved, setResolutionModalForceResolved] =
+    useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaintIds, setSelectedComplaintIds] = useState<number[]>(
     [],
@@ -430,31 +448,126 @@ export function ComplaintsTable({
     return statusOverrides[complaint.id] ?? complaint.status;
   };
 
-  const handleStatusChange = async (complaintId: number, newStatus: string) => {
-    if (!onStatusChange || isReadOnly) return;
+  const getResolutionDetailValue = (complaint: ComplaintWithDetails) => {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        resolutionDetailOverrides,
+        complaint.id,
+      )
+    ) {
+      return resolutionDetailOverrides[complaint.id] ?? "";
+    }
+
+    return complaint.resolution_detail ?? "";
+  };
+
+  const openResolutionDateModal = (
+    complaint: ComplaintWithDetails,
+    options?: { forceResolved?: boolean },
+  ) => {
+    const currentDate = getResolutionDateValue(complaint);
+    const currentTracking = getSPTrackingData(complaint);
+
+    setResolutionModalComplaint(complaint);
+    setResolutionModalDate(
+      currentDate ??
+        (options?.forceResolved ? new Date().toISOString().slice(0, 10) : ""),
+    );
+    setResolutionModalSeen(currentTracking.seen);
+    setResolutionModalObservations(currentTracking.observations);
+    setResolutionModalDetail(getResolutionDetailValue(complaint));
+    setResolutionModalForceResolved(Boolean(options?.forceResolved));
+  };
+
+  const closeResolutionDateModal = () => {
+    setResolutionModalComplaint(null);
+    setResolutionModalDate("");
+    setResolutionModalSeen(false);
+    setResolutionModalObservations("");
+    setResolutionModalDetail("");
+    setResolutionModalForceResolved(false);
+  };
+
+  const saveStatusChange = async (
+    complaintId: number,
+    newStatus: string,
+    resolutionDetail?: string | null,
+  ): Promise<boolean> => {
+    if (!onStatusChange || isReadOnly) return false;
 
     setUpdatingStatus(complaintId);
     const toastId = toast.loading("Actualizando estado del reclamo...");
 
     try {
-      await onStatusChange(complaintId, newStatus);
+      const shouldUseDirectPatch =
+        resolutionDetail !== undefined || newStatus !== "Resuelto";
+
+      if (shouldUseDirectPatch) {
+        const response = await fetch(`/api/complaints/${complaintId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            ...(resolutionDetail !== undefined
+              ? { resolution_detail: resolutionDetail }
+              : {}),
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "No se pudo actualizar el estado");
+        }
+      } else {
+        await onStatusChange(complaintId, newStatus, resolutionDetail);
+      }
 
       setStatusOverrides((prev) => ({
         ...prev,
         [complaintId]: newStatus,
       }));
 
+      if (resolutionDetail !== undefined) {
+        setResolutionDetailOverrides((prev) => ({
+          ...prev,
+          [complaintId]: resolutionDetail,
+        }));
+      }
+
       toast.success("Estado actualizado correctamente", {
         id: toastId,
       });
+
+      return true;
     } catch (error) {
       console.error("Error updating status:", error);
-      toast.error("No se pudo actualizar el estado", {
-        id: toastId,
-      });
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo actualizar el estado",
+        {
+          id: toastId,
+        },
+      );
+
+      return false;
     } finally {
       setUpdatingStatus(null);
     }
+  };
+
+  const handleStatusChange = async (complaintId: number, newStatus: string) => {
+    if (!onStatusChange || isReadOnly) return;
+
+    const complaint = sortedComplaints.find((item) => item.id === complaintId);
+
+    if (newStatus === "Resuelto" && complaint) {
+      openResolutionDateModal(complaint, { forceResolved: true });
+      return;
+    }
+
+    await saveStatusChange(complaintId, newStatus, null);
   };
 
   const getSPTrackingData = (complaint: ComplaintWithDetails) => {
@@ -469,22 +582,6 @@ export function ComplaintsTable({
     };
   };
 
-  const openResolutionDateModal = (complaint: ComplaintWithDetails) => {
-    const currentDate = getResolutionDateValue(complaint);
-    const currentTracking = getSPTrackingData(complaint);
-
-    setResolutionModalComplaint(complaint);
-    setResolutionModalDate(currentDate ?? "");
-    setResolutionModalSeen(currentTracking.seen);
-    setResolutionModalObservations(currentTracking.observations);
-  };
-
-  const closeResolutionDateModal = () => {
-    setResolutionModalComplaint(null);
-    setResolutionModalDate("");
-    setResolutionModalSeen(false);
-    setResolutionModalObservations("");
-  };
 
   const saveResolutionDate = async () => {
     if (!resolutionModalComplaint || isReadOnly) return;
@@ -493,7 +590,10 @@ export function ComplaintsTable({
     const toastId = toast.loading("Guardando seguimiento del reclamo...");
 
     try {
-      const shouldMarkAsResolved = Boolean(resolutionModalDate);
+      const normalizedResolutionDetail = resolutionModalDetail.trim();
+      const shouldMarkAsResolved =
+        resolutionModalForceResolved || Boolean(resolutionModalDate);
+      const shouldSaveResolutionDetail = !isServiciosPublicosUser;
 
       const response = await fetch(
         `/api/complaints/${resolutionModalComplaint.id}`,
@@ -504,6 +604,9 @@ export function ComplaintsTable({
           },
           body: JSON.stringify({
             resolution_date: resolutionModalDate || null,
+            ...(shouldSaveResolutionDetail
+              ? { resolution_detail: normalizedResolutionDetail || null }
+              : {}),
             sp_seen: resolutionModalSeen,
             sp_observations: resolutionModalObservations,
             ...(shouldMarkAsResolved ? { status: "Resuelto" } : {}),
@@ -522,6 +625,13 @@ export function ComplaintsTable({
         [resolutionModalComplaint.id]: resolutionModalDate || null,
       }));
 
+      if (shouldSaveResolutionDetail) {
+        setResolutionDetailOverrides((prev) => ({
+          ...prev,
+          [resolutionModalComplaint.id]: normalizedResolutionDetail || null,
+        }));
+      }
+
       if (shouldMarkAsResolved) {
         setStatusOverrides((prev) => ({
           ...prev,
@@ -531,7 +641,7 @@ export function ComplaintsTable({
 
       toast.success(
         shouldMarkAsResolved
-          ? "Seguimiento guardado y reclamo marcado como resuelto"
+          ? "Resolución guardada y reclamo marcado como resuelto"
           : "Seguimiento guardado correctamente",
         {
           id: toastId,
@@ -570,6 +680,7 @@ export function ComplaintsTable({
           },
           body: JSON.stringify({
             resolution_date: null,
+            resolution_detail: null,
             sp_seen: false,
             sp_observations: "",
           }),
@@ -587,7 +698,12 @@ export function ComplaintsTable({
         [resolutionModalComplaint.id]: null,
       }));
 
-      toast.success("Seguimiento quitado correctamente", {
+      setResolutionDetailOverrides((prev) => ({
+        ...prev,
+        [resolutionModalComplaint.id]: null,
+      }));
+
+      toast.success("Fecha y detalle de resolución quitados correctamente", {
         id: toastId,
       });
 
@@ -764,6 +880,11 @@ export function ComplaintsTable({
       partes.push(`Zona/Sector: *${display.zoneLabel || "-"}*`);
       partes.push(`Desde: *${display.sinceWhenLabel || "-"}*`);
       partes.push(`Fecha resolución: *${display.resolutionDateLabel || "-"}*`);
+      if (getComplaintStatus(item) === "Resuelto") {
+        partes.push(
+          `Detalle resolución: *${display.resolutionDetailLabel || "-"}*`,
+        );
+      }
       partes.push(`Detalle: *${display.detailLabel || "-"}*`);
       partes.push(`Cargado por: *${item.loaded_by_user?.full_name || "-"}*`);
       partes.push("");
@@ -809,6 +930,7 @@ export function ComplaintsTable({
             Nivel: display.levelLabel,
             Descripción: display.descriptionLabel,
             "Fecha resolución": display.resolutionDateLabel,
+            "Detalle resolución": display.resolutionDetailLabel,
             Agente: display.agentLabel,
             Estado: item.status,
             "Cargado por": item.loaded_by_user?.full_name ?? "",
@@ -838,6 +960,7 @@ export function ComplaintsTable({
           Causa: display.causeLabel,
           "Desde Cuándo": display.sinceWhenLabel,
           "Fecha resolución": display.resolutionDateLabel,
+          "Detalle resolución": display.resolutionDetailLabel,
           Estado: item.status,
         };
       });
@@ -924,6 +1047,7 @@ export function ComplaintsTable({
           "Nivel",
           "Descripción",
           "Fecha resolución",
+          "Detalle resolución",
           "Agente",
           "Estado",
         ],
@@ -953,6 +1077,7 @@ export function ComplaintsTable({
           "Causa",
           "Observación",
           "Fecha resolución",
+          "Detalle resolución",
           "Estado",
         ],
       ];
@@ -981,6 +1106,7 @@ export function ComplaintsTable({
             display.levelLabel,
             display.descriptionLabel,
             resolutionDateForPdf,
+            isResolved ? display.resolutionDetailLabel : "-",
             display.agentLabel,
             currentStatus,
           ];
@@ -1009,6 +1135,7 @@ export function ComplaintsTable({
           display.causeLabel,
           display.detailLabel,
           resolutionDateForPdf,
+          isResolved ? display.resolutionDetailLabel : "-",
           currentStatus,
         ];
       });
@@ -1053,10 +1180,11 @@ export function ComplaintsTable({
               3: { cellWidth: 65 },
               4: { cellWidth: 25 },
               5: { cellWidth: 18 },
-              6: { cellWidth: 34 },
-              7: { cellWidth: 20 },
-              8: { cellWidth: 28 },
-              9: { cellWidth: 18 },
+              6: { cellWidth: 30 },
+              7: { cellWidth: 18 },
+              8: { cellWidth: 34 },
+              9: { cellWidth: 24 },
+              10: { cellWidth: 17 },
             }
           : isZyVUser
             ? {
@@ -1077,12 +1205,13 @@ export function ComplaintsTable({
                 3: { cellWidth: 48 },
                 4: { cellWidth: 27 },
                 5: { cellWidth: 30 },
-                6: { cellWidth: 58 },
-                7: { cellWidth: 24 },
-                8: { cellWidth: 22 },
+                6: { cellWidth: 48 },
+                7: { cellWidth: 22 },
+                8: { cellWidth: 42 },
+                9: { cellWidth: 20 },
               },
         didParseCell: (data: CellHookData) => {
-          const statusColumnIndex = isArboladoUser ? 9 : 8;
+          const statusColumnIndex = isArboladoUser ? 10 : isZyVUser ? 8 : 9;
 
           if (
             data.section === "body" &&
@@ -1379,6 +1508,13 @@ export function ComplaintsTable({
                           <span>{display.resolutionDateLabel}</span>
                         </div>
 
+                        {complaintStatus === "Resuelto" && (
+                          <div>
+                            <span className="font-semibold">Detalle resolución: </span>
+                            <span>{display.resolutionDetailLabel}</span>
+                          </div>
+                        )}
+
                         <div>
                           <span className="font-semibold">Agente: </span>
                           <span>{display.agentLabel}</span>
@@ -1439,6 +1575,13 @@ export function ComplaintsTable({
                           </span>
                           <span>{display.resolutionDateLabel}</span>
                         </div>
+
+                        {complaintStatus === "Resuelto" && (
+                          <div>
+                            <span className="font-semibold">Detalle resolución: </span>
+                            <span>{display.resolutionDetailLabel}</span>
+                          </div>
+                        )}
 
                         {!isServiciosPublicosUser && (
                           <div>
@@ -1922,13 +2065,15 @@ export function ComplaintsTable({
 
       {resolutionModalComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg">
+          <div className="w-full max-w-lg rounded-2xl border bg-background p-5 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold">
-                  {isServiciosPublicosUser
-                    ? "Seguimiento del reclamo"
-                    : "Fecha de resolución"}
+                  {resolutionModalForceResolved
+                    ? "Resolver reclamo"
+                    : isServiciosPublicosUser
+                      ? "Seguimiento del reclamo"
+                      : "Fecha de resolución"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Reclamo {getVisibleComplaintNumber(resolutionModalComplaint)}
@@ -1947,6 +2092,11 @@ export function ComplaintsTable({
             </div>
 
             <div className="space-y-4">
+              {resolutionModalForceResolved && (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  Estás marcando este reclamo como <span className="font-semibold">resuelto</span>. Podés completar la fecha y, opcionalmente, un detalle de cómo se resolvió.
+                </p>
+              )}
               {isServiciosPublicosUser && (
                 <label className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-3 text-sm">
                   <Checkbox
@@ -1969,6 +2119,22 @@ export function ComplaintsTable({
                   onChange={(e) => setResolutionModalDate(e.target.value)}
                 />
               </div>
+
+              {!isServiciosPublicosUser && (
+                <div className="space-y-2">
+                  <Label htmlFor="resolution-detail-modal">
+                    Detalle resuelto (opcional)
+                  </Label>
+                  <textarea
+                    id="resolution-detail-modal"
+                    value={resolutionModalDetail}
+                    onChange={(e) => setResolutionModalDetail(e.target.value)}
+                    rows={4}
+                    placeholder="Ej: Se realizó la limpieza, se retiraron ramas y quedó solucionado."
+                    className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              )}
 
               {isServiciosPublicosUser && (
                 <div className="space-y-2">
@@ -2018,7 +2184,7 @@ export function ComplaintsTable({
                       Guardando...
                     </>
                   ) : (
-                    "Guardar"
+                    resolutionModalForceResolved ? "Guardar y resolver" : "Guardar"
                   )}
                 </Button>
               </div>

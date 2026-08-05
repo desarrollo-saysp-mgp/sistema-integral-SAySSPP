@@ -19,6 +19,7 @@ import {
   History,
   Eye,
   MessageSquareText,
+  CheckCircle2,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -35,6 +36,7 @@ type ComplaintWithDetails = Complaint & {
   service: Service | null;
   cause: Cause | null;
   loaded_by_user: UserType;
+  resolution_detail?: string | null;
 };
 
 type ComplaintExtraData = {
@@ -55,6 +57,7 @@ type ComplaintExtraData = {
 const FIELD_LABELS: Record<string, string> = {
   complaint_date: "Fecha de reclamo",
   resolution_date: "Fecha de resolución",
+  resolution_detail: "Detalle de resolución",
   complainant_name: "Nombre y apellido",
   address: "Calle",
   street_number: "Número",
@@ -354,6 +357,21 @@ export default function ComplaintViewPage() {
     return String(value);
   };
 
+  const getResolutionDateValue = (item: ComplaintWithDetails) => {
+    if (item.resolution_date) return item.resolution_date;
+
+    if (item.status === "Resuelto") {
+      return item.updated_at || item.created_at || null;
+    }
+
+    return null;
+  };
+
+  const getResolutionDetailValue = (item: ComplaintWithDetails) => {
+    const detail = String(item.resolution_detail || "").trim();
+    return detail || "-";
+  };
+
   const loadImageAsDataUrl = (src: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const image = new Image();
@@ -399,6 +417,13 @@ export default function ComplaintViewPage() {
       const arboladoDescription = getArboladoDescription(extra);
       const arboladoAgent = getArboladoAgent(extra);
 
+      const spTracking = getSPTrackingData(extra);
+      const shouldShowSPTracking =
+        isServiciosPublicosService(serviceName) ||
+        "sp_seen" in extra ||
+        "sp_observations" in extra ||
+        "sp_resolution_date" in extra;
+
       const displayComplaintNumber = cleanValue(
         isArbolado
           ? complaint.arbolado_number ?? complaint.complaint_number
@@ -408,6 +433,9 @@ export default function ComplaintViewPage() {
       const displayAddress = `${complaint.address || "-"} ${
         complaint.street_number || ""
       }`.trim();
+      const resolutionDateForDisplay = getResolutionDateValue(complaint);
+      const resolutionDetailForDisplay = getResolutionDetailValue(complaint);
+      const hasResolutionDetail = resolutionDetailForDisplay !== "-";
 
       const doc = new jsPDF({
         orientation: "portrait",
@@ -536,7 +564,7 @@ export default function ComplaintViewPage() {
           ],
           [
             "Fecha de resolución",
-            formatDateOnly(complaint.resolution_date),
+            formatDateOnly(resolutionDateForDisplay),
             "",
             "",
           ],
@@ -572,9 +600,40 @@ export default function ComplaintViewPage() {
         },
       });
 
-      const yAfterText =
+      let yAfterText =
         (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
           ?.finalY ?? 135;
+
+      if (hasResolutionDetail) {
+        autoTable(doc, {
+          theme: "grid",
+          startY: yAfterText + 6,
+          margin: { left: 14, right: 14 },
+          head: [["Detalle resuelto"]],
+          body: [[resolutionDetailForDisplay]],
+          styles: {
+            fontSize: 7.6,
+            cellPadding: 2,
+            overflow: "linebreak",
+            textColor: [51, 65, 85],
+            lineColor: [187, 247, 208],
+            lineWidth: 0.15,
+            valign: "top",
+          },
+          headStyles: {
+            fillColor: [34, 197, 94],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+          },
+          bodyStyles: {
+            fillColor: [240, 253, 244],
+          },
+        });
+
+        yAfterText =
+          (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+            ?.finalY ?? yAfterText;
+      }
 
       autoTable(doc, {
         ...commonTableStyles,
@@ -586,6 +645,12 @@ export default function ComplaintViewPage() {
             complaint.status,
             "Responsable de carga",
             cleanValue(complaint.loaded_by_user?.full_name),
+          ],
+          [
+            "Fecha de resolución",
+            formatDateOnly(resolutionDateForDisplay),
+            "",
+            "",
           ],
           [
             "Creado",
@@ -607,6 +672,48 @@ export default function ComplaintViewPage() {
           }
         },
       });
+
+      let yAfterStatus =
+        (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+          ?.finalY ?? yAfterText + 28;
+
+      if (shouldShowSPTracking) {
+        autoTable(doc, {
+          ...commonTableStyles,
+          startY: yAfterStatus + 6,
+          head: [["Seguimiento de Servicios Públicos", "", "", ""]],
+          body: [
+            [
+              "Fecha de resolución",
+              formatDateOnly(spTracking.resolutionDate),
+              "",
+              "",
+            ],
+            [
+              "Observaciones",
+              cleanValue(spTracking.observations),
+              "",
+              "",
+            ],
+          ],
+          bodyStyles: {
+            fillColor: [248, 250, 252],
+          },
+          didParseCell: (data) => {
+            if (
+              data.section === "body" &&
+              data.row.index === 1 &&
+              data.column.index === 1
+            ) {
+              data.cell.colSpan = 3;
+            }
+          },
+        });
+
+        yAfterStatus =
+          (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+            ?.finalY ?? yAfterStatus;
+      }
 
       doc.setFontSize(8);
       doc.setTextColor(100);
@@ -681,6 +788,10 @@ export default function ComplaintViewPage() {
   const displayAddress = `${complaint.address || "-"} ${
     complaint.street_number || ""
   }`.trim();
+
+  const resolutionDateForDisplay = getResolutionDateValue(complaint);
+  const resolutionDetailForDisplay = getResolutionDetailValue(complaint);
+  const hasResolutionDetail = resolutionDetailForDisplay !== "-";
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6 p-6">
@@ -818,7 +929,7 @@ export default function ComplaintViewPage() {
 
             <InfoField
               label="Fecha de Resolución"
-              value={formatDateOnly(complaint.resolution_date)}
+              value={formatDateOnly(resolutionDateForDisplay)}
             />
           </div>
 
@@ -863,6 +974,44 @@ export default function ComplaintViewPage() {
               value={cleanValue(complaint.loaded_by_user?.full_name)}
             />
           </div>
+
+          {complaint.status === "Resuelto" && (
+            <div className="mt-5 rounded-xl border border-green-200 bg-green-50/60 p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-700" />
+                <h3 className="text-sm font-semibold text-green-900">
+                  Resolución del reclamo
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+                <InfoField
+                  label="Fecha de resolución"
+                  value={formatDateOnly(resolutionDateForDisplay)}
+                />
+
+                <InfoField
+                  label="Estado"
+                  value={cleanValue(complaint.status)}
+                />
+              </div>
+
+              {hasResolutionDetail && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <MessageSquareText className="h-4 w-4 text-green-700" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Detalle resuelto
+                    </p>
+                  </div>
+
+                  <p className="min-h-[44px] whitespace-pre-wrap rounded-md bg-background p-3 text-sm leading-relaxed">
+                    {resolutionDetailForDisplay}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {shouldShowSPTracking && (
             <div className="mt-5 rounded-xl border bg-muted/20 p-4">

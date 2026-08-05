@@ -5,6 +5,7 @@ import { obtenerLatLon } from "@/lib/geocoding";
 
 type ComplaintUpdateWithArboladoNumber = ComplaintUpdate & {
   arbolado_number?: number | null;
+  resolution_detail?: string | null;
 };
 
 const validatePhone = (phone: string): boolean => {
@@ -35,6 +36,7 @@ const validContactMethods = [
   "Telefono",
   "Email",
   "WhatsApp",
+  "Nota",
 ];
 
 const validArboladoLevels = ["Urgente", "Importante", "Orden de llegada"];
@@ -66,7 +68,8 @@ const isServiciosPublicosAllowedService = (serviceName: unknown) => {
     normalized.includes("barrido") ||
     normalized.includes("riego") ||
     normalized.includes("motonivelacion") ||
-    normalized.includes("canales y desagues")
+    normalized.includes("canales y desagues") ||
+    normalized.includes("jornadas integrales")
   );
 };
 
@@ -80,7 +83,9 @@ const isGirsuAllowedService = (serviceName: unknown) => {
     normalized.includes("rec especial") ||
     normalized.includes("inspeccion") ||
     normalized.includes("rec. contenedores") ||
-    normalized.includes("rec contenedores")
+    normalized.includes("rec contenedores") ||
+    normalized.includes("rec. escuelas y jardines") ||
+    normalized.includes("rec escuelas y jardines")
   );
 };
 
@@ -367,6 +372,7 @@ export async function PATCH(
         "sp_seen",
         "sp_observations",
         "sp_resolution_date",
+        "resolution_detail",
       ]);
 
       const invalidKeys = Object.keys(body).filter(
@@ -413,6 +419,14 @@ export async function PATCH(
 
     if (body.status !== undefined) {
       updateData.status = body.status;
+    }
+
+    if (body.resolution_detail !== undefined) {
+      updateData.resolution_detail = body.resolution_detail
+        ? String(body.resolution_detail).trim()
+        : null;
+    } else if (body.status !== undefined && body.status !== "Resuelto") {
+      updateData.resolution_detail = null;
     }
 
     if (body.referred !== undefined) {

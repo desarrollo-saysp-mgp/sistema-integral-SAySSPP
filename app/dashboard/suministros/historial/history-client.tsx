@@ -764,7 +764,7 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
         )} ${movement.unit}`,
         movement.destination,
         movement.created_by_name,
-        movement.reference || "—",
+        movement.observations || "—",
       ]);
 
       autoTable(doc, {
@@ -777,7 +777,7 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
           "Cantidad",
           "Destino",
           "Usuario",
-          "Referencia",
+          "Observaciones",
         ]],
         body,
         styles: {
