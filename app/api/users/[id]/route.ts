@@ -8,6 +8,7 @@ type SupportedRole =
   | "ReclamosArbolado"
   | "ReclamosZyV"
   | "AdminLectura"
+  | "SecretariaPrivada"
   | "FC_RRHH"
   | "FC_SECTOR"
   | "Taller"
@@ -20,6 +21,7 @@ const VALID_ROLES: SupportedRole[] = [
   "ReclamosArbolado",
   "ReclamosZyV",
   "AdminLectura",
+  "SecretariaPrivada",
   "FC_RRHH",
   "FC_SECTOR",
   "Taller",
@@ -37,6 +39,7 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "complaints",
           "purchase_requests",
           "rrhh",
+          "personnel",
           "fleet",
           "work_orders",
           "fuel",
@@ -75,6 +78,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         is_readonly: true,
         default_module: null,
         fc_sectors: ["all"],
+      };
+
+    case "SecretariaPrivada":
+      return {
+        modules: ["personnel"],
+        is_readonly: false,
+        default_module: "personnel",
+        fc_sectors: [],
       };
 
     case "Reclamos":
@@ -188,17 +199,27 @@ export async function GET(
       );
     }
 
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: currentUserError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (currentUserError || !currentUser) {
+      return NextResponse.json(
+        { error: "No se pudo obtener el perfil del usuario" },
+        { status: 403 },
+      );
+    }
+
+    if (
+      currentUser.role !== "Admin" &&
+      currentUser.role !== "AdminLectura"
+    ) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Solo administradores pueden ver usuarios",
+            "No autorizado. Solo administradores y administradores de lectura pueden ver usuarios",
         },
         { status: 403 },
       );
@@ -260,13 +281,17 @@ export async function PATCH(
       );
     }
 
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: currentUserError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (
+      currentUserError ||
+      !currentUser ||
+      currentUser.role !== "Admin"
+    ) {
       return NextResponse.json(
         {
           error:
@@ -285,11 +310,23 @@ export async function PATCH(
       password?: string;
     };
 
+    const normalizedFullName = full_name?.trim();
+    const normalizedEmail = email?.trim().toLowerCase();
+
     if (role && !VALID_ROLES.includes(role)) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "SecretariaPrivada", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
+        },
+        { status: 400 },
+      );
+    }
+
+    if (password && password.length < 6) {
+      return NextResponse.json(
+        {
+          error: "La contraseña debe tener al menos 6 caracteres",
         },
         { status: 400 },
       );
@@ -300,10 +337,10 @@ export async function PATCH(
     /*
      * Actualizar email en Supabase Auth
      */
-    if (email) {
+    if (normalizedEmail) {
       const { error: authUpdateError } =
         await adminClient.auth.admin.updateUserById(id, {
-          email,
+          email: normalizedEmail,
         });
 
       if (authUpdateError) {
@@ -347,22 +384,43 @@ export async function PATCH(
     }
 
     /*
+     * Obtener el usuario actual.
+     *
+     * Esto permite conservar el email existente cuando se cambia solamente
+     * el rol. Es importante especialmente para el rol FC_SECTOR, porque sus
+     * permisos dependen del correo electrónico.
+     */
+    const { data: userToUpdate, error: userToUpdateError } = await supabase
+      .from("users")
+      .select("email")
+      .eq("id", id)
+      .single();
+
+    if (userToUpdateError || !userToUpdate) {
+      return NextResponse.json(
+        { error: "No se pudo obtener el usuario a actualizar" },
+        { status: 404 },
+      );
+    }
+
+    /*
      * Actualizar perfil en tabla users
      */
     const userUpdate: UserUpdate = {};
 
-    if (full_name) {
-      userUpdate.full_name = full_name;
+    if (normalizedFullName) {
+      userUpdate.full_name = normalizedFullName;
     }
 
-    if (email) {
-      userUpdate.email = email;
+    if (normalizedEmail) {
+      userUpdate.email = normalizedEmail;
     }
 
     if (role) {
       userUpdate.role = role;
 
-      const config = getRoleConfig(role, email);
+      const roleEmail = normalizedEmail || userToUpdate.email;
+      const config = getRoleConfig(role, roleEmail);
 
       userUpdate.modules = config.modules;
       userUpdate.is_readonly = config.is_readonly;
@@ -370,13 +428,29 @@ export async function PATCH(
       userUpdate.fc_sectors = config.fc_sectors;
     }
 
-    const { data: updatedUser, error: dbError } =
-      await supabase
-        .from("users")
-        .update(userUpdate)
-        .eq("id", id)
-        .select()
-        .single();
+    if (Object.keys(userUpdate).length === 0 && !password) {
+      return NextResponse.json(
+        { error: "No se enviaron cambios para actualizar" },
+        { status: 400 },
+      );
+    }
+
+    /*
+     * Si solamente se modificó la contraseña, no hace falta ejecutar un
+     * UPDATE vacío sobre public.users.
+     */
+    if (Object.keys(userUpdate).length === 0) {
+      return NextResponse.json({
+        message: "Contraseña actualizada exitosamente",
+      });
+    }
+
+    const { data: updatedUser, error: dbError } = await supabase
+      .from("users")
+      .update(userUpdate)
+      .eq("id", id)
+      .select()
+      .single();
 
     if (dbError) {
       console.error(
@@ -429,13 +503,17 @@ export async function DELETE(
       );
     }
 
-    const { data: currentUser } = await supabase
+    const { data: currentUser, error: currentUserError } = await supabase
       .from("users")
       .select("role")
       .eq("id", authUser.id)
       .single();
 
-    if (!currentUser || currentUser.role !== "Admin") {
+    if (
+      currentUserError ||
+      !currentUser ||
+      currentUser.role !== "Admin"
+    ) {
       return NextResponse.json(
         {
           error:
@@ -448,8 +526,7 @@ export async function DELETE(
     if (authUser.id === id) {
       return NextResponse.json(
         {
-          error:
-            "No puedes eliminar tu propio usuario",
+          error: "No puedes eliminar tu propio usuario",
         },
         { status: 400 },
       );
@@ -490,6 +567,14 @@ export async function DELETE(
       console.error(
         "Error deleting auth user:",
         authDeleteError,
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "El perfil fue eliminado, pero ocurrió un error al eliminar el usuario de autenticación",
+        },
+        { status: 500 },
       );
     }
 

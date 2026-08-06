@@ -7,6 +7,7 @@ type SupportedRole =
   | "ReclamosArbolado"
   | "ReclamosZyV"
   | "AdminLectura"
+  | "SecretariaPrivada"
   | "FC_RRHH"
   | "FC_SECTOR"
   | "Taller"
@@ -19,6 +20,7 @@ const VALID_ROLES: SupportedRole[] = [
   "ReclamosArbolado",
   "ReclamosZyV",
   "AdminLectura",
+  "SecretariaPrivada",
   "FC_RRHH",
   "FC_SECTOR",
   "Taller",
@@ -36,6 +38,7 @@ function getRoleConfig(role: SupportedRole, email?: string) {
           "complaints",
           "purchase_requests",
           "rrhh",
+          "personnel",
           "fleet",
           "work_orders",
           "stock_inventory",
@@ -72,6 +75,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         is_readonly: true,
         default_module: null,
         fc_sectors: ["all"],
+      };
+
+    case "SecretariaPrivada":
+      return {
+        modules: ["personnel"],
+        is_readonly: false,
+        default_module: "personnel",
+        fc_sectors: [],
       };
 
     case "Reclamos":
@@ -144,6 +155,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
         modules: ["stock_inventory"],
         is_readonly: false,
         default_module: "stock_inventory",
+        fc_sectors: [],
+      };
+
+    case "RNU":
+      return {
+        modules: ["rnu"],
+        is_readonly: false,
+        default_module: "rnu",
         fc_sectors: [],
       };
 
@@ -269,7 +288,9 @@ export async function POST(request: NextRequest) {
       currentUser.role !== "Admin"
     ) {
       return NextResponse.json(
-        { error: "No autorizado. Solo administradores pueden crear usuarios" },
+        {
+          error: "No autorizado. Solo administradores pueden crear usuarios",
+        },
         { status: 403 },
       );
     }
@@ -300,7 +321,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "SecretariaPrivada", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
         },
         { status: 400 },
       );

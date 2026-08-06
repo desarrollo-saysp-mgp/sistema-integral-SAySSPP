@@ -26,6 +26,7 @@ export type UserRole =
   | "ReclamosArbolado"
   | "ReclamosZyV"
   | "AdminLectura"
+  | "SecretariaPrivada"
   | "FC_RRHH"
   | "Taller"
   | "Suministros"
@@ -59,7 +60,8 @@ export interface UserFormData {
   password?: string;
 }
 
-// Dropdown values for "since_when" field (UI only - database stores calculated date)
+// Dropdown values for "since_when" field
+// The database stores the calculated date.
 export type SinceWhenPeriod =
   | "En el día"
   | "1 semana"
@@ -68,12 +70,14 @@ export type SinceWhenPeriod =
   | "6 meses"
   | "1 año";
 
-export const SINCE_WHEN_OPTIONS: { value: SinceWhenPeriod; label: string }[] =
-  [
-    { value: "En el día", label: "En el día" },
-    { value: "1 semana", label: "1 semana" },
-    { value: "1 mes", label: "1 mes" },
-    { value: "3 meses", label: "3 meses" },
-    { value: "6 meses", label: "6 meses" },
-    { value: "1 año", label: "1 año" },
-  ];
+export const SINCE_WHEN_OPTIONS: {
+  value: SinceWhenPeriod;
+  label: string;
+}[] = [
+  { value: "En el día", label: "En el día" },
+  { value: "1 semana", label: "1 semana" },
+  { value: "1 mes", label: "1 mes" },
+  { value: "3 meses", label: "3 meses" },
+  { value: "6 meses", label: "6 meses" },
+  { value: "1 año", label: "1 año" },
+];

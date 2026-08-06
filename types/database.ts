@@ -12,6 +12,7 @@ export interface Database {
           | "ReclamosArbolado"
           | "ReclamosZyV"
           | "AdminLectura"
+          | "SecretariaPrivada"
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
@@ -34,6 +35,7 @@ export interface Database {
           | "ReclamosArbolado"
           | "ReclamosZyV"
           | "AdminLectura"
+          | "SecretariaPrivada"
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
@@ -56,6 +58,7 @@ export interface Database {
           | "ReclamosArbolado"
           | "ReclamosZyV"
           | "AdminLectura"
+          | "SecretariaPrivada"
           | "FC_RRHH"
           | "FC_SECTOR"
           | "Taller"
@@ -67,6 +70,96 @@ export interface Database {
           fc_sectors?: string[] | null;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+
+      personnel: {
+        Row: {
+          id: string;
+          legajo: number;
+          nombre_completo: string;
+          area_rrhh: string | null;
+          codigo_direccion: string | null;
+          direccion: string | null;
+          tarea: string | null;
+          regimen_especial: string | null;
+          hora_ingreso: string | null;
+          hora_salida: string | null;
+          tipo_contrato:
+            | "PLANTA_PERMANENTE"
+            | "MONOTRIBUTISTA"
+            | "CONTRATO_CON_APORTES";
+          horas_arregladas: number | null;
+          convenio: boolean | null;
+          numero_resolucion: string | null;
+          fecha_actualizacion: string | null;
+          observaciones: string | null;
+          activo: boolean;
+          fecha_baja: string | null;
+          motivo_baja: string | null;
+          dado_de_baja_por: string | null;
+          creado_por: string | null;
+          actualizado_por: string | null;
+          creado_en: string;
+          actualizado_en: string;
+        };
+        Insert: {
+          id?: string;
+          legajo: number;
+          nombre_completo: string;
+          area_rrhh?: string | null;
+          codigo_direccion?: string | null;
+          direccion?: string | null;
+          tarea?: string | null;
+          regimen_especial?: string | null;
+          hora_ingreso?: string | null;
+          hora_salida?: string | null;
+          tipo_contrato:
+            | "PLANTA_PERMANENTE"
+            | "MONOTRIBUTISTA"
+            | "CONTRATO_CON_APORTES";
+          horas_arregladas?: number | null;
+          convenio?: boolean | null;
+          numero_resolucion?: string | null;
+          fecha_actualizacion?: string | null;
+          observaciones?: string | null;
+          activo?: boolean;
+          fecha_baja?: string | null;
+          motivo_baja?: string | null;
+          dado_de_baja_por?: string | null;
+          creado_por?: string | null;
+          actualizado_por?: string | null;
+          creado_en?: string;
+          actualizado_en?: string;
+        };
+        Update: {
+          id?: string;
+          legajo?: number;
+          nombre_completo?: string;
+          area_rrhh?: string | null;
+          codigo_direccion?: string | null;
+          direccion?: string | null;
+          tarea?: string | null;
+          regimen_especial?: string | null;
+          hora_ingreso?: string | null;
+          hora_salida?: string | null;
+          tipo_contrato?:
+            | "PLANTA_PERMANENTE"
+            | "MONOTRIBUTISTA"
+            | "CONTRATO_CON_APORTES";
+          horas_arregladas?: number | null;
+          convenio?: boolean | null;
+          numero_resolucion?: string | null;
+          fecha_actualizacion?: string | null;
+          observaciones?: string | null;
+          activo?: boolean;
+          fecha_baja?: string | null;
+          motivo_baja?: string | null;
+          dado_de_baja_por?: string | null;
+          creado_por?: string | null;
+          actualizado_por?: string | null;
+          creado_en?: string;
+          actualizado_en?: string;
         };
       };
 
@@ -568,6 +661,12 @@ export type User = Database["public"]["Tables"]["users"]["Row"];
 export type UserInsert = Database["public"]["Tables"]["users"]["Insert"];
 export type UserUpdate = Database["public"]["Tables"]["users"]["Update"];
 
+export type Personnel = Database["public"]["Tables"]["personnel"]["Row"];
+export type PersonnelInsert =
+  Database["public"]["Tables"]["personnel"]["Insert"];
+export type PersonnelUpdate =
+  Database["public"]["Tables"]["personnel"]["Update"];
+
 export type Complaint = Database["public"]["Tables"]["complaints"]["Row"];
 export type ComplaintInsert =
   Database["public"]["Tables"]["complaints"]["Insert"];
@@ -660,6 +759,7 @@ export type UserRole =
   | "ReclamosArbolado"
   | "ReclamosZyV"
   | "AdminLectura"
+  | "SecretariaPrivada"
   | "FC_RRHH"
   | "FC_SECTOR"
   | "Taller"

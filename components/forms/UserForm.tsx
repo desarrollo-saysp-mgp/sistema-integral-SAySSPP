@@ -53,9 +53,9 @@ export function UserForm({
     confirmPassword: "",
   });
 
-  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
-    {},
-  );
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormState, string>>
+  >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -114,7 +114,8 @@ export function UserForm({
       if (!formData.password.trim()) {
         newErrors.password = "La contraseña es requerida";
       } else if (formData.password.length < 6) {
-        newErrors.password = "La contraseña debe tener al menos 6 caracteres";
+        newErrors.password =
+          "La contraseña debe tener al menos 6 caracteres";
       }
 
       if (!formData.confirmPassword.trim()) {
@@ -124,15 +125,20 @@ export function UserForm({
       }
     } else {
       if (formData.password && formData.password.length < 6) {
-        newErrors.password = "La contraseña debe tener al menos 6 caracteres";
+        newErrors.password =
+          "La contraseña debe tener al menos 6 caracteres";
       }
 
-      if (formData.password && formData.password !== formData.confirmPassword) {
+      if (
+        formData.password &&
+        formData.password !== formData.confirmPassword
+      ) {
         newErrors.confirmPassword = "Las contraseñas no coinciden";
       }
     }
 
     setErrors(newErrors);
+
     return Object.keys(newErrors).length === 0;
   };
 
@@ -145,22 +151,31 @@ export function UserForm({
 
     const payload: UserFormData = {
       full_name: formData.full_name.trim(),
-      email: formData.email.trim(),
+      email: formData.email.trim().toLowerCase(),
       role: formData.role,
-      ...(formData.password ? { password: formData.password } : {}),
+      ...(formData.password
+        ? {
+            password: formData.password,
+          }
+        : {}),
     };
 
-    const result = await onSubmit(payload);
+    try {
+      const result = await onSubmit(payload);
 
-    setIsSubmitting(false);
+      if (result.success) {
+        onOpenChange(false);
+        return;
+      }
 
-    if (result.success) {
-      onOpenChange(false);
-    } else if (result.error) {
-      setErrors((prev) => ({
-        ...prev,
-        email: result.error,
-      }));
+      if (result.error) {
+        setErrors((prev) => ({
+          ...prev,
+          email: result.error,
+        }));
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -171,6 +186,7 @@ export function UserForm({
           <DialogTitle>
             {isEditing ? "Editar usuario" : "Nuevo usuario"}
           </DialogTitle>
+
           <DialogDescription>
             {isEditing
               ? "Actualiza los datos del usuario. La contraseña es opcional."
@@ -181,80 +197,138 @@ export function UserForm({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="full_name">Nombre completo *</Label>
+
             <Input
               id="full_name"
               value={formData.full_name}
-              onChange={(e) => handleChange("full_name", e.target.value)}
+              onChange={(e) =>
+                handleChange("full_name", e.target.value)
+              }
               placeholder="Ingrese nombre completo"
+              disabled={isSubmitting}
             />
+
             {errors.full_name && (
-              <p className="text-sm text-red-500">{errors.full_name}</p>
+              <p className="text-sm text-red-500">
+                {errors.full_name}
+              </p>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="email">Email *</Label>
+
             <Input
               id="email"
               type="email"
               value={formData.email}
               onChange={(e) => handleChange("email", e.target.value)}
               placeholder="Ingrese email"
+              disabled={isSubmitting}
             />
+
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email}</p>
+              <p className="text-sm text-red-500">
+                {errors.email}
+              </p>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="role">Rol *</Label>
+
             <Select
               value={formData.role}
-              onValueChange={(value) => handleChange("role", value)}
+              onValueChange={(value) =>
+                handleChange("role", value)
+              }
+              disabled={isSubmitting}
             >
               <SelectTrigger id="role">
                 <SelectValue placeholder="Seleccione un rol" />
               </SelectTrigger>
 
               <SelectContent>
-                <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Reclamos">Reclamos</SelectItem>
+                <SelectItem value="Admin">
+                  Admin
+                </SelectItem>
+
+                <SelectItem value="AdminLectura">
+                  Admin Lectura
+                </SelectItem>
+
+                <SelectItem value="SecretariaPrivada">
+                  Secretaría Privada
+                </SelectItem>
+
+                <SelectItem value="Reclamos">
+                  Reclamos
+                </SelectItem>
+
                 <SelectItem value="ReclamosArbolado">
                   Reclamos Arbolado
                 </SelectItem>
-                <SelectItem value="ReclamosZyV">Reclamos ZyV</SelectItem>
-                <SelectItem value="AdminLectura">Admin Lectura</SelectItem>
-                <SelectItem value="FC_RRHH">FC + RRHH</SelectItem>
-                <SelectItem value="FC_SECTOR">FC Sector</SelectItem>
-                <SelectItem value="Taller">Taller</SelectItem>
-                <SelectItem value="Suministros">Suministros</SelectItem>
-                <SelectItem value="RNU">RNU</SelectItem>
+
+                <SelectItem value="ReclamosZyV">
+                  Reclamos ZyV
+                </SelectItem>
+
+                <SelectItem value="FC_RRHH">
+                  FC + RRHH
+                </SelectItem>
+
+                <SelectItem value="FC_SECTOR">
+                  FC Sector
+                </SelectItem>
+
+                <SelectItem value="Taller">
+                  Taller
+                </SelectItem>
+
+                <SelectItem value="Suministros">
+                  Suministros
+                </SelectItem>
+
+                <SelectItem value="RNU">
+                  RNU
+                </SelectItem>
               </SelectContent>
             </Select>
 
             {errors.role && (
-              <p className="text-sm text-red-500">{errors.role}</p>
+              <p className="text-sm text-red-500">
+                {errors.role}
+              </p>
             )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="password">
-                {isEditing ? "Nueva contraseña" : "Contraseña *"}
+                {isEditing
+                  ? "Nueva contraseña"
+                  : "Contraseña *"}
               </Label>
+
               <Input
                 id="password"
                 type="password"
                 value={formData.password}
-                onChange={(e) => handleChange("password", e.target.value)}
+                onChange={(e) =>
+                  handleChange("password", e.target.value)
+                }
                 placeholder={
                   isEditing
                     ? "Opcional para editar"
                     : "Ingrese una contraseña"
                 }
+                disabled={isSubmitting}
               />
+
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password}</p>
+                <p className="text-sm text-red-500">
+                  {errors.password}
+                </p>
               )}
             </div>
 
@@ -264,15 +338,21 @@ export function UserForm({
                   ? "Confirmar nueva contraseña"
                   : "Confirmar contraseña *"}
               </Label>
+
               <Input
                 id="confirmPassword"
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) =>
-                  handleChange("confirmPassword", e.target.value)
+                  handleChange(
+                    "confirmPassword",
+                    e.target.value,
+                  )
                 }
                 placeholder="Repita la contraseña"
+                disabled={isSubmitting}
               />
+
               {errors.confirmPassword && (
                 <p className="text-sm text-red-500">
                   {errors.confirmPassword}
@@ -283,8 +363,8 @@ export function UserForm({
 
           {!isEditing && (
             <p className="text-sm text-muted-foreground">
-              El usuario será creado con la contraseña definida por el
-              administrador.
+              El usuario será creado con la contraseña definida por
+              el administrador.
             </p>
           )}
 
