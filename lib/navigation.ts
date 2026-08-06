@@ -2,6 +2,7 @@ export type AppModule =
   | "complaints"
   | "purchase_requests"
   | "rrhh"
+  | "personnel"
   | "supplies"
   | "workshop"
   | "public_services"
@@ -46,6 +47,15 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     basePath: "/dashboard/rrhh",
     homePath: "/dashboard/rrhh",
     subtitle: "Módulo de Recursos Humanos",
+  },
+
+  personnel: {
+    key: "personnel",
+    label: "Personal",
+    shortLabel: "Personal",
+    basePath: "/dashboard/personnel",
+    homePath: "/dashboard/personnel",
+    subtitle: "Administración del personal de la Secretaría",
   },
 
   supplies: {

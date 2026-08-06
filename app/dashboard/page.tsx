@@ -20,14 +20,28 @@ function getModuleRoute(moduleKey: string) {
   switch (moduleKey) {
     case "complaints":
       return "/dashboard/complaints/home";
+
     case "purchase_requests":
       return "/dashboard/solicitud-compra";
+
     case "rrhh":
       return "/dashboard/rrhh";
+
     case "general_dashboard":
       return "/dashboard/tablero-general";
+
     case "work_orders":
       return "/dashboard/taller/ordenes-trabajo";
+
+    case "stock_inventory":
+      return "/dashboard/suministros";
+
+    case "rnu":
+      return "/dashboard/rnu";
+
+    case "personnel":
+      return "/dashboard/personnel";
+
     default:
       return "/dashboard/accesos";
   }
@@ -38,57 +52,88 @@ export default async function DashboardRouter() {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("role, email, modules, default_module")
     .eq("id", user.id)
     .single();
 
-  if (!profile) {
+  if (profileError || !profile) {
     redirect("/login");
   }
 
-  const modules = Array.isArray(profile.modules) ? profile.modules : [];
-  const defaultModule = profile.default_module;
+  const modules: string[] = Array.isArray(profile.modules)
+    ? profile.modules.filter(
+        (module): module is string => typeof module === "string",
+      )
+    : [];
+
+  const defaultModule =
+    typeof profile.default_module === "string"
+      ? profile.default_module
+      : null;
 
   const userEmail = normalizeText(profile.email || user.email);
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
   const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
 
-  // GIRSU y Arbolado deben entrar a Accesos porque tienen:
-  // Reclamos propio + Tablero propio.
+  /*
+   * GIRSU y Arbolado deben entrar a Accesos porque tienen:
+   * Reclamos propio + Tablero propio.
+   */
   if (isGirsuUser || isArboladoUser) {
     redirect("/dashboard/accesos");
   }
 
-  // Admins siempre van a accesos
-  if (profile.role === "Admin" || profile.role === "AdminLectura") {
+  /*
+   * Los administradores siempre entran a la pantalla de accesos.
+   */
+  if (
+    profile.role === "Admin" ||
+    profile.role === "AdminLectura"
+  ) {
     redirect("/dashboard/accesos");
   }
 
-  // Si tiene módulo por defecto, entra ahí
+  /*
+   * Secretaría Privada entra directamente al módulo Personal.
+   */
+  if (profile.role === "SecretariaPrivada") {
+    redirect("/dashboard/personnel");
+  }
+
+  /*
+   * Si tiene un módulo predeterminado, entra directamente.
+   */
   if (defaultModule) {
     redirect(getModuleRoute(defaultModule));
   }
 
-  // Si tiene un solo módulo, entra directo
+  /*
+   * Si tiene un solo módulo, entra directamente.
+   */
   if (modules.length === 1) {
     redirect(getModuleRoute(modules[0]));
   }
 
-  // Si tiene varios módulos, mostrar accesos
+  /*
+   * Si tiene varios módulos, entra a la pantalla de accesos.
+   */
   if (modules.length > 1) {
     redirect("/dashboard/accesos");
   }
 
-  // Fallback temporal por role
+  /*
+   * Fallback temporal según el rol.
+   */
   if (
     profile.role === "Reclamos" ||
     profile.role === "ReclamosArbolado" ||
@@ -97,6 +142,20 @@ export default async function DashboardRouter() {
     redirect("/dashboard/complaints/home");
   }
 
-  // Último fallback
+  if (profile.role === "Taller") {
+    redirect("/dashboard/taller/ordenes-trabajo");
+  }
+
+  if (profile.role === "Suministros") {
+    redirect("/dashboard/suministros");
+  }
+
+  if (profile.role === "RNU") {
+    redirect("/dashboard/rnu");
+  }
+
+  /*
+   * Último fallback.
+   */
   redirect("/dashboard/accesos");
 }

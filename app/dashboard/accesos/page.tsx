@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+
 import {
   Card,
   CardContent,
@@ -15,7 +16,8 @@ type ModuleKey =
   | "general_dashboard"
   | "work_orders"
   | "stock_inventory"
-  | "rnu";
+  | "rnu"
+  | "personnel";
 
 type AccessItem = {
   key: ModuleKey;
@@ -75,6 +77,15 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/rnu",
     available: true,
   },
+
+  personnel: {
+    key: "personnel",
+    title: "Personal",
+    description:
+      "Carga, edición, consulta y baja del personal de la Secretaría.",
+    href: "/dashboard/personnel",
+    available: true,
+  },
 };
 
 const GIRSU_EMAILS = [
@@ -103,9 +114,10 @@ export default async function AccesosPage() {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
@@ -126,21 +138,28 @@ export default async function AccesosPage() {
 
   const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
   const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
+
   const isTallerUser = userRole === "taller";
   const isSuministrosUser = userRole === "suministros";
   const isRnuUser = userRole === "rnu";
+  const isSecretariaPrivadaUser = userRole === "secretariaprivada";
 
   const hasAllowedRole = allowedRoles.includes(userRole);
 
   const rawModules: string[] = Array.isArray(profile.modules)
-    ? profile.modules
+    ? profile.modules.filter(
+        (module): module is string => typeof module === "string",
+      )
     : [];
 
   const modules = rawModules.map((module) => normalizeModule(module));
 
   const baseAccesses = modules
     .map((moduleKey) => MODULE_CONFIG[moduleKey as ModuleKey])
-    .filter((item): item is AccessItem => Boolean(item));
+    .filter(
+      (item): item is AccessItem =>
+        Boolean(item) && item.available,
+    );
 
   const accesses = [...baseAccesses];
 
@@ -152,16 +171,19 @@ export default async function AccesosPage() {
     (item) => item.key === "stock_inventory",
   );
 
-  const alreadyHasRnu = accesses.some((item) => item.key === "rnu");
+  const alreadyHasRnu = accesses.some(
+    (item) => item.key === "rnu",
+  );
+
+  const alreadyHasPersonnel = accesses.some(
+    (item) => item.key === "personnel",
+  );
 
   /*
-    Admin/AdminLectura: ven Tablero General.
-    GIRSU: ve Tablero GIRSU.
-    Arbolado: ve Tablero Arbolado.
-    Taller: solo Órdenes de Trabajo.
-    Suministros: solo Stock, Inventario y Compras.
-    RNU: solo Registro de Ingresos RNU.
-  */
+   * Admin/AdminLectura: ven Tablero General.
+   * GIRSU: ve Tablero GIRSU.
+   * Arbolado: ve Tablero Arbolado.
+   */
   if (
     (hasAllowedRole || isGirsuUser || isArboladoUser) &&
     !alreadyHasDashboard
@@ -170,9 +192,8 @@ export default async function AccesosPage() {
   }
 
   /*
-    El módulo de Stock, Inventario y Compras estará disponible
-    para Admin, AdminLectura y Suministros.
-  */
+   * Stock disponible para Admin, AdminLectura y Suministros.
+   */
   if (
     (hasAllowedRole || isSuministrosUser) &&
     !alreadyHasStockInventory
@@ -181,14 +202,35 @@ export default async function AccesosPage() {
   }
 
   /*
-    El módulo RNU estará disponible
-    para Admin, AdminLectura y RNU.
-  */
-  if ((hasAllowedRole || isRnuUser) && !alreadyHasRnu) {
+   * RNU disponible para Admin, AdminLectura y RNU.
+   */
+  if (
+    (hasAllowedRole || isRnuUser) &&
+    !alreadyHasRnu
+  ) {
     accesses.push(MODULE_CONFIG.rnu);
   }
 
+  /*
+   * Personal disponible para Admin y Secretaría Privada.
+   * AdminLectura no tiene acceso.
+   */
+  if (
+    (userRole === "admin" || isSecretariaPrivadaUser) &&
+    !alreadyHasPersonnel
+  ) {
+    accesses.push(MODULE_CONFIG.personnel);
+  }
+
   const filteredAccesses = accesses.filter((item) => {
+    /*
+     * Ocultamos Formularios de Compra únicamente del frontend.
+     * El módulo, los permisos y la ruta siguen existiendo.
+     */
+    if (item.key === "purchase_requests") {
+      return false;
+    }
+
     if (isTallerUser) {
       return item.key === "work_orders";
     }
@@ -201,8 +243,15 @@ export default async function AccesosPage() {
       return item.key === "rnu";
     }
 
+    if (isSecretariaPrivadaUser) {
+      return item.key === "personnel";
+    }
+
     if (isGirsuUser || isArboladoUser) {
-      return item.key === "complaints" || item.key === "general_dashboard";
+      return (
+        item.key === "complaints" ||
+        item.key === "general_dashboard"
+      );
     }
 
     if (item.key === "general_dashboard") {
@@ -217,13 +266,19 @@ export default async function AccesosPage() {
       return hasAllowedRole;
     }
 
+    if (item.key === "personnel") {
+      return userRole === "admin";
+    }
+
     return true;
   });
 
   return (
     <div className="container mx-auto space-y-8 p-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Accesos del sistema</h1>
+        <h1 className="text-3xl font-bold">
+          Accesos del sistema
+        </h1>
 
         <p className="text-muted-foreground">
           Seleccioná el módulo al que querés ingresar.
@@ -232,7 +287,9 @@ export default async function AccesosPage() {
 
       <Card>
         <CardContent className="flex flex-col gap-1 py-5">
-          <span className="text-lg font-semibold">{profile.full_name}</span>
+          <span className="text-lg font-semibold">
+            {profile.full_name}
+          </span>
 
           <span className="text-sm text-muted-foreground">
             {profile.email}
@@ -243,7 +300,10 @@ export default async function AccesosPage() {
           </span>
 
           <span className="text-sm text-muted-foreground">
-            Modo: {profile.is_readonly ? "Solo lectura" : "Edición habilitada"}
+            Modo:{" "}
+            {profile.is_readonly
+              ? "Solo lectura"
+              : "Edición habilitada"}
           </span>
         </CardContent>
       </Card>
@@ -262,7 +322,8 @@ export default async function AccesosPage() {
                 ? {
                     ...item,
                     title: "Reclamos GIRSU",
-                    description: "Seguimiento de reclamos del área GIRSU.",
+                    description:
+                      "Seguimiento de reclamos del área GIRSU.",
                   }
                 : isArboladoUser && item.key === "complaints"
                   ? {
@@ -271,13 +332,16 @@ export default async function AccesosPage() {
                       description:
                         "Seguimiento de reclamos correspondientes al área de Arbolado.",
                     }
-                  : isGirsuUser && item.key === "general_dashboard"
+                  : isGirsuUser &&
+                      item.key === "general_dashboard"
                     ? {
                         ...item,
                         title: "Tablero GIRSU",
-                        description: "Visualización tablero Power BI de GIRSU.",
+                        description:
+                          "Visualización tablero Power BI de GIRSU.",
                       }
-                    : isArboladoUser && item.key === "general_dashboard"
+                    : isArboladoUser &&
+                        item.key === "general_dashboard"
                       ? {
                           ...item,
                           title: "Tablero Arbolado",
@@ -287,9 +351,14 @@ export default async function AccesosPage() {
                       : item;
 
             return (
-              <Card key={displayItem.key} className="rounded-2xl">
+              <Card
+                key={displayItem.key}
+                className="rounded-2xl"
+              >
                 <CardHeader>
-                  <CardTitle>{displayItem.title}</CardTitle>
+                  <CardTitle>
+                    {displayItem.title}
+                  </CardTitle>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
@@ -298,7 +367,9 @@ export default async function AccesosPage() {
                   </p>
 
                   <Button asChild className="w-full">
-                    <Link href={displayItem.href}>Ingresar</Link>
+                    <Link href={displayItem.href}>
+                      Ingresar
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>

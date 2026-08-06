@@ -18,6 +18,7 @@ interface UserContextType {
   loading: boolean;
   isAdmin: boolean;
   isAdministrative: boolean;
+  canManagePersonnel: boolean;
   isAuthenticated: boolean;
   hasRole: (role: UserRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -34,6 +35,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       const supabase = createClient();
+
       const { data, error } = await supabase
         .from("users")
         .select("*")
@@ -59,12 +61,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = async () => {
     if (!user) return;
+
     const profileData = await fetchProfile(user.id);
     setProfile(profileData);
   };
 
   useEffect(() => {
     const supabase = createClient();
+
     let cancelled = false;
     let subscription: { unsubscribe: () => void } | null = null;
 
@@ -113,6 +117,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
               setProfile(profileData);
               setLoading(false);
             }
+
             return;
           }
 
@@ -121,11 +126,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
             setUser(null);
             setProfile(null);
             setLoading(false);
+
             return;
           }
 
           if (event === "TOKEN_REFRESHED" && eventSession?.user) {
             const profileData = await fetchProfile(eventSession.user.id);
+
             if (!cancelled) {
               setUser(eventSession.user);
               setProfile(profileData);
@@ -149,16 +156,31 @@ export function UserProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     loading,
+
     isAdmin:
-      profile?.role === "Admin" || profile?.role === "AdminLectura",
+      profile?.role === "Admin" ||
+      profile?.role === "AdminLectura",
+
     isAdministrative:
-      profile?.role === "Admin" || profile?.role === "AdminLectura",
+      profile?.role === "Admin" ||
+      profile?.role === "AdminLectura",
+
+    canManagePersonnel:
+      profile?.role === "Admin" ||
+      profile?.role === "SecretariaPrivada",
+
     isAuthenticated: !!user,
+
     hasRole: (role: UserRole) => profile?.role === role,
+
     refreshProfile,
   };
 
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+  return (
+    <UserContext.Provider value={value}>
+      {children}
+    </UserContext.Provider>
+  );
 }
 
 export function useUser() {
