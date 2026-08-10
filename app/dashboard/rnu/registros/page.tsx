@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
+
 import RegistrosRnuClient from "./registros-client";
 
 export type RnuEntry = {
@@ -38,22 +40,26 @@ function normalizeRole(value: unknown) {
     .replace(/\s+/g, "");
 }
 
+const PAGE_SIZE = 1000;
+
 export default async function RnuRegistrosPage() {
   const supabase = await createClient();
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const { data: profile, error: profileError } =
+    await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
   if (profileError || !profile) {
     redirect("/login");
@@ -71,45 +77,70 @@ export default async function RnuRegistrosPage() {
     redirect("/dashboard/accesos");
   }
 
-  const { data, error } = await supabase
-    .from("rnu_entries")
-    .select(`
-      id,
-      entry_type,
-      entry_date,
-      entry_time,
-      visitor_count,
+  const entries: RnuEntry[] = [];
 
-      province_locality,
-      observations,
+  let from = 0;
 
-      transport_type,
-      first_visit,
-      entry_reasons,
-      facilities,
+  while (true) {
+    const { data, error } = await supabase
+      .from("rnu_entries")
+      .select(`
+        id,
+        entry_type,
+        entry_date,
+        entry_time,
+        visitor_count,
 
-      institution_name,
-      ages,
-      responsible_name,
-      responsible_phone,
-      estimated_exit_time,
-      has_visit_request,
-      activities,
-      behavior,
+        province_locality,
+        observations,
 
-      created_at
-    `)
-    .order("entry_date", { ascending: false })
-    .order("entry_time", { ascending: false });
+        transport_type,
+        first_visit,
+        entry_reasons,
+        facilities,
 
-  if (error) {
-    console.error(
-      "Error al consultar registros RNU:",
-      error,
-    );
+        institution_name,
+        ages,
+        responsible_name,
+        responsible_phone,
+        estimated_exit_time,
+        has_visit_request,
+        activities,
+        behavior,
+
+        created_at
+      `)
+      .order("entry_date", {
+        ascending: false,
+      })
+      .order("entry_time", {
+        ascending: false,
+      })
+      .range(
+        from,
+        from + PAGE_SIZE - 1,
+      );
+
+    if (error) {
+      console.error(
+        "Error al consultar registros RNU:",
+        error,
+      );
+
+      break;
+    }
+
+    const batch =
+      (data ?? []) as RnuEntry[];
+
+    entries.push(...batch);
+
+    if (batch.length < PAGE_SIZE) {
+      break;
+    }
+
+    from += PAGE_SIZE;
   }
-
-  const entries = (data ?? []) as RnuEntry[];
 
   return (
     <RegistrosRnuClient
