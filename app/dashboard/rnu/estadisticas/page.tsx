@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
+
 import EstadisticasRnuClient from "./estadisticas-client";
 
 export type RnuStatsEntry = {
@@ -7,14 +9,11 @@ export type RnuStatsEntry = {
   entry_type: "GENERAL" | "INSTITUCION";
   entry_date: string;
   visitor_count: number;
-
   province_locality: string | null;
-
   transport_type: string | null;
   first_visit: boolean | null;
   entry_reasons: string[] | null;
   facilities: string[] | null;
-
   institution_name: string | null;
   activities: string[] | null;
   behavior: string | null;
@@ -29,6 +28,8 @@ function normalizeRole(value: unknown) {
     .replace(/\s+/g, "");
 }
 
+const PAGE_SIZE = 1000;
+
 export default async function RnuEstadisticasPage() {
   const supabase = await createClient();
 
@@ -41,11 +42,12 @@ export default async function RnuEstadisticasPage() {
     redirect("/login");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const { data: profile, error: profileError } =
+    await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
   if (profileError || !profile) {
     redirect("/login");
@@ -63,34 +65,55 @@ export default async function RnuEstadisticasPage() {
     redirect("/dashboard/accesos");
   }
 
-  const { data, error } = await supabase
-    .from("rnu_entries")
-    .select(`
-      id,
-      entry_type,
-      entry_date,
-      visitor_count,
-      province_locality,
-      transport_type,
-      first_visit,
-      entry_reasons,
-      facilities,
-      institution_name,
-      activities,
-      behavior
-    `)
-    .order("entry_date", {
-      ascending: true,
-    });
+  const entries: RnuStatsEntry[] = [];
 
-  if (error) {
-    console.error(
-      "Error al obtener estadísticas RNU:",
-      error,
-    );
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("rnu_entries")
+      .select(`
+        id,
+        entry_type,
+        entry_date,
+        visitor_count,
+        province_locality,
+        transport_type,
+        first_visit,
+        entry_reasons,
+        facilities,
+        institution_name,
+        activities,
+        behavior
+      `)
+      .order("entry_date", {
+        ascending: true,
+      })
+      .range(
+        from,
+        from + PAGE_SIZE - 1,
+      );
+
+    if (error) {
+      console.error(
+        "Error al obtener estadísticas RNU:",
+        error,
+      );
+
+      break;
+    }
+
+    const batch =
+      (data ?? []) as RnuStatsEntry[];
+
+    entries.push(...batch);
+
+    if (batch.length < PAGE_SIZE) {
+      break;
+    }
+
+    from += PAGE_SIZE;
   }
-
-  const entries = (data ?? []) as RnuStatsEntry[];
 
   return (
     <EstadisticasRnuClient
