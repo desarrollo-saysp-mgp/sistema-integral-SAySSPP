@@ -5,9 +5,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
 } from "react";
+
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -21,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,6 +52,18 @@ type SuministrosDashboardClientProps = {
 };
 
 const CHUNK_SIZE = 1000;
+
+/**
+ * Tiempo máximo que permitimos esperar por una consulta
+ * antes de considerar que quedó trabada.
+ */
+const REQUEST_TIMEOUT_MS = 15000;
+
+/**
+ * Evita disparar varias recargas seguidas cuando Chrome
+ * genera focus + visibilitychange casi al mismo tiempo.
+ */
+const VISIBILITY_REFRESH_COOLDOWN_MS = 3000;
 
 const MODULE_CARDS: ModuleCard[] = [
   {
@@ -95,6 +110,41 @@ const MODULE_CARDS: ModuleCard[] = [
   },
 ];
 
+/**
+ * Wrapper que evita esperar indefinidamente una promesa.
+ *
+ * Si Supabase o la conexión quedan en un estado extraño,
+ * después del timeout rechazamos nuestra espera y la UI
+ * puede recuperarse.
+ */
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `La consulta excedió el tiempo máximo de ${
+            timeoutMs / 1000
+          } segundos.`,
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([
+    Promise.resolve(promise),
+    timeoutPromise,
+  ]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
+
 export function SuministrosDashboardClient({
   isReadonly,
 }: SuministrosDashboardClientProps) {
@@ -103,8 +153,28 @@ export function SuministrosDashboardClient({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Evita que focus + visibilitychange generen varias
+   * recargas prácticamente simultáneas.
+   */
+  const lastVisibilityRefreshRef = useRef(0);
+
+  /**
+   * Evita que dos consultas de stock se ejecuten al mismo tiempo.
+   */
+  const loadingStockRef = useRef(false);
+
   const loadStockSummary = useCallback(
     async (showRefreshLoader = false) => {
+      /**
+       * Si ya existe una consulta en curso, no iniciamos otra.
+       */
+      if (loadingStockRef.current) {
+        return;
+      }
+
+      loadingStockRef.current = true;
+
       if (showRefreshLoader) {
         setRefreshing(true);
       } else {
@@ -124,21 +194,32 @@ export function SuministrosDashboardClient({
         while (hasMoreRows) {
           const to = from + CHUNK_SIZE - 1;
 
-          const { data, error: stockError } = await supabase
-            .from("supply_current_stock")
-            .select(
-              `
-                product_id,
-                current_stock,
-                low_stock,
-                product_active,
-                category_active
-              `,
-            )
-            .eq("product_active", true)
-            .eq("category_active", true)
-            .order("product_id", { ascending: true })
-            .range(from, to);
+          /**
+           * Esta consulta tenía posibilidad de quedar pendiente
+           * indefinidamente si la pestaña volvía de un estado
+           * suspendido con la conexión en mal estado.
+           *
+           * Ahora tiene un timeout de seguridad.
+           */
+          const { data, error: stockError } = await withTimeout(
+            supabase
+              .from("supply_current_stock")
+              .select(
+                `
+                  product_id,
+                  current_stock,
+                  low_stock,
+                  product_active,
+                  category_active
+                `,
+              )
+              .eq("product_active", true)
+              .eq("category_active", true)
+              .order("product_id", {
+                ascending: true,
+              })
+              .range(from, to),
+          );
 
           if (stockError) {
             throw stockError;
@@ -163,6 +244,8 @@ export function SuministrosDashboardClient({
           "No se pudo cargar el resumen de stock. Intentá nuevamente.",
         );
       } finally {
+        loadingStockRef.current = false;
+
         setLoading(false);
         setRefreshing(false);
       }
@@ -171,19 +254,28 @@ export function SuministrosDashboardClient({
   );
 
   useEffect(() => {
-    void loadStockSummary();
+    let mounted = true;
+
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const supabase = createClient();
 
-    let mounted = true;
-    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+    /**
+     * Carga inicial del resumen.
+     */
+    void loadStockSummary();
 
     /*
-      El nombre incluye un identificador único para evitar conflictos
-      con React Strict Mode y el Hot Reload de Next.js.
-    */
+     * El nombre incluye un identificador único para evitar conflictos
+     * con React Strict Mode y el Hot Reload de Next.js.
+     */
     const channelName = `suministros-panel-${crypto.randomUUID()}`;
 
+    /**
+     * Reconsulta el resumen cuando existe un cambio Realtime.
+     *
+     * Esperamos 300 ms para agrupar eventos muy cercanos.
+     */
     const refreshAfterChange = () => {
       if (!mounted) return;
 
@@ -229,14 +321,12 @@ export function SuministrosDashboardClient({
       )
       .subscribe((status, subscriptionError) => {
         if (status === "SUBSCRIBED") {
-          console.log("Realtime de Suministros conectado.");
+          console.log(
+            "Realtime de Suministros conectado.",
+          );
         }
 
         if (status === "CHANNEL_ERROR") {
-          /*
-            Usamos warn para que Next.js no muestre el overlay rojo
-            por un problema temporal de conexión.
-          */
           console.warn(
             "Realtime de Suministros tuvo un error de conexión.",
             subscriptionError,
@@ -250,12 +340,83 @@ export function SuministrosDashboardClient({
         }
 
         if (status === "CLOSED") {
-          console.log("Canal Realtime de Suministros cerrado.");
+          console.log(
+            "Canal Realtime de Suministros cerrado.",
+          );
         }
       });
 
+    /**
+     * Fuerza una actualización cuando el usuario vuelve
+     * después de haber dejado la pestaña inactiva.
+     */
+    const refreshAfterVisibilityResume = () => {
+      if (!mounted) return;
+
+      const now = Date.now();
+
+      if (
+        now - lastVisibilityRefreshRef.current <
+        VISIBILITY_REFRESH_COOLDOWN_MS
+      ) {
+        return;
+      }
+
+      lastVisibilityRefreshRef.current = now;
+
+      console.log(
+        "Suministros volvió a primer plano. Actualizando stock...",
+      );
+
+      void loadStockSummary(true);
+    };
+
+    /**
+     * Chrome dispara este evento cuando una pestaña
+     * vuelve a ser visible.
+     */
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      refreshAfterVisibilityResume();
+    };
+
+    /**
+     * Respaldo adicional para casos como:
+     *
+     * - PC bloqueada
+     * - navegador minimizado
+     * - cambio de aplicación
+     * - pestaña suspendida
+     */
+    const handleWindowFocus = () => {
+      refreshAfterVisibilityResume();
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange,
+    );
+
+    window.addEventListener(
+      "focus",
+      handleWindowFocus,
+    );
+
     return () => {
       mounted = false;
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+
+      window.removeEventListener(
+        "focus",
+        handleWindowFocus,
+      );
 
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
@@ -287,11 +448,11 @@ export function SuministrosDashboardClient({
 
   const visibleCards = isReadonly
     ? MODULE_CARDS.filter(
-      (item) =>
-        item.href === "/dashboard/suministros/stock" ||
-        item.href === "/dashboard/suministros/historial" ||
-        item.href === "/dashboard/suministros/estadisticas",
-    )
+        (item) =>
+          item.href === "/dashboard/suministros/stock" ||
+          item.href === "/dashboard/suministros/historial" ||
+          item.href === "/dashboard/suministros/estadisticas",
+      )
     : MODULE_CARDS;
 
   if (loading) {
@@ -300,7 +461,9 @@ export function SuministrosDashboardClient({
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="size-8 animate-spin" />
 
-          <p className="text-sm">Cargando módulo de Suministros...</p>
+          <p className="text-sm">
+            Cargando módulo de Suministros...
+          </p>
         </div>
       </div>
     );
@@ -328,7 +491,9 @@ export function SuministrosDashboardClient({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void loadStockSummary(true)}
+              onClick={() =>
+                void loadStockSummary(true)
+              }
               disabled={refreshing}
             >
               {refreshing && (
@@ -445,7 +610,9 @@ export function SuministrosDashboardClient({
                   </p>
 
                   <Button asChild className="w-full">
-                    <Link href={item.href}>Ingresar</Link>
+                    <Link href={item.href}>
+                      Ingresar
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>
@@ -453,8 +620,6 @@ export function SuministrosDashboardClient({
           })}
         </div>
       </section>
-
-
     </div>
   );
 }
