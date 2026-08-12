@@ -290,7 +290,7 @@ export function PersonnelDataClient() {
               </Link>
             </Button>
 
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-2xl font-bold sm:text-3xl">
               Datos del personal
             </h1>
 
@@ -306,6 +306,7 @@ export function PersonnelDataClient() {
             variant="outline"
             onClick={() => void loadPersonnel(true)}
             disabled={refreshing}
+            className="w-full sm:w-auto"
           >
             {refreshing ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
@@ -416,7 +417,8 @@ export function PersonnelDataClient() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border">
+            {/* DESKTOP / TABLET */}
+            <div className="hidden overflow-hidden rounded-xl border md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -493,6 +495,83 @@ export function PersonnelDataClient() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* MOBILE: CARDS, SIN SCROLL HORIZONTAL */}
+            <div className="grid gap-3 md:hidden">
+              {filteredDirections.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No se encontraron direcciones.
+                </div>
+              ) : (
+                filteredDirections.map((item) => {
+                  const isSelected =
+                    selectedDirection === item.direction;
+
+                  return (
+                    <button
+                      key={item.direction}
+                      type="button"
+                      onClick={() =>
+                        selectDirection(item.direction)
+                      }
+                      className={
+                        isSelected
+                          ? "w-full rounded-2xl border border-primary/30 bg-muted/70 p-4 text-left shadow-sm transition"
+                          : "w-full rounded-2xl border bg-background p-4 text-left shadow-sm transition hover:bg-muted/40"
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-semibold leading-5 text-foreground">
+                            {item.direction}
+                          </p>
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Tocá para ver el personal de esta dirección
+                          </p>
+                        </div>
+
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted font-bold text-foreground">
+                          {item.total}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <div className="rounded-xl bg-muted/40 p-2 text-center">
+                          <p className="text-[11px] leading-4 text-muted-foreground">
+                            Planta
+                          </p>
+
+                          <p className="mt-1 text-lg font-bold text-foreground">
+                            {item.permanent}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-muted/40 p-2 text-center">
+                          <p className="text-[11px] leading-4 text-muted-foreground">
+                            Monotrib.
+                          </p>
+
+                          <p className="mt-1 text-lg font-bold text-foreground">
+                            {item.monotributists}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-muted/40 p-2 text-center">
+                          <p className="text-[11px] leading-4 text-muted-foreground">
+                            Con aportes
+                          </p>
+
+                          <p className="mt-1 text-lg font-bold text-foreground">
+                            {item.contributions}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -507,7 +586,7 @@ export function PersonnelDataClient() {
                   <p className="text-sm text-muted-foreground">
                     Personal de la dirección
                   </p>
-                  <h2 className="text-2xl font-semibold">
+                  <h2 className="break-words text-xl font-semibold sm:text-2xl">
                     {selectedDirection}
                   </h2>
                   <p className="text-sm text-muted-foreground">
@@ -609,8 +688,8 @@ export function PersonnelDataClient() {
                       key={person.id}
                       className="space-y-3 rounded-xl border p-4"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                           <p className="font-semibold">
                             {person.nombre_completo}
                           </p>

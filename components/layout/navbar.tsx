@@ -26,6 +26,7 @@ import {
   X,
   LayoutGrid,
   BarChart3,
+  PhoneForwarded,
   Moon,
   Sun,
 } from "lucide-react";
@@ -259,6 +260,27 @@ export function Navbar() {
                             </div>
                             <p className="ml-6 text-xs text-muted-foreground">
                               Crear un nuevo reclamo ciudadano
+                            </p>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+
+                    {canCreateComplaints && (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          href="/dashboard/calls/new"
+                          className="cursor-pointer rounded-xl"
+                        >
+                          <div className="flex flex-col gap-1 py-1">
+                            <div className="flex items-center gap-2">
+                              <PhoneForwarded className="h-4 w-4 text-[#00A27F]" />
+                              <span className="font-medium">
+                                Registrar llamada desviada
+                              </span>
+                            </div>
+                            <p className="ml-6 text-xs text-muted-foreground">
+                              Registrar llamadas que corresponden a otras áreas
                             </p>
                           </div>
                         </Link>
@@ -525,6 +547,22 @@ export function Navbar() {
                       >
                         <PlusCircle className="h-5 w-5" />
                         <span>Nuevo Reclamo</span>
+                      </Link>
+                    )}
+
+                    {canCreateComplaints && (
+                      <Link
+                        href="/dashboard/calls/new"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                          pathname === "/dashboard/calls/new"
+                            ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+                            : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
+                        )}
+                      >
+                        <PhoneForwarded className="h-5 w-5" />
+                        <span>Registrar llamada desviada</span>
                       </Link>
                     )}
 
