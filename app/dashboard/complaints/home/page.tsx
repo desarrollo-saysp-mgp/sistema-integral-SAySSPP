@@ -18,6 +18,7 @@ import {
   Plus,
   List,
   BarChart3,
+  PhoneForwarded,
 } from "lucide-react";
 import { PageLoader } from "@/components/ui/page-loader";
 import { toast } from "sonner";
@@ -72,10 +73,13 @@ const getStatusBadge = (status: string) => {
   switch (status) {
     case "En proceso":
       return "border-[#F4D9A6] bg-[#FFF7E8] text-[#C48814] dark:border-yellow-500/50 dark:bg-yellow-500/10 dark:text-yellow-300";
+
     case "Resuelto":
       return "border-[#B7E7D9] bg-[#ECFDF7] text-[#00A27F] dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-300";
+
     case "No resuelto":
       return "border-[#F2C6D1] bg-[#FFF0F3] text-[#D85C76] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300";
+
     default:
       return "border-border bg-muted text-muted-foreground";
   }
@@ -124,9 +128,17 @@ const getComplaintSubtitle = (complaint: RecentComplaint) => {
   const serviceName = complaint.service?.name || null;
   const causeName = complaint.cause?.name || null;
 
-  if (serviceName && causeName) return `${serviceName} - ${causeName}`;
-  if (serviceName) return serviceName;
-  if (causeName) return causeName;
+  if (serviceName && causeName) {
+    return `${serviceName} - ${causeName}`;
+  }
+
+  if (serviceName) {
+    return serviceName;
+  }
+
+  if (causeName) {
+    return causeName;
+  }
 
   return complaint.details || "Sin detalle";
 };
@@ -143,6 +155,7 @@ const getDateTime = (dateString: string) => {
   if (!dateString) return 0;
 
   const [year, month, day] = dateString.split("-").map(Number);
+
   return new Date(year, month - 1, day).getTime();
 };
 
@@ -159,7 +172,8 @@ export default function DashboardPage() {
   const isServiciosPublicosUser =
     normalizedProfileEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL);
 
-  const isGirsuUser = normalizedProfileEmail === normalizeName(GIRSU_EMAIL);
+  const isGirsuUser =
+    normalizedProfileEmail === normalizeName(GIRSU_EMAIL);
 
   const fetchStats = useCallback(
     async (showLoader = true) => {
@@ -212,7 +226,9 @@ export default function DashboardPage() {
       const dateDiff =
         getDateTime(b.complaint_date) - getDateTime(a.complaint_date);
 
-      if (dateDiff !== 0) return dateDiff;
+      if (dateDiff !== 0) {
+        return dateDiff;
+      }
 
       const numberA =
         a.form_variant === "arbolado"
@@ -242,7 +258,9 @@ export default function DashboardPage() {
       return;
     }
 
-    navigateWithLoading(`${baseUrl}?status=${encodeURIComponent(status)}`);
+    navigateWithLoading(
+      `${baseUrl}?status=${encodeURIComponent(status)}`,
+    );
   };
 
   if (loading) {
@@ -270,19 +288,37 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap gap-3">
           {!isServiciosPublicosUser && !isGirsuUser && (
-            <Button
-              onClick={() => navigateWithLoading("/dashboard/complaints/new")}
-              className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
-              disabled={isPending}
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              Nuevo Reclamo
-            </Button>
+            <>
+              <Button
+                onClick={() =>
+                  navigateWithLoading("/dashboard/complaints/new")
+                }
+                className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
+                disabled={isPending}
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                Nuevo Reclamo
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() =>
+                  navigateWithLoading("/dashboard/calls/new")
+                }
+                className="h-12 rounded-xl border-border bg-card px-6 font-semibold text-card-foreground shadow-sm transition-all hover:scale-[1.02] hover:bg-muted hover:shadow-md active:scale-[0.98]"
+                disabled={isPending}
+              >
+                <PhoneForwarded className="mr-2 h-5 w-5" />
+                Registrar llamada desviada
+              </Button>
+            </>
           )}
 
           <Button
             variant="outline"
-            onClick={() => navigateWithLoading("/dashboard/complaints")}
+            onClick={() =>
+              navigateWithLoading("/dashboard/complaints")
+            }
             className="h-11 rounded-xl border-border bg-card px-5 text-card-foreground hover:bg-muted"
             disabled={isPending}
           >
@@ -292,7 +328,9 @@ export default function DashboardPage() {
 
           <Button
             variant="outline"
-            onClick={() => navigateWithLoading("/dashboard/complaints/stats")}
+            onClick={() =>
+              navigateWithLoading("/dashboard/complaints/stats")
+            }
             className="h-11 rounded-xl border-border bg-card px-5 text-card-foreground hover:bg-muted"
             disabled={isPending}
           >
@@ -433,8 +471,12 @@ export default function DashboardPage() {
                       <span className="font-semibold text-foreground">
                         {getDisplayComplaintNumber(complaint)}
                       </span>
+
                       <span>•</span>
-                      <span>{formatDate(complaint.complaint_date)}</span>
+
+                      <span>
+                        {formatDate(complaint.complaint_date)}
+                      </span>
                     </div>
 
                     <div className="mt-2 text-base font-medium text-foreground">
