@@ -417,14 +417,201 @@ export function PersonnelTable({
               type="button"
               variant="outline"
               onClick={clearFilters}
+              className="w-full lg:w-auto"
             >
               Limpiar
             </Button>
           )}
         </div>
 
-        <div className="overflow-hidden rounded-xl border">
-          <div className="overflow-x-auto">
+
+        {/* VISTA MOBILE: CARDS, SIN SCROLL HORIZONTAL */}
+        <div className="space-y-3 md:hidden">
+          {paginatedPersonnel.length === 0 ? (
+            <div className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+              No se encontraron registros de personal.
+            </div>
+          ) : (
+            paginatedPersonnel.map((person) => {
+              const isUpdating = updatingId === person.id;
+
+              return (
+                <Card
+                  key={person.id}
+                  className="overflow-hidden rounded-2xl border shadow-sm"
+                >
+                  <CardContent className="space-y-4 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-base font-semibold leading-5">
+                          {person.nombre_completo}
+                        </p>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Legajo:{" "}
+                          <span className="font-medium text-foreground">
+                            {person.legajo || "-"}
+                          </span>
+                        </p>
+                      </div>
+
+                      {person.activo ? (
+                        <Badge variant="default" className="shrink-0">
+                          Activo
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="shrink-0">
+                          Baja
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 text-sm">
+                      <div className="rounded-xl bg-muted/35 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Dirección
+                        </p>
+
+                        <p className="mt-1 break-words font-medium">
+                          {person.direccion || "-"}
+                        </p>
+
+                        {person.codigo_direccion && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Código: {person.codigo_direccion}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl bg-muted/35 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Área RR. HH.
+                        </p>
+
+                        <p className="mt-1 break-words font-medium">
+                          {person.area_rrhh || "-"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-muted/35 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Contratación
+                        </p>
+
+                        <div className="mt-2 space-y-1.5">
+                          <Badge
+                            variant={getContractBadgeVariant(
+                              person.tipo_contrato,
+                            )}
+                          >
+                            {formatContractType(person.tipo_contrato)}
+                          </Badge>
+
+                          {person.tipo_contrato === "PLANTA_PERMANENTE" && (
+                            <p className="text-xs text-muted-foreground">
+                              {person.numero_resolucion
+                                ? `Resolución: ${person.numero_resolucion}`
+                                : "Sin resolución"}
+                            </p>
+                          )}
+
+                          {person.tipo_contrato === "MONOTRIBUTISTA" && (
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p>
+                                {person.convenio
+                                  ? "Con convenio"
+                                  : "Sin convenio"}
+                              </p>
+
+                              {person.convenio && (
+                                <p>
+                                  {person.numero_resolucion
+                                    ? `Resolución: ${person.numero_resolucion}`
+                                    : "Resolución no informada"}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-muted/35 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Tarea que realiza
+                        </p>
+
+                        <p className="mt-1 whitespace-pre-wrap break-words font-medium">
+                          {person.tarea || "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onEdit(person)}
+                        disabled={isUpdating}
+                        className="h-9"
+                      >
+                        <Pencil className="mr-2 size-4" />
+                        Editar
+                      </Button>
+
+                      {person.activo ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onDeactivate(person)}
+                          disabled={isUpdating}
+                          className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <UserX className="mr-2 size-4" />
+                          Dar de baja
+                        </Button>
+                      ) : (
+                        <>
+                          {onReactivate && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onReactivate(person)}
+                              disabled={isUpdating}
+                              className="h-9"
+                            >
+                              <UserCheck className="mr-2 size-4" />
+                              Reactivar
+                            </Button>
+                          )}
+
+                          {onDelete && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onDelete(person)}
+                              disabled={isUpdating}
+                              className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              Eliminar
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-xl border md:block">
+          <div>
             <Table className="text-[11px] xl:text-xs">
               <TableHeader>
                 <TableRow>
@@ -655,7 +842,7 @@ export function PersonnelTable({
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground sm:text-left">
             Mostrando{" "}
             <span className="font-medium text-foreground">
               {paginatedPersonnel.length}
@@ -667,7 +854,54 @@ export function PersonnelTable({
             registros
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-1 sm:justify-end">
+          {/* PAGINACIÓN MOBILE */}
+          <div className="flex items-center justify-between gap-2 sm:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setCurrentPage((page) =>
+                  Math.max(1, page - 1),
+                )
+              }
+              disabled={currentPage === 1}
+              className="h-9"
+            >
+              <ChevronLeft className="mr-1 size-4" />
+              Anterior
+            </Button>
+
+            <span className="text-sm text-muted-foreground">
+              Página{" "}
+              <span className="font-semibold text-foreground">
+                {currentPage}
+              </span>{" "}
+              de{" "}
+              <span className="font-semibold text-foreground">
+                {totalPages}
+              </span>
+            </span>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setCurrentPage((page) =>
+                  Math.min(totalPages, page + 1),
+                )
+              }
+              disabled={currentPage === totalPages}
+              className="h-9"
+            >
+              Siguiente
+              <ChevronRight className="ml-1 size-4" />
+            </Button>
+          </div>
+
+          {/* PAGINACIÓN DESKTOP / TABLET */}
+          <div className="hidden flex-wrap items-center justify-center gap-1 sm:flex sm:justify-end">
             <Button
               type="button"
               variant="outline"

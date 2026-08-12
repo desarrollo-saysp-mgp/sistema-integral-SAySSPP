@@ -22,6 +22,7 @@ import {
   PhoneCall,
   FileDown,
   Pencil,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -218,6 +219,16 @@ export default function NewCallPage() {
     savingEdit,
     setSavingEdit,
   ] = useState(false);
+
+  const [
+    deletingCallId,
+    setDeletingCallId,
+  ] = useState<number | null>(null);
+
+  const [
+    callToDelete,
+    setCallToDelete,
+  ] = useState<CallRecord | null>(null);
 
   /*
    * TRAER LLAMADAS
@@ -687,6 +698,70 @@ export default function NewCallPage() {
     };
 
   /*
+   * ELIMINAR LLAMADA
+   */
+  const openDeleteModal = (
+    call: CallRecord,
+  ) => {
+    setCallToDelete(call);
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingCallId !== null) {
+      return;
+    }
+
+    setCallToDelete(null);
+  };
+
+  const handleDeleteCall = async () => {
+    if (!callToDelete) {
+      return;
+    }
+
+    try {
+      setDeletingCallId(callToDelete.id);
+
+      const { error } = await supabase
+        .from("call_records")
+        .delete()
+        .eq("id", callToDelete.id);
+
+      if (error) {
+        console.error(
+          "Error eliminando llamada:",
+          error,
+        );
+
+        toast.error(
+          "No se pudo eliminar la llamada.",
+        );
+
+        return;
+      }
+
+      toast.success(
+        "Llamada eliminada correctamente.",
+      );
+
+      setCallToDelete(null);
+
+      await fetchCalls();
+    } catch (error) {
+      console.error(
+        "Error inesperado eliminando llamada:",
+        error,
+      );
+
+      toast.error(
+        "Ocurrió un error al eliminar la llamada.",
+      );
+    } finally {
+      setDeletingCallId(null);
+    }
+  };
+
+  /*
    * EXPORTAR PDF
    */
   const loadImageAsDataUrl = (
@@ -871,8 +946,8 @@ export default function NewCallPage() {
        */
       const tableData =
         filteredCalls.map(
-          (call) => [
-            String(call.id),
+          (call, index) => [
+            String(index + 1),
 
             formatDateTime(
               call.call_datetime ||
@@ -1523,7 +1598,7 @@ export default function NewCallPage() {
             ) : (
               <div className="space-y-2">
                 {filteredCalls.map(
-                  (call) => (
+                  (call, index) => (
                     <div
                       key={call.id}
                       className="rounded-xl border border-border bg-background px-4 py-3 transition-all hover:bg-muted/30 hover:shadow-sm"
@@ -1591,7 +1666,7 @@ export default function NewCallPage() {
 
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="inline-flex rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                            #{call.id}
+                            #{index + 1}
                           </span>
 
                           <Button
@@ -1603,10 +1678,37 @@ export default function NewCallPage() {
                                 call,
                               )
                             }
+                            disabled={
+                              deletingCallId ===
+                              call.id
+                            }
                             className="h-8 rounded-lg"
                           >
                             <Pencil className="mr-1.5 h-3.5 w-3.5" />
                             Editar
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              openDeleteModal(
+                                call,
+                              )
+                            }
+                            disabled={
+                              deletingCallId !==
+                              null
+                            }
+                            className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                          >
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+
+                            {deletingCallId ===
+                            call.id
+                              ? "Eliminando..."
+                              : "Eliminar"}
                           </Button>
                         </div>
                       </div>
@@ -1640,7 +1742,7 @@ export default function NewCallPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Corregí los datos del registro #{editingCall.id}.
+                  Corregí los datos cargados en esta llamada.
                 </p>
               </div>
 
@@ -1846,6 +1948,141 @@ export default function NewCallPage() {
                 {savingEdit
                   ? "Guardando..."
                   : "Guardar cambios"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ELIMINAR */}
+      {callToDelete && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closeDeleteModal();
+            }
+          }}
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/40">
+                  <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">
+                    Eliminar llamada
+                  </h2>
+
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Confirmá la eliminación de esta llamada registrada.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={closeDeleteModal}
+                disabled={deletingCallId !== null}
+                className="shrink-0 rounded-full"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-foreground">
+                    {callToDelete.caller_name || "Sin nombre"}
+                  </span>
+
+                  <span className="text-muted-foreground">
+                    •
+                  </span>
+
+                  <span className="text-sm font-semibold text-[#00A27F]">
+                    {formatDateTime(
+                      callToDelete.call_datetime ||
+                        callToDelete.created_at,
+                    )}
+                  </span>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Motivo
+                  </p>
+
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                    {callToDelete.reason}
+                  </p>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">
+                      Área:
+                    </span>{" "}
+                    <span className="font-medium text-foreground">
+                      {callToDelete.destination_area || "Sin especificar"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-muted-foreground">
+                      Acción:
+                    </span>{" "}
+                    <span className="font-medium text-foreground">
+                      {callToDelete.action_taken || "Sin especificar"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 dark:border-red-900/60 dark:bg-red-950/30">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                  Esta acción no se puede deshacer.
+                </p>
+
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  El registro se eliminará definitivamente del sistema.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-border bg-muted/20 px-5 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeDeleteModal}
+                disabled={deletingCallId !== null}
+                className="rounded-xl"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() =>
+                  void handleDeleteCall()
+                }
+                disabled={deletingCallId !== null}
+                className="rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+
+                {deletingCallId ===
+                callToDelete.id
+                  ? "Eliminando..."
+                  : "Eliminar registro"}
               </Button>
             </div>
           </div>
