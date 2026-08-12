@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Filter, PhoneForwarded } from "lucide-react";
 import type { Complaint, Service, User } from "@/types";
 import { toast } from "sonner";
 import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
@@ -744,13 +744,24 @@ export default function ComplaintsClient() {
           </div>
 
           {canCreateComplaints && (
-            <Button
-              onClick={() => router.push("/dashboard/complaints/new")}
-              className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              Nuevo Reclamo
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Button
+                onClick={() => router.push("/dashboard/complaints/new")}
+                className="h-12 rounded-xl bg-[#00A27F] px-6 font-semibold text-white shadow-md transition-all hover:scale-[1.02] hover:bg-[#008568] hover:shadow-lg active:scale-[0.98]"
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                Nuevo Reclamo
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => router.push("/dashboard/calls/new")}
+                className="h-12 rounded-xl border-border bg-card px-6 font-semibold text-card-foreground shadow-sm transition-all hover:scale-[1.02] hover:bg-muted hover:shadow-md active:scale-[0.98]"
+              >
+                <PhoneForwarded className="mr-2 h-5 w-5" />
+                Registrar llamada desviada
+              </Button>
+            </div>
           )}
         </div>
 
