@@ -314,6 +314,7 @@ export const STREETS = [
   "Calle 316",
   "Calle 318",
   "Calle 319",
+  "Calle 319 bis",
   "Calle 32",
   "Calle 32 bis",
   "Calle 32 bis Norte",
