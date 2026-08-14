@@ -268,18 +268,46 @@ export function VehicleSecurityEditClient({
                 ...checklist,
             };
 
-            const response = await fetch(`/api/taller/estado-general/${inspection.id}`, {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
+            const response = await fetch(
+                `/api/taller/estado-general/${inspection.id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
                 },
-                body: JSON.stringify(payload),
-            });
+            );
+
+            const contentType = response.headers.get("content-type") || "";
+
+            if (!contentType.includes("application/json")) {
+                const responseText = await response.text();
+
+                console.error(
+                    "Respuesta no JSON al actualizar checklist:",
+                    {
+                        status: response.status,
+                        statusText: response.statusText,
+                        url: response.url,
+                        redirected: response.redirected,
+                        body: responseText.slice(0, 1000),
+                    },
+                );
+
+                throw new Error(
+                    response.status === 401
+                        ? "Tu sesión venció. Volvé a iniciar sesión."
+                        : "El servidor devolvió una respuesta inesperada. Intentá guardar nuevamente.",
+                );
+            }
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || "Error al actualizar checklist");
+                throw new Error(
+                    result?.error || "Error al actualizar checklist",
+                );
             }
 
             toast.success(
