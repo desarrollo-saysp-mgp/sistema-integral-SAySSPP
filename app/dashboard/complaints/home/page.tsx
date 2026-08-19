@@ -309,7 +309,7 @@ export default function DashboardPage() {
                 disabled={isPending}
               >
                 <PhoneForwarded className="mr-2 h-5 w-5" />
-                Registrar llamada desviada
+                Registrar consulta derivada
               </Button>
             </>
           )}
