@@ -47,6 +47,20 @@ const ITEMS_PER_PAGE = 20;
 const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
+const normalizeServiceName = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const SERVICIOS_PUBLICOS_NAMES = new Set([
+  "barrido",
+  "canales y desagues",
+  "motonivelacion",
+  "riego",
+]);
+
 const parseLocalDate = (dateStr?: string | null): Date | null => {
   if (!dateStr) return null;
 
@@ -273,6 +287,16 @@ const getComplaintDisplayData = (
   };
 };
 
+const isServiciosPublicosComplaint = (
+  complaint: ComplaintWithDetails,
+) => {
+  const display = getComplaintDisplayData(complaint);
+
+  return SERVICIOS_PUBLICOS_NAMES.has(
+    normalizeServiceName(display.serviceLabel),
+  );
+};
+
 export function ComplaintsTable({
   complaints,
   onStatusChange,
@@ -295,6 +319,10 @@ export function ComplaintsTable({
 
   const canEditComplaint =
     !isReadOnly && !isServiciosPublicosUser && !isGirsuUser;
+
+  const canEditServiciosPublicosTracking =
+    !isReadOnly &&
+    (isServiciosPublicosUser || profile?.role === "Reclamos");
 
   const canSendWhatsApp =
     isServiciosPublicosUser ||
@@ -418,6 +446,22 @@ export function ComplaintsTable({
   }, [selectedComplaints, sortedComplaints]);
 
   const hasSelectedComplaints = selectedComplaints.length > 0;
+
+  const showServiciosPublicosTrackingColumns = useMemo(
+    () =>
+      sortedComplaints.some((complaint) =>
+        isServiciosPublicosComplaint(complaint),
+      ),
+    [sortedComplaints],
+  );
+
+  const pdfIncludesServiciosPublicosTracking = useMemo(
+    () =>
+      exportComplaints.some((complaint) =>
+        isServiciosPublicosComplaint(complaint),
+      ),
+    [exportComplaints],
+  );
 
   const allVisibleSelected =
     paginatedComplaints.length > 0 &&
@@ -1104,6 +1148,9 @@ export function ComplaintsTable({
           "Observación",
           "Fecha resolución",
           "Detalle resolución",
+          ...(pdfIncludesServiciosPublicosTracking
+            ? ["Obs. Serv. Públicos"]
+            : []),
           "Estado",
         ],
       ];
@@ -1117,6 +1164,7 @@ export function ComplaintsTable({
         );
 
         const currentStatus = getComplaintStatus(item);
+        const spTrackingData = getSPTrackingData(item);
         const isResolved = currentStatus === "Resuelto";
         const resolutionDateForPdf = isResolved
           ? display.resolutionDateLabel
@@ -1162,6 +1210,13 @@ export function ComplaintsTable({
           display.detailLabel,
           resolutionDateForPdf,
           isResolved ? display.resolutionDetailLabel : "-",
+          ...(pdfIncludesServiciosPublicosTracking
+            ? [
+                isServiciosPublicosComplaint(item)
+                  ? spTrackingData.observations || "-"
+                  : "-",
+              ]
+            : []),
           currentStatus,
         ];
       });
@@ -1182,8 +1237,8 @@ export function ComplaintsTable({
         rowPageBreak: "avoid",
         margin: { top: 10, right: 10, bottom: 14, left: 10 },
         styles: {
-          fontSize: isArboladoUser ? 6.1 : isZyVUser ? 7.2 : 6.8,
-          cellPadding: isArboladoUser ? 1.25 : isZyVUser ? 1.8 : 1.5,
+          fontSize: isArboladoUser ? 6.1 : isZyVUser ? 7.2 : 6.5,
+          cellPadding: isArboladoUser ? 1.25 : isZyVUser ? 1.8 : 1.45,
           overflow: "linebreak",
           textColor: [51, 65, 85],
           lineColor: [226, 232, 240],
@@ -1224,20 +1279,40 @@ export function ComplaintsTable({
                 7: { cellWidth: 22 },
                 8: { cellWidth: 22 },
               }
-            : {
-                0: { cellWidth: 11 },
-                1: { cellWidth: 18 },
-                2: { cellWidth: 26 },
-                3: { cellWidth: 42 },
-                4: { cellWidth: 25 },
-                5: { cellWidth: 28 },
-                6: { cellWidth: 42 },
-                7: { cellWidth: 20 },
-                8: { cellWidth: 36 },
-                9: { cellWidth: 19 },
-              },
+            : pdfIncludesServiciosPublicosTracking
+              ? {
+                  0: { cellWidth: 10 },
+                  1: { cellWidth: 17 },
+                  2: { cellWidth: 24 },
+                  3: { cellWidth: 36 },
+                  4: { cellWidth: 24 },
+                  5: { cellWidth: 26 },
+                  6: { cellWidth: 36 },
+                  7: { cellWidth: 20 },
+                  8: { cellWidth: 30 },
+                  9: { cellWidth: 34 },
+                  10: { cellWidth: 20 },
+                }
+              : {
+                  0: { cellWidth: 11 },
+                  1: { cellWidth: 18 },
+                  2: { cellWidth: 28 },
+                  3: { cellWidth: 42 },
+                  4: { cellWidth: 27 },
+                  5: { cellWidth: 30 },
+                  6: { cellWidth: 48 },
+                  7: { cellWidth: 22 },
+                  8: { cellWidth: 42 },
+                  9: { cellWidth: 20 },
+                },
         didParseCell: (data: CellHookData) => {
-          const statusColumnIndex = isArboladoUser ? 10 : isZyVUser ? 8 : 9;
+          const statusColumnIndex = isArboladoUser
+            ? 10
+            : isZyVUser
+              ? 8
+              : pdfIncludesServiciosPublicosTracking
+                ? 10
+                : 9;
 
           if (
             data.section === "body" &&
@@ -1454,6 +1529,8 @@ export function ComplaintsTable({
                 resolutionDateOverride,
               );
 
+              const spTrackingData = getSPTrackingData(complaint);
+
               const hasResolutionDate = display.resolutionDateLabel !== "-";
               const isUpdatingResolution =
                 updatingResolutionDate === complaint.id;
@@ -1625,6 +1702,24 @@ export function ComplaintsTable({
                           </div>
                         )}
 
+                        {isServiciosPublicosComplaint(complaint) && (
+                          <>
+                            <div>
+                              <span className="font-semibold">
+                                Visto Serv. Públicos:{" "}
+                              </span>
+                              <span>{spTrackingData.seen ? "Sí" : "-"}</span>
+                            </div>
+
+                            <div>
+                              <span className="font-semibold">
+                                Observación Serv. Públicos:{" "}
+                              </span>
+                              <span>{spTrackingData.observations || "-"}</span>
+                            </div>
+                          </>
+                        )}
+
                         {!isServiciosPublicosUser && (
                           <div>
                             <span className="font-semibold">Cargado por: </span>
@@ -1760,10 +1855,12 @@ export function ComplaintsTable({
                         <TableHead>Zona</TableHead>
                       )}
                       <TableHead>Desde Cuándo</TableHead>
-                      {isServiciosPublicosUser && <TableHead>Visto</TableHead>}
+                      {showServiciosPublicosTrackingColumns && (
+                        <TableHead>Visto</TableHead>
+                      )}
                       <TableHead>Fecha resolución</TableHead>
-                      {isServiciosPublicosUser && (
-                        <TableHead>Observaciones</TableHead>
+                      {showServiciosPublicosTrackingColumns && (
+                        <TableHead>Observación Serv. Públicos</TableHead>
                       )}
                       <TableHead>Estado</TableHead>
                       {!isServiciosPublicosUser && (
@@ -1978,9 +2075,10 @@ export function ComplaintsTable({
                             <TableCell>{display.zoneLabel}</TableCell>
                           )}
                           <TableCell>{display.sinceWhenLabel}</TableCell>
-                          {isServiciosPublicosUser && (
+                          {showServiciosPublicosTrackingColumns && (
                             <TableCell>
-                              {spTrackingData.seen ? (
+                              {isServiciosPublicosComplaint(complaint) &&
+                              spTrackingData.seen ? (
                                 <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
                                   Visto
                                 </Badge>
@@ -1990,9 +2088,11 @@ export function ComplaintsTable({
                             </TableCell>
                           )}
                           <TableCell>{display.resolutionDateLabel}</TableCell>
-                          {isServiciosPublicosUser && (
-                            <TableCell className="max-w-[220px] whitespace-normal break-words">
-                              {spTrackingData.observations || "-"}
+                          {showServiciosPublicosTrackingColumns && (
+                            <TableCell className="max-w-[260px] whitespace-normal break-words">
+                              {isServiciosPublicosComplaint(complaint)
+                                ? spTrackingData.observations || "-"
+                                : "-"}
                             </TableCell>
                           )}
                           <TableCell>{statusCell}</TableCell>
@@ -2139,7 +2239,8 @@ export function ComplaintsTable({
                   Estás marcando este reclamo como <span className="font-semibold">resuelto</span>. Podés completar la fecha y, opcionalmente, un detalle de cómo se resolvió.
                 </p>
               )}
-              {isServiciosPublicosUser && (
+              {canEditServiciosPublicosTracking &&
+                isServiciosPublicosComplaint(resolutionModalComplaint) && (
                 <label className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-3 text-sm">
                   <Checkbox
                     checked={resolutionModalSeen}
@@ -2178,9 +2279,12 @@ export function ComplaintsTable({
                 </div>
               )}
 
-              {isServiciosPublicosUser && (
+              {canEditServiciosPublicosTracking &&
+                isServiciosPublicosComplaint(resolutionModalComplaint) && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Observaciones</label>
+                  <label className="text-sm font-medium">
+                    Observación de Servicios Públicos
+                  </label>
                   <textarea
                     value={resolutionModalObservations}
                     onChange={(e) =>
