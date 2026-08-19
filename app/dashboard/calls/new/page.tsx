@@ -674,6 +674,79 @@ export default function NewCallPage() {
   }, [calls]);
 
   /*
+   * MINI ESTADÍSTICAS
+   */
+  const callStats = useMemo(() => {
+    const now = new Date();
+
+    let todayCount = 0;
+    let monthCount = 0;
+
+    const areas = new Map<
+      string,
+      {
+        label: string;
+        count: number;
+      }
+    >();
+
+    calls.forEach((call) => {
+      const callDate = new Date(
+        call.call_datetime || call.created_at,
+      );
+
+      if (!Number.isNaN(callDate.getTime())) {
+        const isToday =
+          callDate.getFullYear() === now.getFullYear() &&
+          callDate.getMonth() === now.getMonth() &&
+          callDate.getDate() === now.getDate();
+
+        const isThisMonth =
+          callDate.getFullYear() === now.getFullYear() &&
+          callDate.getMonth() === now.getMonth();
+
+        if (isToday) {
+          todayCount += 1;
+        }
+
+        if (isThisMonth) {
+          monthCount += 1;
+        }
+      }
+
+      const areaLabel =
+        call.destination_area?.trim();
+
+      if (areaLabel) {
+        const areaKey = areaLabel.toLowerCase();
+
+        const current = areas.get(areaKey);
+
+        if (current) {
+          current.count += 1;
+        } else {
+          areas.set(areaKey, {
+            label: areaLabel,
+            count: 1,
+          });
+        }
+      }
+    });
+
+    const topArea =
+      Array.from(areas.values()).sort(
+        (a, b) => b.count - a.count,
+      )[0] || null;
+
+    return {
+      total: calls.length,
+      today: todayCount,
+      thisMonth: monthCount,
+      topArea,
+    };
+  }, [calls]);
+
+  /*
    * LIMPIAR FILTROS
    */
   const clearFilters = () => {
@@ -1598,6 +1671,90 @@ export default function NewCallPage() {
           </CardHeader>
 
           <CardContent className="space-y-5 p-5">
+            {/* MINI ESTADÍSTICAS */}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Total registradas
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.total}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <PhoneCall className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Registradas hoy
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.today}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <CalendarDays className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Este mes
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.thisMonth}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <ClipboardList className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Área más consultada
+                    </p>
+
+                    <p className="mt-1 truncate text-lg font-bold text-foreground">
+                      {callStats.topArea?.label || "Sin datos"}
+                    </p>
+
+                    {callStats.topArea && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {callStats.topArea.count}{" "}
+                        {callStats.topArea.count === 1
+                          ? "consulta"
+                          : "consultas"}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <Building2 className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* FILTROS */}
             <div className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
               <div className="flex items-center gap-2 font-semibold">
