@@ -125,8 +125,40 @@ function loadImageAsDataUrl(
       const canvas =
         document.createElement("canvas");
 
-      canvas.width = image.width * 2;
-      canvas.height = image.height * 2;
+      /*
+       * El logo se muestra pequeño en el PDF (34 x 12 mm),
+       * por lo que no tiene sentido incrustar la imagen original
+       * a resolución completa. La reducimos antes de convertirla.
+       */
+      const originalWidth =
+        image.naturalWidth || image.width;
+
+      const originalHeight =
+        image.naturalHeight || image.height;
+
+      const maxWidth = 500;
+
+      const targetWidth = Math.min(
+        originalWidth,
+        maxWidth,
+      );
+
+      const scale =
+        originalWidth > 0
+          ? targetWidth / originalWidth
+          : 1;
+
+      const targetHeight = Math.max(
+        1,
+        Math.round(originalHeight * scale),
+      );
+
+      canvas.width = Math.max(
+        1,
+        Math.round(targetWidth),
+      );
+
+      canvas.height = targetHeight;
 
       const context =
         canvas.getContext("2d");
@@ -141,6 +173,19 @@ function loadImageAsDataUrl(
         return;
       }
 
+      /*
+       * JPEG no admite transparencia.
+       * Pintamos fondo blanco para conservar una apariencia limpia
+       * y reducir muchísimo el peso respecto de un PNG grande.
+       */
+      context.fillStyle = "#ffffff";
+      context.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
       context.drawImage(
         image,
         0,
@@ -150,7 +195,10 @@ function loadImageAsDataUrl(
       );
 
       resolve(
-        canvas.toDataURL("image/png"),
+        canvas.toDataURL(
+          "image/jpeg",
+          0.72,
+        ),
       );
     };
 
@@ -528,6 +576,7 @@ export default function EstadisticasRnuClient({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true,
       }) as PdfDocument;
 
       let logoDataUrl: string | null = null;
@@ -547,11 +596,13 @@ export default function EstadisticasRnuClient({
       if (logoDataUrl) {
         doc.addImage(
           logoDataUrl,
-          "PNG",
+          "JPEG",
           14,
           10,
           34,
           12,
+          undefined,
+          "FAST",
         );
       }
 

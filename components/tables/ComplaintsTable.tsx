@@ -836,20 +836,36 @@ export function ComplaintsTable({
     return new Promise((resolve, reject) => {
       const image = new Image();
       image.crossOrigin = "anonymous";
+
       image.onload = () => {
         const canvas = document.createElement("canvas");
-        canvas.width = image.width * 2;
-        canvas.height = image.height * 2;
+
+        const originalWidth = image.naturalWidth || image.width;
+        const originalHeight = image.naturalHeight || image.height;
+        const maxWidth = 500;
+
+        const targetWidth = Math.min(originalWidth, maxWidth);
+        const scale = originalWidth > 0 ? targetWidth / originalWidth : 1;
+        const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+        canvas.width = Math.max(1, Math.round(targetWidth));
+        canvas.height = targetHeight;
 
         const ctx = canvas.getContext("2d");
+
         if (!ctx) {
           reject(new Error("No se pudo procesar la imagen"));
           return;
         }
 
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/png"));
+
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
       };
+
       image.onerror = () => reject(new Error("No se pudo cargar el logo"));
       image.src = src;
     });
@@ -1003,6 +1019,7 @@ export function ComplaintsTable({
         orientation: "landscape",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
       let logoDataUrl: string | null = null;
@@ -1016,7 +1033,16 @@ export function ComplaintsTable({
       }
 
       if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", 14, 10, 34, 12);
+        doc.addImage(
+          logoDataUrl,
+          "JPEG",
+          14,
+          10,
+          34,
+          12,
+          undefined,
+          "FAST",
+        );
       }
 
       doc.setFontSize(18);
@@ -1154,10 +1180,10 @@ export function ComplaintsTable({
         showHead: "everyPage",
         pageBreak: "auto",
         rowPageBreak: "avoid",
-        margin: { top: 44, right: 10, bottom: 14, left: 10 },
+        margin: { top: 10, right: 10, bottom: 14, left: 10 },
         styles: {
-          fontSize: isArboladoUser ? 6.2 : 7.2,
-          cellPadding: isArboladoUser ? 1.3 : 1.8,
+          fontSize: isArboladoUser ? 6.1 : isZyVUser ? 7.2 : 6.8,
+          cellPadding: isArboladoUser ? 1.25 : isZyVUser ? 1.8 : 1.5,
           overflow: "linebreak",
           textColor: [51, 65, 85],
           lineColor: [226, 232, 240],
@@ -1174,17 +1200,17 @@ export function ComplaintsTable({
         },
         columnStyles: isArboladoUser
           ? {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 18 },
-              2: { cellWidth: 26 },
-              3: { cellWidth: 65 },
-              4: { cellWidth: 25 },
-              5: { cellWidth: 18 },
-              6: { cellWidth: 30 },
+              0: { cellWidth: 11 },
+              1: { cellWidth: 17 },
+              2: { cellWidth: 24 },
+              3: { cellWidth: 52 },
+              4: { cellWidth: 22 },
+              5: { cellWidth: 16 },
+              6: { cellWidth: 28 },
               7: { cellWidth: 18 },
-              8: { cellWidth: 34 },
-              9: { cellWidth: 24 },
-              10: { cellWidth: 17 },
+              8: { cellWidth: 32 },
+              9: { cellWidth: 22 },
+              10: { cellWidth: 18 },
             }
           : isZyVUser
             ? {
@@ -1199,16 +1225,16 @@ export function ComplaintsTable({
                 8: { cellWidth: 22 },
               }
             : {
-                0: { cellWidth: 12 },
+                0: { cellWidth: 11 },
                 1: { cellWidth: 18 },
-                2: { cellWidth: 28 },
-                3: { cellWidth: 48 },
-                4: { cellWidth: 27 },
-                5: { cellWidth: 30 },
-                6: { cellWidth: 48 },
-                7: { cellWidth: 22 },
-                8: { cellWidth: 42 },
-                9: { cellWidth: 20 },
+                2: { cellWidth: 26 },
+                3: { cellWidth: 42 },
+                4: { cellWidth: 25 },
+                5: { cellWidth: 28 },
+                6: { cellWidth: 42 },
+                7: { cellWidth: 20 },
+                8: { cellWidth: 36 },
+                9: { cellWidth: 19 },
               },
         didParseCell: (data: CellHookData) => {
           const statusColumnIndex = isArboladoUser ? 10 : isZyVUser ? 8 : 9;
@@ -1227,17 +1253,33 @@ export function ComplaintsTable({
             data.cell.styles.lineColor = colors.fillColor;
           }
         },
-        didDrawPage: (data) => {
-          const pageCount = doc.getNumberOfPages();
-          doc.setFontSize(9);
-          doc.setTextColor(100);
-          doc.text(
-            `Página ${data.pageNumber} de ${pageCount}`,
-            doc.internal.pageSize.getWidth() - 28,
-            doc.internal.pageSize.getHeight() - 8,
-          );
-        },
       });
+
+      /*
+       * PIE DE PÁGINA
+       * Se agrega después de generar toda la tabla para conocer
+       * el total real de páginas.
+       */
+      const pdfPageCount = doc.getNumberOfPages();
+
+      for (
+        let pageNumber = 1;
+        pageNumber <= pdfPageCount;
+        pageNumber += 1
+      ) {
+        doc.setPage(pageNumber);
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+
+        doc.text(
+          `Página ${pageNumber} de ${pdfPageCount}`,
+          doc.internal.pageSize.getWidth() - 12,
+          doc.internal.pageSize.getHeight() - 8,
+          {
+            align: "right",
+          },
+        );
+      }
 
       doc.save(
         hasSelectedComplaints
