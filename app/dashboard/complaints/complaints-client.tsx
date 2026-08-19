@@ -759,7 +759,7 @@ export default function ComplaintsClient() {
                 className="h-12 rounded-xl border-border bg-card px-6 font-semibold text-card-foreground shadow-sm transition-all hover:scale-[1.02] hover:bg-muted hover:shadow-md active:scale-[0.98]"
               >
                 <PhoneForwarded className="mr-2 h-5 w-5" />
-                Registrar llamada desviada
+                Registrar consulta derivada
               </Button>
             </div>
           )}

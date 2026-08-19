@@ -24,6 +24,9 @@ import {
   Pencil,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -70,6 +73,8 @@ const ACTION_OPTIONS = [
   "No se pudo derivar",
   "Otro",
 ];
+
+const CALLS_PER_PAGE = 6;
 
 const getLocalDateTimeValue = () => {
   const now = new Date();
@@ -176,6 +181,16 @@ export default function NewCallPage() {
     loadingCalls,
     setLoadingCalls,
   ] = useState(true);
+
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
+
+  const [
+    sortOrder,
+    setSortOrder,
+  ] = useState<"desc" | "asc">("desc");
 
   /*
    * FILTROS
@@ -402,7 +417,7 @@ export default function NewCallPage() {
       }
 
       toast.success(
-        "Llamada desviada registrada correctamente.",
+        "Consulta derivada registrada correctamente.",
       );
 
       setCallerName("");
@@ -444,7 +459,7 @@ export default function NewCallPage() {
           .trim()
           .toLowerCase();
 
-      return calls.filter(
+      const filtered = calls.filter(
         (call) => {
           const callDateValue =
             call.call_datetime ||
@@ -531,6 +546,24 @@ export default function NewCallPage() {
           );
         },
       );
+
+      return [...filtered].sort(
+        (a, b) => {
+          const dateA = new Date(
+            a.call_datetime ||
+              a.created_at,
+          ).getTime();
+
+          const dateB = new Date(
+            b.call_datetime ||
+              b.created_at,
+          ).getTime();
+
+          return sortOrder === "desc"
+            ? dateB - dateA
+            : dateA - dateB;
+        },
+      );
     }, [
       calls,
       searchTerm,
@@ -538,7 +571,180 @@ export default function NewCallPage() {
       actionFilter,
       dateFrom,
       dateTo,
+      sortOrder,
     ]);
+
+  /*
+   * PAGINACIÓN
+   */
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCalls.length / CALLS_PER_PAGE),
+  );
+
+  const paginatedCalls = useMemo(() => {
+    const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
+
+    return filteredCalls.slice(
+      startIndex,
+      startIndex + CALLS_PER_PAGE,
+    );
+  }, [filteredCalls, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchTerm,
+    dateFrom,
+    dateTo,
+    areaFilter,
+    actionFilter,
+    sortOrder,
+  ]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from(
+        { length: totalPages },
+        (_, index) => index + 1,
+      );
+    }
+
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, "ellipsis", totalPages] as const;
+    }
+
+    if (currentPage >= totalPages - 3) {
+      return [
+        1,
+        "ellipsis",
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ] as const;
+    }
+
+    return [
+      1,
+      "ellipsis",
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      "ellipsis",
+      totalPages,
+    ] as const;
+  }, [currentPage, totalPages]);
+
+  /*
+   * NUMERACIÓN CRONOLÓGICA
+   * La consulta más vieja es #1 y las siguientes continúan en orden.
+   * Esta numeración no cambia al ordenar ni al filtrar.
+   */
+  const callNumberById = useMemo(() => {
+    const chronologicalCalls = [...calls].sort((a, b) => {
+      const dateA = new Date(
+        a.call_datetime || a.created_at,
+      ).getTime();
+
+      const dateB = new Date(
+        b.call_datetime || b.created_at,
+      ).getTime();
+
+      if (dateA !== dateB) {
+        return dateA - dateB;
+      }
+
+      return a.id - b.id;
+    });
+
+    return new Map(
+      chronologicalCalls.map((call, index) => [
+        call.id,
+        index + 1,
+      ]),
+    );
+  }, [calls]);
+
+  /*
+   * MINI ESTADÍSTICAS
+   */
+  const callStats = useMemo(() => {
+    const now = new Date();
+
+    let todayCount = 0;
+    let monthCount = 0;
+
+    const areas = new Map<
+      string,
+      {
+        label: string;
+        count: number;
+      }
+    >();
+
+    calls.forEach((call) => {
+      const callDate = new Date(
+        call.call_datetime || call.created_at,
+      );
+
+      if (!Number.isNaN(callDate.getTime())) {
+        const isToday =
+          callDate.getFullYear() === now.getFullYear() &&
+          callDate.getMonth() === now.getMonth() &&
+          callDate.getDate() === now.getDate();
+
+        const isThisMonth =
+          callDate.getFullYear() === now.getFullYear() &&
+          callDate.getMonth() === now.getMonth();
+
+        if (isToday) {
+          todayCount += 1;
+        }
+
+        if (isThisMonth) {
+          monthCount += 1;
+        }
+      }
+
+      const areaLabel =
+        call.destination_area?.trim();
+
+      if (areaLabel) {
+        const areaKey = areaLabel.toLowerCase();
+
+        const current = areas.get(areaKey);
+
+        if (current) {
+          current.count += 1;
+        } else {
+          areas.set(areaKey, {
+            label: areaLabel,
+            count: 1,
+          });
+        }
+      }
+    });
+
+    const topArea =
+      Array.from(areas.values()).sort(
+        (a, b) => b.count - a.count,
+      )[0] || null;
+
+    return {
+      total: calls.length,
+      today: todayCount,
+      thisMonth: monthCount,
+      topArea,
+    };
+  }, [calls]);
 
   /*
    * LIMPIAR FILTROS
@@ -549,6 +755,7 @@ export default function NewCallPage() {
     setDateTo("");
     setAreaFilter("");
     setActionFilter("");
+    setCurrentPage(1);
   };
 
   const hasFilters =
@@ -888,7 +1095,7 @@ export default function NewCallPage() {
       );
 
       doc.text(
-        "Registro de Llamadas Desviadas",
+        "Registro de Consultas Derivadas",
         52,
         15,
       );
@@ -1152,7 +1359,7 @@ export default function NewCallPage() {
       );
 
       toast.success(
-        "PDF de llamadas exportado correctamente.",
+        "PDF de consultas derivadas exportado correctamente.",
       );
     } catch (error) {
       console.error(
@@ -1193,11 +1400,11 @@ export default function NewCallPage() {
 
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                Registrar llamada desviada
+                Registrar consulta derivada
               </h1>
 
               <p className="mt-1 text-muted-foreground">
-                Registrá el motivo de una llamada que no corresponde a un reclamo.
+                Registrá el motivo de una consulta que no corresponde a un reclamo.
               </p>
             </div>
           </div>
@@ -1208,7 +1415,7 @@ export default function NewCallPage() {
           <Card className="rounded-2xl border-border bg-card shadow-sm">
             <CardHeader className="border-b border-border px-5 py-4">
               <CardTitle className="text-lg">
-                Datos de la llamada
+                Datos de la consulta 
               </CardTitle>
             </CardHeader>
 
@@ -1276,7 +1483,7 @@ export default function NewCallPage() {
                 >
                   <ClipboardList className="h-4 w-4 text-muted-foreground" />
 
-                  Motivo de la llamada
+                  Motivo de la consulta
 
                   <span className="text-red-500">
                     *
@@ -1412,11 +1619,11 @@ export default function NewCallPage() {
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <PhoneCall className="h-5 w-5 text-[#00A27F]" />
 
-                  Llamadas registradas
+                  Consultas registradas
                 </CardTitle>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Historial de llamadas desviadas registradas en el sistema.
+                  Historial de consultas derivadas registradas en el sistema.
                 </p>
               </div>
 
@@ -1427,6 +1634,24 @@ export default function NewCallPage() {
                     ? "registro"
                     : "registros"}
                 </span>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setSortOrder((current) =>
+                      current === "desc"
+                        ? "asc"
+                        : "desc",
+                    )
+                  }
+                  className="h-10 rounded-xl"
+                >
+                  <ArrowUpDown className="mr-2 h-4 w-4" />
+                  {sortOrder === "desc"
+                    ? "Más nuevas primero"
+                    : "Más viejas primero"}
+                </Button>
 
                 <Button
                   type="button"
@@ -1446,6 +1671,90 @@ export default function NewCallPage() {
           </CardHeader>
 
           <CardContent className="space-y-5 p-5">
+            {/* MINI ESTADÍSTICAS */}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Total registradas
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.total}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <PhoneCall className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Registradas hoy
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.today}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <CalendarDays className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Este mes
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {callStats.thisMonth}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <ClipboardList className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Área más consultada
+                    </p>
+
+                    <p className="mt-1 truncate text-lg font-bold text-foreground">
+                      {callStats.topArea?.label || "Sin datos"}
+                    </p>
+
+                    {callStats.topArea && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {callStats.topArea.count}{" "}
+                        {callStats.topArea.count === 1
+                          ? "consulta"
+                          : "consultas"}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 rounded-xl bg-[#00A27F]/10 p-2.5">
+                    <Building2 className="h-5 w-5 text-[#00A27F]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* FILTROS */}
             <div className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
               <div className="flex items-center gap-2 font-semibold">
@@ -1597,7 +1906,7 @@ export default function NewCallPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredCalls.map(
+                {paginatedCalls.map(
                   (call, index) => (
                     <div
                       key={call.id}
@@ -1666,7 +1975,7 @@ export default function NewCallPage() {
 
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="inline-flex rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                            #{index + 1}
+                            #{callNumberById.get(call.id) ?? "-"}
                           </span>
 
                           <Button
@@ -1714,6 +2023,93 @@ export default function NewCallPage() {
                       </div>
                     </div>
                   ),
+                )}
+
+                {totalPages > 1 && (
+                  <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Página{" "}
+                      <span className="font-semibold text-foreground">
+                        {currentPage}
+                      </span>{" "}
+                      de{" "}
+                      <span className="font-semibold text-foreground">
+                        {totalPages}
+                      </span>
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentPage((page) =>
+                            Math.max(1, page - 1),
+                          )
+                        }
+                        disabled={currentPage <= 1}
+                        className="h-9 w-9 rounded-xl"
+                        aria-label="Página anterior"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      {paginationItems.map((item, index) =>
+                        item === "ellipsis" ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="flex h-9 min-w-7 items-center justify-center px-1 text-sm font-medium text-muted-foreground"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <Button
+                            key={item}
+                            type="button"
+                            variant={
+                              currentPage === item
+                                ? "default"
+                                : "outline"
+                            }
+                            size="icon"
+                            onClick={() =>
+                              setCurrentPage(item)
+                            }
+                            className={`h-9 w-9 rounded-xl ${
+                              currentPage === item
+                                ? "bg-[#00A27F] text-white hover:bg-[#008568]"
+                                : ""
+                            }`}
+                            aria-label={`Ir a la página ${item}`}
+                            aria-current={
+                              currentPage === item
+                                ? "page"
+                                : undefined
+                            }
+                          >
+                            {item}
+                          </Button>
+                        ),
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentPage((page) =>
+                            Math.min(totalPages, page + 1),
+                          )
+                        }
+                        disabled={currentPage >= totalPages}
+                        className="h-9 w-9 rounded-xl"
+                        aria-label="Página siguiente"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

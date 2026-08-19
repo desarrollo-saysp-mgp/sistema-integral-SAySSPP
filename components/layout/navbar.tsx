@@ -276,11 +276,11 @@ export function Navbar() {
                             <div className="flex items-center gap-2">
                               <PhoneForwarded className="h-4 w-4 text-[#00A27F]" />
                               <span className="font-medium">
-                                Registrar llamada desviada
+                                Registrar consulta derivada
                               </span>
                             </div>
                             <p className="ml-6 text-xs text-muted-foreground">
-                              Registrar llamadas que corresponden a otras áreas
+                              Registrar consultas que corresponden a otras áreas
                             </p>
                           </div>
                         </Link>
@@ -562,7 +562,7 @@ export function Navbar() {
                         )}
                       >
                         <PhoneForwarded className="h-5 w-5" />
-                        <span>Registrar llamada desviada</span>
+                        <span>Registrar consulta derivada</span>
                       </Link>
                     )}
 
