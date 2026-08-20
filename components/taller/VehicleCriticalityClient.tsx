@@ -102,6 +102,7 @@ const normalizeVehicleCode = (value: unknown) =>
 const RETIRED_VEHICLES = [
   { code: "S.P.3", vehicle: "F-100 doble cabina roja", licensePlate: "WOE320" },
   { code: "S.P.4", vehicle: "Chevrolet C10 Pick Up", licensePlate: "WWE612" },
+  { code: "S.P.9", vehicle: "Fiat Strada Trekking", licensePlate: "ODU636" },
   { code: "R.E. P.C.1", vehicle: "Pala JCB Deutz", licensePlate: "BLS045" },
   { code: "R.E. P.C.2", vehicle: "Pala JCB Deutz", licensePlate: "BXI010" },
   { code: "R.E. P.C.3", vehicle: "Pala Yineng", licensePlate: "CWV092" },
