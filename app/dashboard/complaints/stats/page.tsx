@@ -144,29 +144,29 @@ const getServiceDirectionName = (serviceName?: string | null) => {
 const getResolvedPalette = (percentage: number) => {
   if (percentage >= 85) {
     return {
-      card: "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100",
-      text: "text-emerald-700",
-      icon: "text-emerald-600",
-      chip: "bg-emerald-100 text-emerald-700",
+      card: "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 dark:border-emerald-900/50 dark:from-emerald-950/40 dark:via-card dark:to-emerald-950/30",
+      text: "text-emerald-700 dark:text-emerald-400",
+      icon: "text-emerald-600 dark:text-emerald-400",
+      chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
       bar: "bg-emerald-500",
     };
   }
 
   if (percentage >= 65) {
     return {
-      card: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100",
-      text: "text-amber-700",
-      icon: "text-amber-600",
-      chip: "bg-amber-100 text-amber-700",
+      card: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100 dark:border-amber-900/50 dark:from-amber-950/40 dark:via-card dark:to-amber-950/30",
+      text: "text-amber-700 dark:text-amber-400",
+      icon: "text-amber-600 dark:text-amber-400",
+      chip: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
       bar: "bg-amber-500",
     };
   }
 
   return {
-    card: "border-red-200 bg-gradient-to-br from-red-50 via-white to-red-100",
-    text: "text-red-700",
-    icon: "text-red-600",
-    chip: "bg-red-100 text-red-700",
+    card: "border-red-200 bg-gradient-to-br from-red-50 via-white to-red-100 dark:border-red-900/50 dark:from-red-950/40 dark:via-card dark:to-red-950/30",
+    text: "text-red-700 dark:text-red-400",
+    icon: "text-red-600 dark:text-red-400",
+    chip: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
     bar: "bg-red-500",
   };
 };
@@ -177,9 +177,9 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("servicios publicos")) {
     return {
       bar: "bg-rose-500",
-      text: "text-rose-700",
-      soft: "bg-rose-50",
-      border: "border-rose-200",
+      text: "text-rose-700 dark:text-rose-400",
+      soft: "bg-rose-50 dark:bg-rose-950/30",
+      border: "border-rose-200 dark:border-rose-900/50",
       hover: "group-hover:bg-rose-500",
     };
   }
@@ -187,9 +187,9 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("girsu")) {
     return {
       bar: "bg-orange-400",
-      text: "text-orange-700",
-      soft: "bg-orange-50",
-      border: "border-orange-200",
+      text: "text-orange-700 dark:text-orange-400",
+      soft: "bg-orange-50 dark:bg-orange-950/30",
+      border: "border-orange-200 dark:border-orange-900/50",
       hover: "group-hover:bg-orange-400",
     };
   }
@@ -197,9 +197,9 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("arbolado")) {
     return {
       bar: "bg-emerald-500",
-      text: "text-emerald-700",
-      soft: "bg-emerald-50",
-      border: "border-emerald-200",
+      text: "text-emerald-700 dark:text-emerald-400",
+      soft: "bg-emerald-50 dark:bg-emerald-950/30",
+      border: "border-emerald-200 dark:border-emerald-900/50",
       hover: "group-hover:bg-emerald-500",
     };
   }
@@ -207,9 +207,9 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("zoonosis") || normalized.includes("vectores")) {
     return {
       bar: "bg-sky-500",
-      text: "text-sky-700",
-      soft: "bg-sky-50",
-      border: "border-sky-200",
+      text: "text-sky-700 dark:text-sky-400",
+      soft: "bg-sky-50 dark:bg-sky-950/30",
+      border: "border-sky-200 dark:border-sky-900/50",
       hover: "group-hover:bg-sky-500",
     };
   }
@@ -217,9 +217,9 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("resuelto") && !normalized.includes("no resuelto")) {
     return {
       bar: "bg-emerald-500",
-      text: "text-emerald-700",
-      soft: "bg-emerald-50",
-      border: "border-emerald-200",
+      text: "text-emerald-700 dark:text-emerald-400",
+      soft: "bg-emerald-50 dark:bg-emerald-950/30",
+      border: "border-emerald-200 dark:border-emerald-900/50",
       hover: "group-hover:bg-emerald-500",
     };
   }
@@ -227,19 +227,19 @@ const getStatPalette = (name: string, index = 0) => {
   if (normalized.includes("proceso")) {
     return {
       bar: "bg-amber-500",
-      text: "text-amber-700",
-      soft: "bg-amber-50",
-      border: "border-amber-200",
+      text: "text-amber-700 dark:text-amber-400",
+      soft: "bg-amber-50 dark:bg-amber-950/30",
+      border: "border-amber-200 dark:border-amber-900/50",
       hover: "group-hover:bg-amber-500",
     };
   }
 
   const palettes = [
-    { bar: "bg-[#00A27F]", text: "text-[#00A27F]", soft: "bg-[#00A27F]/10", border: "border-[#00A27F]/20", hover: "group-hover:bg-[#008568]" },
-    { bar: "bg-violet-500", text: "text-violet-700", soft: "bg-violet-50", border: "border-violet-200", hover: "group-hover:bg-violet-500" },
-    { bar: "bg-cyan-500", text: "text-cyan-700", soft: "bg-cyan-50", border: "border-cyan-200", hover: "group-hover:bg-cyan-500" },
-    { bar: "bg-pink-500", text: "text-pink-700", soft: "bg-pink-50", border: "border-pink-200", hover: "group-hover:bg-pink-500" },
-    { bar: "bg-lime-500", text: "text-lime-700", soft: "bg-lime-50", border: "border-lime-200", hover: "group-hover:bg-lime-500" },
+    { bar: "bg-[#00A27F]", text: "text-[#00A27F] dark:text-emerald-400", soft: "bg-[#00A27F]/10 dark:bg-[#00A27F]/15", border: "border-[#00A27F]/20 dark:border-[#00A27F]/30", hover: "group-hover:bg-[#008568]" },
+    { bar: "bg-violet-500", text: "text-violet-700 dark:text-violet-400", soft: "bg-violet-50 dark:bg-violet-950/30", border: "border-violet-200 dark:border-violet-900/50", hover: "group-hover:bg-violet-500" },
+    { bar: "bg-cyan-500", text: "text-cyan-700 dark:text-cyan-400", soft: "bg-cyan-50 dark:bg-cyan-950/30", border: "border-cyan-200 dark:border-cyan-900/50", hover: "group-hover:bg-cyan-500" },
+    { bar: "bg-pink-500", text: "text-pink-700 dark:text-pink-400", soft: "bg-pink-50 dark:bg-pink-950/30", border: "border-pink-200 dark:border-pink-900/50", hover: "group-hover:bg-pink-500" },
+    { bar: "bg-lime-500", text: "text-lime-700 dark:text-lime-400", soft: "bg-lime-50 dark:bg-lime-950/30", border: "border-lime-200 dark:border-lime-900/50", hover: "group-hover:bg-lime-500" },
   ];
 
   return palettes[index % palettes.length];
@@ -400,7 +400,7 @@ function StatBars({
                     </span>
                   </div>
 
-                  <div className="h-3 overflow-hidden rounded-full bg-white/80 shadow-inner">
+                  <div className="h-3 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-white/10">
                     <div
                       className={`h-full rounded-full transition-all ${palette.bar} ${palette.hover}`}
                       style={{ width: `${percentage}%` }}
@@ -1693,12 +1693,12 @@ export default function StatsPage() {
         </Card>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <Card className="rounded-2xl border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-card-foreground shadow-sm">
+          <Card className="rounded-2xl border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-card-foreground shadow-sm dark:border-sky-900/50 dark:from-sky-950/40 dark:via-card dark:to-cyan-950/30">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-sky-900">
+              <CardTitle className="text-sm font-bold text-sky-900 dark:text-sky-200">
                 Total analizado
               </CardTitle>
-              <BarChart3 className="h-5 w-5 text-sky-600" />
+              <BarChart3 className="h-5 w-5 text-sky-600 dark:text-sky-400" />
             </CardHeader>
 
             <CardContent>
@@ -1717,12 +1717,12 @@ export default function StatsPage() {
             onClick={() => openDetailModal("status", { name: "Resuelto", count: stats?.resolvedCount ?? 0 })}
             className="text-left disabled:cursor-default"
           >
-            <Card className="h-full rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 text-card-foreground shadow-sm transition hover:border-emerald-400 hover:shadow-md">
+            <Card className="h-full rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 text-card-foreground shadow-sm transition hover:border-emerald-400 hover:shadow-md dark:border-emerald-900/50 dark:from-emerald-950/40 dark:via-card dark:to-emerald-950/30 dark:hover:border-emerald-700">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-bold text-emerald-900">
+                <CardTitle className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
                   Reclamos resueltos
                 </CardTitle>
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
+                <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               </CardHeader>
 
               <CardContent>
@@ -1742,12 +1742,12 @@ export default function StatsPage() {
             onClick={() => openDetailModal("status", { name: "En proceso", count: stats?.openCount ?? 0 })}
             className="text-left disabled:cursor-default"
           >
-            <Card className="h-full rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 text-card-foreground shadow-sm transition hover:border-amber-400 hover:shadow-md">
+            <Card className="h-full rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 text-card-foreground shadow-sm transition hover:border-amber-400 hover:shadow-md dark:border-amber-900/50 dark:from-amber-950/40 dark:via-card dark:to-yellow-950/30 dark:hover:border-amber-700">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-bold text-amber-900">
+                <CardTitle className="text-sm font-bold text-amber-900 dark:text-amber-200">
                   Reclamos abiertos
                 </CardTitle>
-                <Clock3 className="h-5 w-5 text-amber-600" />
+                <Clock3 className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </CardHeader>
 
               <CardContent>
@@ -1785,7 +1785,7 @@ export default function StatsPage() {
               >
                 {loading ? "..." : `${stats?.resolvedPercentage ?? 0}%`}
               </div>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/80 shadow-inner">
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-white/10">
                 <div
                   className={`h-full rounded-full ${getResolvedPalette(
                     stats?.resolvedPercentage ?? 0,
@@ -1817,7 +1817,7 @@ export default function StatsPage() {
             }
             className="text-left disabled:cursor-default"
           >
-            <Card className="h-full rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 text-card-foreground shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <Card className="h-full rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 text-card-foreground shadow-sm transition hover:border-violet-400 hover:shadow-md dark:border-violet-900/50 dark:from-violet-950/40 dark:via-card dark:to-fuchsia-950/30 dark:hover:border-violet-700">
               <CardHeader className="flex flex-row items-center gap-2 pb-2">
                 <Clock3 className="h-5 w-5 text-[#00A27F]" />
                 <CardTitle className="text-sm font-bold text-foreground">
