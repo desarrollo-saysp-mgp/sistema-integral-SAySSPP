@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+
 import { FichaVehiculoClient } from "./ficha-vehiculo-client";
 
 const normalizeText = (value: unknown) =>
@@ -39,8 +40,10 @@ type Vehicle = {
 
   primary_driver_1: string | null;
   primary_driver_2: string | null;
+  backup_driver: string | null;
 
   image_path: string | null;
+  image_thumb_path: string | null;
 
   active: boolean;
 
