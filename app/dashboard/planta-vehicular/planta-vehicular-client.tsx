@@ -243,6 +243,32 @@ const IMAGE_URL_CACHE_KEY =
 const FILTERS_STORAGE_KEY =
   "planta-vehicular-filters-v1";
 
+type VehicleSortOption =
+  | "code_asc"
+  | "code_desc"
+  | "criticality_desc"
+  | "criticality_asc"
+  | "vehicle_asc"
+  | "year_desc"
+  | "year_asc";
+
+const DEFAULT_SORT: VehicleSortOption =
+  "code_asc";
+
+const isVehicleSortOption = (
+  value: unknown,
+): value is VehicleSortOption => {
+  return [
+    "code_asc",
+    "code_desc",
+    "criticality_desc",
+    "criticality_asc",
+    "vehicle_asc",
+    "year_desc",
+    "year_asc",
+  ].includes(String(value || ""));
+};
+
 type VehicleFiltersState = {
   code: string;
   plate: string;
@@ -250,6 +276,7 @@ type VehicleFiltersState = {
   department: string;
   type: string;
   active: string;
+  sort: VehicleSortOption;
 };
 
 type CachedImageUrl = {
@@ -893,6 +920,11 @@ export function PlantaVehicularClient({
   const [activeFilter, setActiveFilter] =
     useState("Activos");
 
+  const [sortOption, setSortOption] =
+    useState<VehicleSortOption>(
+      DEFAULT_SORT,
+    );
+
   const [
     filtersInitialized,
     setFiltersInitialized,
@@ -930,6 +962,7 @@ export function PlantaVehicularClient({
         "direccion",
         "tipo",
         "situacion",
+        "orden",
       ].some((key) => params.has(key));
 
     let nextFilters: VehicleFiltersState = {
@@ -939,6 +972,7 @@ export function PlantaVehicularClient({
       department: ALL_VALUE,
       type: ALL_VALUE,
       active: "Activos",
+      sort: DEFAULT_SORT,
     };
 
     if (hasUrlFilters) {
@@ -961,6 +995,13 @@ export function PlantaVehicularClient({
         active:
           params.get("situacion") ||
           "Activos",
+        sort: isVehicleSortOption(
+          params.get("orden"),
+        )
+          ? (params.get(
+              "orden",
+            ) as VehicleSortOption)
+          : DEFAULT_SORT,
       };
     } else {
       try {
@@ -994,6 +1035,11 @@ export function PlantaVehicularClient({
             active:
               parsed.active ||
               "Activos",
+            sort: isVehicleSortOption(
+              parsed.sort,
+            )
+              ? parsed.sort
+              : DEFAULT_SORT,
           };
         }
       } catch {
@@ -1011,6 +1057,7 @@ export function PlantaVehicularClient({
     );
     setTypeFilter(nextFilters.type);
     setActiveFilter(nextFilters.active);
+    setSortOption(nextFilters.sort);
 
     setFiltersInitialized(true);
   }, []);
@@ -1030,6 +1077,7 @@ export function PlantaVehicularClient({
       department: departmentFilter,
       type: typeFilter,
       active: activeFilter,
+      sort: sortOption,
     };
 
     try {
@@ -1090,6 +1138,13 @@ export function PlantaVehicularClient({
       );
     }
 
+    if (sortOption !== DEFAULT_SORT) {
+      params.set(
+        "orden",
+        sortOption,
+      );
+    }
+
     const query =
       params.toString();
 
@@ -1116,6 +1171,7 @@ export function PlantaVehicularClient({
     departmentFilter,
     typeFilter,
     activeFilter,
+    sortOption,
     pathname,
     router,
   ]);
@@ -1468,7 +1524,7 @@ export function PlantaVehicularClient({
 
   const filteredVehicles =
     useMemo(() => {
-      return vehicles.filter(
+      const filtered = vehicles.filter(
         (vehicle) => {
           const vehicleStatus =
             getStatusLabel(
@@ -1541,6 +1597,143 @@ export function PlantaVehicularClient({
           );
         },
       );
+
+      const compareCode = (
+        a: Vehicle,
+        b: Vehicle,
+      ) =>
+        String(a.code || "").localeCompare(
+          String(b.code || ""),
+          "es",
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        );
+
+      const getCriticalityTotal = (
+        vehicle: Vehicle,
+      ) => {
+        const row =
+          criticalityByVehicle[
+            normalizeVehicleCode(
+              vehicle.code,
+            )
+          ];
+
+        return (
+          row?.total_criticality ??
+          null
+        );
+      };
+
+      return [...filtered].sort(
+        (a, b) => {
+          switch (sortOption) {
+            case "code_desc":
+              return -compareCode(a, b);
+
+            case "criticality_desc": {
+              const aValue =
+                getCriticalityTotal(a);
+              const bValue =
+                getCriticalityTotal(b);
+
+              if (
+                aValue === null &&
+                bValue === null
+              ) {
+                return compareCode(a, b);
+              }
+
+              if (aValue === null) {
+                return 1;
+              }
+
+              if (bValue === null) {
+                return -1;
+              }
+
+              return (
+                bValue - aValue ||
+                compareCode(a, b)
+              );
+            }
+
+            case "criticality_asc": {
+              const aValue =
+                getCriticalityTotal(a);
+              const bValue =
+                getCriticalityTotal(b);
+
+              if (
+                aValue === null &&
+                bValue === null
+              ) {
+                return compareCode(a, b);
+              }
+
+              if (aValue === null) {
+                return 1;
+              }
+
+              if (bValue === null) {
+                return -1;
+              }
+
+              return (
+                aValue - bValue ||
+                compareCode(a, b)
+              );
+            }
+
+            case "vehicle_asc":
+              return (
+                String(
+                  a.vehicle || "",
+                ).localeCompare(
+                  String(
+                    b.vehicle || "",
+                  ),
+                  "es",
+                  {
+                    numeric: true,
+                    sensitivity: "base",
+                  },
+                ) ||
+                compareCode(a, b)
+              );
+
+            case "year_desc": {
+              const aYear =
+                a.year ?? -Infinity;
+              const bYear =
+                b.year ?? -Infinity;
+
+              return (
+                bYear - aYear ||
+                compareCode(a, b)
+              );
+            }
+
+            case "year_asc": {
+              const aYear =
+                a.year ?? Infinity;
+              const bYear =
+                b.year ?? Infinity;
+
+              return (
+                aYear - bYear ||
+                compareCode(a, b)
+              );
+            }
+
+            case "code_asc":
+            default:
+              return compareCode(a, b);
+          }
+        },
+      );
     }, [
       vehicles,
       codeFilter,
@@ -1549,6 +1742,8 @@ export function PlantaVehicularClient({
       departmentFilter,
       typeFilter,
       activeFilter,
+      sortOption,
+      criticalityByVehicle,
     ]);
 
 
@@ -1655,6 +1850,7 @@ export function PlantaVehicularClient({
     setDepartmentFilter(ALL_VALUE);
     setTypeFilter(ALL_VALUE);
     setActiveFilter("Activos");
+    setSortOption(DEFAULT_SORT);
 
     if (typeof window !== "undefined") {
       try {
@@ -1673,7 +1869,8 @@ export function PlantaVehicularClient({
     statusFilter !== ALL_VALUE ||
     departmentFilter !== ALL_VALUE ||
     typeFilter !== ALL_VALUE ||
-    activeFilter !== "Activos";
+    activeFilter !== "Activos" ||
+    sortOption !== DEFAULT_SORT;
 
   const getPdfFilterSummary = () => {
     const filters: string[] = [];
@@ -2432,9 +2629,9 @@ export function PlantaVehicularClient({
               FILTROS
           ====================================================== */}
 
-          <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 xl:grid-cols-12">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 xl:grid-cols-[minmax(150px,0.9fr)_minmax(150px,0.9fr)_minmax(220px,1.35fr)_minmax(180px,1.05fr)_minmax(180px,1.05fr)_minmax(130px,0.75fr)_minmax(220px,1.2fr)]">
             {/* CÓDIGO */}
-            <div className="min-w-0 space-y-1.5 xl:col-span-2">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Código
               </Label>
@@ -2449,7 +2646,7 @@ export function PlantaVehicularClient({
             </div>
 
             {/* DOMINIO */}
-            <div className="min-w-0 space-y-1.5 xl:col-span-2">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Dominio
               </Label>
@@ -2464,7 +2661,7 @@ export function PlantaVehicularClient({
             </div>
 
             {/* ESTADO OPERATIVO */}
-            <div className="min-w-0 space-y-1.5 sm:col-span-2 xl:col-span-3">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Estado operativo
               </Label>
@@ -2495,7 +2692,7 @@ export function PlantaVehicularClient({
             </div>
 
             {/* DIRECCIÓN */}
-            <div className="min-w-0 space-y-1.5 xl:col-span-2">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Dirección
               </Label>
@@ -2526,7 +2723,7 @@ export function PlantaVehicularClient({
             </div>
 
             {/* TIPO */}
-            <div className="min-w-0 space-y-1.5 xl:col-span-2">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Tipo de vehículo
               </Label>
@@ -2557,7 +2754,7 @@ export function PlantaVehicularClient({
             </div>
 
             {/* SITUACIÓN */}
-            <div className="min-w-0 space-y-1.5 xl:col-span-1">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
                 Situación
               </Label>
@@ -2581,6 +2778,56 @@ export function PlantaVehicularClient({
 
                   <SelectItem value="Todos">
                     Todos
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ORDENAR */}
+            <div className="min-w-0 space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Ordenar por
+              </Label>
+
+              <Select
+                value={sortOption}
+                onValueChange={(value) =>
+                  setSortOption(
+                    value as VehicleSortOption,
+                  )
+                }
+              >
+                <SelectTrigger className="w-full min-w-0 [&>span]:block [&>span]:truncate">
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="code_asc">
+                    Código (A → Z)
+                  </SelectItem>
+
+                  <SelectItem value="code_desc">
+                    Código (Z → A)
+                  </SelectItem>
+
+                  <SelectItem value="criticality_desc">
+                    Criticidad (mayor → menor)
+                  </SelectItem>
+
+                  <SelectItem value="criticality_asc">
+                    Criticidad (menor → mayor)
+                  </SelectItem>
+
+                  <SelectItem value="vehicle_asc">
+                    Vehículo (A → Z)
+                  </SelectItem>
+
+                  <SelectItem value="year_desc">
+                    Año (más nuevo primero)
+                  </SelectItem>
+
+                  <SelectItem value="year_asc">
+                    Año (más antiguo primero)
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -2713,6 +2960,8 @@ export function PlantaVehicularClient({
                           type: typeFilter,
                           active:
                             activeFilter,
+                          sort:
+                            sortOption,
                         } satisfies VehicleFiltersState),
                       );
                     } catch {
@@ -2823,10 +3072,27 @@ function VehicleCard({
       vehicle,
     );
 
+  const handleCardKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
+      event.preventDefault();
+      onView();
+    }
+  };
+
   return (
     <Card
+      role="button"
+      tabIndex={0}
+      aria-label={`Ver ficha de ${vehicle.code} - ${vehicle.vehicle}`}
+      onClick={onView}
+      onKeyDown={handleCardKeyDown}
       className={[
-        "group overflow-hidden rounded-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg",
+        "group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
         !vehicle.active
           ? "border-red-200 dark:border-red-900"
           : "",
@@ -2849,7 +3115,7 @@ function VehicleCard({
                   ? "high"
                   : "auto"
               }
-              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+              className="pointer-events-none h-full w-full select-none object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
             />
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -2958,7 +3224,7 @@ function VehicleCard({
         )}
       </CardHeader>
 
-      <CardContent className="space-y-3 px-3 pb-3 pt-0">
+      <CardContent className="flex flex-1 flex-col px-3 pb-3 pt-0">
         <div className="space-y-1.5 text-[13px]">
           <VehicleInfoRow
             label="Dominio"
@@ -3003,8 +3269,11 @@ function VehicleCard({
         <Button
           type="button"
           variant="outline"
-          onClick={onView}
-          className="h-9 w-full transition-colors duration-300 group-hover:border-primary/40 group-hover:bg-primary/5"
+          onClick={(event) => {
+            event.stopPropagation();
+            onView();
+          }}
+          className="mt-auto h-9 w-full transition-colors duration-300 group-hover:border-primary/40 group-hover:bg-primary/5"
         >
           Ver ficha
         </Button>
