@@ -291,6 +291,10 @@ export function WorkOrdersClient() {
   const [driverFilter, setDriverFilter] = useState(
     () => searchParams.get("driver") || ALL_VALUE,
   );
+
+  const [maintenanceOnly, setMaintenanceOnly] = useState(
+    () => searchParams.get("maintenance") === "1",
+  );
   const [sortField, setSortField] = useState<SortField>(() => {
     const value = searchParams.get("sort_by");
 
@@ -319,6 +323,7 @@ export function WorkOrdersClient() {
       vehicleCodeFilter,
       failureTypeFilter,
       driverFilter,
+      maintenanceOnly ? "maintenance" : "",
       sortField,
       sortDirection,
     ].join("||");
@@ -333,6 +338,7 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    maintenanceOnly,
     sortField,
     sortDirection,
   ]);
@@ -352,6 +358,10 @@ export function WorkOrdersClient() {
     setParamIfValid(params, "code", vehicleCodeFilter, ALL_VALUE);
     setParamIfValid(params, "failure", failureTypeFilter, ALL_VALUE);
     setParamIfValid(params, "driver", driverFilter, ALL_VALUE);
+
+    if (maintenanceOnly) {
+      params.set("maintenance", "1");
+    }
 
     if (sortField !== "date") {
       params.set("sort_by", sortField);
@@ -377,6 +387,7 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    maintenanceOnly,
     sortField,
     sortDirection,
     currentPage,
@@ -514,6 +525,11 @@ export function WorkOrdersClient() {
         driverFilter === ALL_VALUE ||
         normalizeText(order.driver) === normalizeText(driverFilter);
 
+      const matchesMaintenance =
+        !maintenanceOnly ||
+        normalizeText(order.failure_type).includes("mantenimiento") ||
+        normalizeText(order.repair_type).includes("mantenimiento");
+
       const matchesDate = isDateInRange(
         order.entry_date,
         dateFromFilter,
@@ -529,6 +545,7 @@ export function WorkOrdersClient() {
         matchesVehicleCode &&
         matchesFailureType &&
         matchesDriver &&
+        matchesMaintenance &&
         matchesDate
       );
     });
@@ -564,6 +581,7 @@ export function WorkOrdersClient() {
     vehicleCodeFilter,
     failureTypeFilter,
     driverFilter,
+    maintenanceOnly,
     sortField,
     sortDirection,
   ]);
@@ -645,6 +663,7 @@ export function WorkOrdersClient() {
     vehicleCodeFilter !== ALL_VALUE ||
     failureTypeFilter !== ALL_VALUE ||
     driverFilter !== ALL_VALUE ||
+    maintenanceOnly ||
     sortField !== "date" ||
     sortDirection !== "desc";
 
@@ -659,6 +678,7 @@ export function WorkOrdersClient() {
     setVehicleCodeFilter(ALL_VALUE);
     setFailureTypeFilter(ALL_VALUE);
     setDriverFilter(ALL_VALUE);
+    setMaintenanceOnly(false);
     setSortField("date");
     setSortDirection("desc");
     setSelectedOrderIds([]);
@@ -1192,6 +1212,30 @@ export function WorkOrdersClient() {
             </div>
 
             <div className="space-y-3">
+              {maintenanceOnly && (
+                <div className="flex flex-col gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-900/40">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Gauge className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+
+                    <span>
+                      Mostrando únicamente OT clasificadas como{" "}
+                      <strong>Mantenimiento</strong>.
+                    </span>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMaintenanceOnly(false)}
+                    className="h-8 w-fit"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Quitar filtro
+                  </Button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:items-end">
                 <div className="space-y-1 md:col-span-2 xl:col-span-3">
                   <p className="text-xs font-medium text-muted-foreground">

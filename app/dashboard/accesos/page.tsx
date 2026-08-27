@@ -15,6 +15,7 @@ type ModuleKey =
   | "purchase_requests"
   | "general_dashboard"
   | "work_orders"
+  | "vehicle_fleet"
   | "stock_inventory"
   | "rnu"
   | "personnel";
@@ -57,6 +58,15 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     title: "Órdenes de Trabajo",
     description: "Carga y seguimiento de órdenes de trabajo del taller.",
     href: "/dashboard/taller/ordenes-trabajo",
+    available: true,
+  },
+
+  vehicle_fleet: {
+    key: "vehicle_fleet",
+    title: "Planta Vehicular",
+    description:
+      "Administración, consulta y seguimiento de la flota vehicular.",
+    href: "/dashboard/planta-vehicular",
     available: true,
   },
 
@@ -179,6 +189,10 @@ export default async function AccesosPage() {
     (item) => item.key === "personnel",
   );
 
+  const alreadyHasVehicleFleet = accesses.some(
+    (item) => item.key === "vehicle_fleet",
+  );
+
   /*
    * Admin/AdminLectura: ven Tablero General.
    * GIRSU: ve Tablero GIRSU.
@@ -222,6 +236,23 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.personnel);
   }
 
+  /*
+   * Planta Vehicular disponible para:
+   *
+   * - Admin
+   * - AdminLectura
+   * - Taller
+   *
+   * Los permisos de modificación se controlan además
+   * mediante UserContext y RLS en Supabase.
+   */
+  if (
+    (hasAllowedRole || isTallerUser) &&
+    !alreadyHasVehicleFleet
+  ) {
+    accesses.push(MODULE_CONFIG.vehicle_fleet);
+  }
+
   const filteredAccesses = accesses.filter((item) => {
     /*
      * Ocultamos Formularios de Compra únicamente del frontend.
@@ -231,22 +262,44 @@ export default async function AccesosPage() {
       return false;
     }
 
+    /*
+     * Taller puede ingresar solamente a:
+     *
+     * - Órdenes de Trabajo
+     * - Planta Vehicular
+     */
     if (isTallerUser) {
-      return item.key === "work_orders";
+      return (
+        item.key === "work_orders" ||
+        item.key === "vehicle_fleet"
+      );
     }
 
+    /*
+     * Suministros solamente ve su módulo.
+     */
     if (isSuministrosUser) {
       return item.key === "stock_inventory";
     }
 
+    /*
+     * RNU solamente ve su módulo.
+     */
     if (isRnuUser) {
       return item.key === "rnu";
     }
 
+    /*
+     * Secretaría Privada solamente ve Personal.
+     */
     if (isSecretariaPrivadaUser) {
       return item.key === "personnel";
     }
 
+    /*
+     * GIRSU y Arbolado solamente ven Reclamos
+     * y su correspondiente tablero.
+     */
     if (isGirsuUser || isArboladoUser) {
       return (
         item.key === "complaints" ||
@@ -254,20 +307,52 @@ export default async function AccesosPage() {
       );
     }
 
+    /*
+     * Tablero General:
+     * solamente Admin y AdminLectura.
+     */
     if (item.key === "general_dashboard") {
       return hasAllowedRole;
     }
 
+    /*
+     * Stock:
+     * solamente Admin y AdminLectura
+     * en esta rama del filtro.
+     */
     if (item.key === "stock_inventory") {
       return hasAllowedRole;
     }
 
+    /*
+     * RNU:
+     * solamente Admin y AdminLectura
+     * en esta rama del filtro.
+     */
     if (item.key === "rnu") {
       return hasAllowedRole;
     }
 
+    /*
+     * Personal:
+     * solamente Admin.
+     *
+     * Secretaría Privada ya fue tratada arriba.
+     */
     if (item.key === "personnel") {
       return userRole === "admin";
+    }
+
+    /*
+     * Planta Vehicular:
+     *
+     * - Admin
+     * - AdminLectura
+     *
+     * Taller ya fue tratado arriba.
+     */
+    if (item.key === "vehicle_fleet") {
+      return hasAllowedRole;
     }
 
     return true;
@@ -325,7 +410,8 @@ export default async function AccesosPage() {
                     description:
                       "Seguimiento de reclamos del área GIRSU.",
                   }
-                : isArboladoUser && item.key === "complaints"
+                : isArboladoUser &&
+                    item.key === "complaints"
                   ? {
                       ...item,
                       title: "Reclamos Arbolado",

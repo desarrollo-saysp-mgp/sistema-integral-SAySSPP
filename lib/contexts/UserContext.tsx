@@ -22,6 +22,11 @@ interface UserContextType {
   isAdmin: boolean;
   isAdministrative: boolean;
   canManagePersonnel: boolean;
+
+  // Planta Vehicular
+  canViewVehicleFleet: boolean;
+  canManageVehicleFleet: boolean;
+
   isAuthenticated: boolean;
   hasRole: (role: UserRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -45,7 +50,9 @@ function withTimeout<T>(
     timeoutId = setTimeout(() => {
       reject(
         new Error(
-          `La consulta excedió el tiempo máximo de ${timeoutMs / 1000} segundos.`,
+          `La consulta excedió el tiempo máximo de ${
+            timeoutMs / 1000
+          } segundos.`,
         ),
       );
     }, timeoutMs);
@@ -510,6 +517,17 @@ export function UserProvider({
     canManagePersonnel:
       profile?.role === "Admin" ||
       profile?.role === "SecretariaPrivada",
+
+    // Puede ingresar y consultar Planta Vehicular
+    canViewVehicleFleet:
+      profile?.role === "Admin" ||
+      profile?.role === "AdminLectura" ||
+      profile?.role === "Taller",
+
+    // Puede crear, editar y dar de baja vehículos
+    canManageVehicleFleet:
+      profile?.role === "Admin" ||
+      profile?.role === "Taller",
 
     isAuthenticated: !!user,
 

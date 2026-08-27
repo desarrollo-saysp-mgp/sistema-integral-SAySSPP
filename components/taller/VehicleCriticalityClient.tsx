@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { WorkOrder } from "@/types";
-import { VEHICLE_OPTIONS } from "@/lib/taller/options";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -44,44 +42,38 @@ type VehicleCriticalityStatus =
   | "MALO"
   | "SIN DATOS"
   | "SIN CHECKLIST"
+  | "FUERA DE SERVICIO"
   | "DADO DE BAJA";
 
 type StatusFilter = "Todos" | VehicleCriticalityStatus;
 
-type VehicleCriticalitySetting = {
-  id: string;
-  vehicle_code: string;
-  vehicle: string | null;
-  license_plate: string | null;
-  service_criticality: number | null;
-  replacement_score: number | null;
-  security_score: number | null;
-  notes: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type VehicleSecurityInspection = {
-  id: string;
-  vehicle_code: string;
-  inspection_date: string | null;
-  created_at: string | null;
-};
-
 type VehicleCriticalityRow = {
+  vehicle_id: string;
   vehicle_code: string;
   vehicle: string;
   license_plate: string;
+
+  operational_status: string | null;
+  is_out_of_service: boolean;
+
+  active: boolean;
+  is_retired: boolean;
+  deactivation_date: string | null;
+  deactivation_reason: string | null;
+
   work_orders_count: number;
   mechanical_reliability_score: number;
   service_criticality: number;
   replacement_score: number;
   security_score: number;
+
   has_checklist: boolean;
-  is_retired: boolean;
   total_criticality: number | null;
+
   notes: string;
+
   status_label: VehicleCriticalityStatus;
+  status_display: string;
 };
 
 type EditingValues = {
@@ -96,169 +88,6 @@ const normalizeText = (value: unknown) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const normalizeVehicleCode = (value: unknown) =>
-  normalizeText(value).replace(/[\s.\-]/g, "");
-
-const RETIRED_VEHICLES = [
-  { code: "S.P.3", vehicle: "F-100 doble cabina roja", licensePlate: "WOE320" },
-  { code: "S.P.4", vehicle: "Chevrolet C10 Pick Up", licensePlate: "WWE612" },
-  { code: "S.P.9", vehicle: "Fiat Strada Trekking", licensePlate: "ODU636" },
-  { code: "R.E. P.C.1", vehicle: "Pala JCB Deutz", licensePlate: "BLS045" },
-  { code: "R.E. P.C.2", vehicle: "Pala JCB Deutz", licensePlate: "BXI010" },
-  { code: "R.E. P.C.3", vehicle: "Pala Yineng", licensePlate: "CWV092" },
-  {
-    code: "R.E. P.C.6",
-    vehicle: "Pala Cargadora Klia CA 200",
-    licensePlate: "MGP001",
-  },
-  {
-    code: "R.E. P.C.7",
-    vehicle: "Pala Cargadora Michigan",
-    licensePlate: "TRO131",
-  },
-  { code: "R.E. P.C.9", vehicle: "Topadora M.F. D600", licensePlate: "POI050" },
-  { code: "R.E. P.C.10", vehicle: "Topadora Komatsu", licensePlate: "BYN180" },
-  { code: "B 2", vehicle: "Volcador Ford 7000", licensePlate: "TJN736" },
-  { code: "B 3", vehicle: "Volcador Ford 7000", licensePlate: "XFX605" },
-  { code: "B 1", vehicle: "Volcador Ford F-600", licensePlate: "XFX603" },
-  {
-    code: "R.E. V.5",
-    vehicle: "Volc.Mercedes Benz 1215",
-    licensePlate: "AFU926",
-  },
-  {
-    code: "R.E. V.1",
-    vehicle: "Volcador Grúa Vw 17-190",
-    licensePlate: "AB904NS",
-  },
-  { code: "R.3", vehicle: "Chevrolet", licensePlate: "XGA020" },
-  { code: "R.6", vehicle: "Chevrolet 610", licensePlate: "XFT688" },
-  {
-    code: "A.P.U.1",
-    vehicle: "Chevrolet (camión regador)",
-    licensePlate: "XFX607",
-  },
-  {
-    code: "A.P.U.6",
-    vehicle: "Cuatriciclo Motomel Rojo",
-    licensePlate: "JUI693 (056)",
-  },
-  { code: "A.P.U.11", vehicle: "Tractor Tai - Shan", licensePlate: "" },
-  { code: "A.P.U.13", vehicle: "Desmalezador Z - Beast", licensePlate: "" },
-  { code: "A.P.U.3", vehicle: "Tractor Tai - Shan", licensePlate: "POI091" },
-  { code: "A.P.U.4", vehicle: "Tractor Tai - Shan", licensePlate: "PAT092" },
-  { code: "P.C.3", vehicle: "Ford 7000", licensePlate: "XFT689" },
-  {
-    code: "S.P.1",
-    vehicle: "Ford F-100 Blanca (ex Roja)",
-    licensePlate: "USA005",
-  },
-  { code: "R.D.1", vehicle: "Recolector Ford 7000", licensePlate: "XFX600" },
-  {
-    code: "A.P.U.8",
-    vehicle: "Tractor Massey Fergunson 1185",
-    licensePlate: "",
-  },
-  {
-    code: "A.P.U.12",
-    vehicle: "Tractor Yard Machine by MTD",
-    licensePlate: "",
-  },
-  { code: "A.P.U.14", vehicle: "Ford 150 cabina simple", licensePlate: "SYE917" },
-];
-
-const RETIRED_VEHICLE_CODES = new Set(
-  RETIRED_VEHICLES.map((vehicle) => normalizeVehicleCode(vehicle.code)),
-);
-
-const NON_VEHICLE_CODES = new Set(
-  ["Regadores (C)", "Regadores C"].map(normalizeVehicleCode),
-);
-
-const isRetiredVehicle = (vehicleCode: unknown) =>
-  RETIRED_VEHICLE_CODES.has(normalizeVehicleCode(vehicleCode));
-
-const isNonVehicleCode = (vehicleCode: unknown) =>
-  NON_VEHICLE_CODES.has(normalizeVehicleCode(vehicleCode));
-
-const shouldExcludeFromCriticality = (vehicleCode: unknown) =>
-  isRetiredVehicle(vehicleCode) || isNonVehicleCode(vehicleCode);
-
-const toNumber = (value: unknown) => {
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) return 0;
-  return numberValue;
-};
-
-const getVehicleFromCode = (vehicleCode?: string | null) => {
-  if (!vehicleCode) return null;
-
-  return VEHICLE_OPTIONS.find(
-    (item) => normalizeText(item.code) === normalizeText(vehicleCode),
-  );
-};
-
-const getVehicleLabelFromOrder = (order?: WorkOrder | null) => {
-  if (!order) return "-";
-
-  if (order.vehicle && order.vehicle.trim()) return order.vehicle;
-
-  const matchedVehicle = getVehicleFromCode(order.vehicle_code);
-  return matchedVehicle?.vehicle || "-";
-};
-
-const getLicensePlateLabelFromOrder = (order?: WorkOrder | null) => {
-  if (!order) return "-";
-
-  if (order.license_plate && order.license_plate.trim()) {
-    return order.license_plate;
-  }
-
-  const matchedVehicle = getVehicleFromCode(order.vehicle_code);
-  return matchedVehicle?.licensePlate || "-";
-};
-
-const getSixMonthsAgo = () => {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 6);
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const getDateValue = (dateString?: string | null) => {
-  if (!dateString) return null;
-
-  const [year, month, day] = dateString.split("-").map(Number);
-  if (!year || !month || !day) return null;
-
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date;
-};
-
-const getMechanicalReliabilityScore = (count: number) => {
-  if (count <= 0) return 0;
-  if (count <= 3) return 1;
-  if (count <= 6) return 2;
-  if (count <= 9) return 3;
-  if (count <= 12) return 4;
-  return 5;
-};
-
-const getCriticalityStatus = (
-  criticality: number | null,
-  hasChecklist: boolean,
-  isRetired: boolean,
-): VehicleCriticalityStatus => {
-  if (isRetired) return "DADO DE BAJA";
-  if (!hasChecklist) return "SIN CHECKLIST";
-  if (criticality === null) return "SIN DATOS";
-  if (criticality >= 13) return "MALO";
-  if (criticality >= 10) return "REGULAR";
-  return "BUENO";
-};
-
 const getStatusLabel = (status: VehicleCriticalityStatus) => {
   switch (status) {
     case "BUENO":
@@ -269,6 +98,8 @@ const getStatusLabel = (status: VehicleCriticalityStatus) => {
       return "CRÍTICO";
     case "SIN CHECKLIST":
       return "SIN CHECKLIST";
+    case "FUERA DE SERVICIO":
+      return "FUERA DE SERVICIO";
     case "DADO DE BAJA":
       return "DADO DE BAJA";
     case "SIN DATOS":
@@ -287,6 +118,8 @@ const getStatusBadgeClass = (status: VehicleCriticalityStatus) => {
       return "border-red-200 bg-red-100 text-red-800";
     case "SIN CHECKLIST":
       return "border-orange-200 bg-orange-100 text-orange-800";
+    case "FUERA DE SERVICIO":
+      return "border-slate-300 bg-slate-100 text-slate-700";
     case "DADO DE BAJA":
       return "border-slate-300 bg-slate-100 text-slate-800";
     case "SIN DATOS":
@@ -346,18 +179,17 @@ const hasActiveFilters = ({
 };
 
 export function VehicleCriticalityClient() {
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [settings, setSettings] = useState<VehicleCriticalitySetting[]>([]);
-  const [inspections, setInspections] = useState<VehicleSecurityInspection[]>(
-    [],
-  );
+  const [rows, setRows] = useState<VehicleCriticalityRow[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [savingVehicleCode, setSavingVehicleCode] = useState<string | null>(
     null,
   );
+
   const [editingVehicleCode, setEditingVehicleCode] = useState<string | null>(
     null,
   );
+
   const [editingValues, setEditingValues] = useState<EditingValues>({
     replacement_score: "0",
     notes: "",
@@ -371,44 +203,43 @@ export function VehicleCriticalityClient() {
   const [minTotalFilter, setMinTotalFilter] = useState("");
   const [maxTotalFilter, setMaxTotalFilter] = useState("");
 
+  /*
+   * FUENTE ÚNICA:
+   * /api/taller/criticidad/resumen
+   *
+   * Ese endpoint toma Planta Vehicular como fuente de verdad
+   * para activo / dado de baja / estado operativo.
+   */
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      const [workOrdersResponse, settingsResponse, inspectionsResponse] =
-        await Promise.all([
-          fetch("/api/work-orders", { cache: "no-store" }),
-          fetch("/api/taller/criticidad", { cache: "no-store" }),
-          fetch("/api/taller/estado-general", { cache: "no-store" }),
-        ]);
+      const response = await fetch(
+        "/api/taller/criticidad/resumen",
+        {
+          cache: "no-store",
+        },
+      );
 
-      const workOrdersResult = await workOrdersResponse.json();
-      const settingsResult = await settingsResponse.json();
-      const inspectionsResult = await inspectionsResponse.json();
+      const result = await response.json();
 
-      if (!workOrdersResponse.ok) {
+      if (!response.ok) {
         throw new Error(
-          workOrdersResult.error || "Error al cargar órdenes de trabajo",
+          result?.error ||
+            "Error al cargar criticidad vehicular",
         );
       }
 
-      if (!settingsResponse.ok) {
-        throw new Error(
-          settingsResult.error || "Error al cargar criticidad vehicular",
-        );
-      }
-
-      if (!inspectionsResponse.ok) {
-        throw new Error(
-          inspectionsResult.error || "Error al cargar checklists vehiculares",
-        );
-      }
-
-      setWorkOrders(workOrdersResult.data || []);
-      setSettings(settingsResult.data || []);
-      setInspections(inspectionsResult.data || []);
+      setRows(
+        (result?.data ||
+          []) as VehicleCriticalityRow[],
+      );
     } catch (error) {
-      console.error("Error fetching vehicle criticality data:", error);
+      console.error(
+        "Error fetching vehicle criticality summary:",
+        error,
+      );
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -420,164 +251,8 @@ export function VehicleCriticalityClient() {
   };
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
-
-  const vehiclesWithChecklist = useMemo(() => {
-    const vehicleCodes = new Set<string>();
-
-    inspections.forEach((inspection) => {
-      const vehicleCode = String(inspection.vehicle_code || "").trim();
-      if (!vehicleCode) return;
-
-      vehicleCodes.add(normalizeText(vehicleCode));
-    });
-
-    return vehicleCodes;
-  }, [inspections]);
-
-  const rows = useMemo<VehicleCriticalityRow[]>(() => {
-    const sixMonthsAgo = getSixMonthsAgo();
-    const workOrdersByVehicle = new Map<string, WorkOrder[]>();
-
-    workOrders.forEach((order) => {
-      const vehicleCode = String(order.vehicle_code || "").trim();
-      if (!vehicleCode || isNonVehicleCode(vehicleCode)) return;
-
-      const currentOrders = workOrdersByVehicle.get(vehicleCode) || [];
-      currentOrders.push(order);
-      workOrdersByVehicle.set(vehicleCode, currentOrders);
-    });
-
-    const vehicleCodes = new Set<string>();
-
-    settings.forEach((setting) => {
-      const vehicleCode = setting.vehicle_code?.trim();
-
-      if (vehicleCode && !shouldExcludeFromCriticality(vehicleCode)) {
-        vehicleCodes.add(vehicleCode);
-      }
-    });
-
-    workOrdersByVehicle.forEach((_orders, vehicleCode) => {
-      if (!shouldExcludeFromCriticality(vehicleCode)) {
-        vehicleCodes.add(vehicleCode);
-      }
-    });
-
-    const activeRows = Array.from(vehicleCodes).map((vehicleCode) => {
-      const orders = workOrdersByVehicle.get(vehicleCode) || [];
-      const setting = settings.find(
-        (item) => normalizeText(item.vehicle_code) === normalizeText(vehicleCode),
-      );
-
-      const latestOrder = [...orders].sort((a, b) => {
-        const dateA = getDateValue(a.entry_date)?.getTime() ?? 0;
-        const dateB = getDateValue(b.entry_date)?.getTime() ?? 0;
-        return dateB - dateA;
-      })[0];
-
-      const validOtCount = orders.filter((order) => {
-        const date = getDateValue(order.entry_date);
-        if (!date || date < sixMonthsAgo) return false;
-
-        const failureType = normalizeText(order.failure_type);
-        const repairType = normalizeText(order.repair_type);
-
-        return (
-          !failureType.includes("mantenimiento") &&
-          !repairType.includes("mantenimiento")
-        );
-      }).length;
-
-      const mechanicalScore = getMechanicalReliabilityScore(validOtCount);
-      const serviceCriticality = toNumber(setting?.service_criticality);
-      const replacementScore = toNumber(setting?.replacement_score);
-      const securityScore = toNumber(setting?.security_score);
-      const hasChecklist = vehiclesWithChecklist.has(normalizeText(vehicleCode));
-      const totalCriticality = hasChecklist
-        ? mechanicalScore + serviceCriticality + replacementScore + securityScore
-        : null;
-
-      const matchedVehicle = getVehicleFromCode(vehicleCode);
-
-      return {
-        vehicle_code: vehicleCode,
-        vehicle:
-          setting?.vehicle ||
-          getVehicleLabelFromOrder(latestOrder) ||
-          matchedVehicle?.vehicle ||
-          "-",
-        license_plate:
-          setting?.license_plate ||
-          getLicensePlateLabelFromOrder(latestOrder) ||
-          matchedVehicle?.licensePlate ||
-          "-",
-        work_orders_count: validOtCount,
-        mechanical_reliability_score: mechanicalScore,
-        service_criticality: serviceCriticality,
-        replacement_score: replacementScore,
-        security_score: securityScore,
-        has_checklist: hasChecklist,
-        is_retired: false,
-        total_criticality: totalCriticality,
-        notes: setting?.notes || "",
-        status_label: getCriticalityStatus(totalCriticality, hasChecklist, false),
-      };
-    });
-
-    const retiredRows: VehicleCriticalityRow[] = RETIRED_VEHICLES.map(
-      (retiredVehicle) => {
-        const setting = settings.find(
-          (item) =>
-            normalizeVehicleCode(item.vehicle_code) ===
-            normalizeVehicleCode(retiredVehicle.code),
-        );
-
-        return {
-          vehicle_code: retiredVehicle.code,
-          vehicle: setting?.vehicle || retiredVehicle.vehicle || "-",
-          license_plate:
-            setting?.license_plate || retiredVehicle.licensePlate || "-",
-          work_orders_count: 0,
-          mechanical_reliability_score: 0,
-          service_criticality: 0,
-          replacement_score: 0,
-          security_score: 0,
-          has_checklist: false,
-          is_retired: true,
-          total_criticality: null,
-          notes: "Vehículo dado de baja. Excluido del cálculo de criticidad.",
-          status_label: "DADO DE BAJA",
-        };
-      },
-    );
-
-    return [...activeRows, ...retiredRows].sort((a, b) => {
-      if (a.is_retired && !b.is_retired) return 1;
-      if (!a.is_retired && b.is_retired) return -1;
-
-      if (a.total_criticality === null && b.total_criticality !== null) {
-        return 1;
-      }
-
-      if (a.total_criticality !== null && b.total_criticality === null) {
-        return -1;
-      }
-
-      if (
-        a.total_criticality !== null &&
-        b.total_criticality !== null &&
-        a.total_criticality !== b.total_criticality
-      ) {
-        return b.total_criticality - a.total_criticality;
-      }
-
-      return a.vehicle_code.localeCompare(b.vehicle_code, "es", {
-        numeric: true,
-      });
-    });
-  }, [workOrders, settings, vehiclesWithChecklist]);
 
   const vehicleCodes = useMemo(() => {
     const codes = new Set<string>();
@@ -606,6 +281,7 @@ export function VehicleCriticalityClient() {
         normalizeText(row.vehicle_code).includes(normalizedSearch) ||
         normalizeText(row.vehicle).includes(normalizedSearch) ||
         normalizeText(row.license_plate).includes(normalizedSearch) ||
+        normalizeText(row.operational_status).includes(normalizedSearch) ||
         normalizeText(getStatusLabel(row.status_label)).includes(normalizedSearch);
 
       const matchesCode =
@@ -650,36 +326,66 @@ export function VehicleCriticalityClient() {
     maxTotalFilter,
   ]);
 
-  const activeBaseRows = baseFilteredRows.filter((row) => !row.is_retired);
-  const retiredBaseRows = baseFilteredRows.filter((row) => row.is_retired);
+  /*
+   * Sólo los vehículos activos Y operativos participan del cálculo.
+   * Los fuera de servicio y los dados de baja quedan visibles,
+   * pero excluidos de los indicadores de criticidad.
+   */
+  const calculableBaseRows = baseFilteredRows.filter(
+    (row) =>
+      !row.is_retired &&
+      !row.is_out_of_service,
+  );
+
+  const outOfServiceBaseRows = baseFilteredRows.filter(
+    (row) =>
+      !row.is_retired &&
+      row.is_out_of_service,
+  );
+
+  const retiredBaseRows = baseFilteredRows.filter(
+    (row) => row.is_retired,
+  );
 
   const filteredRows = useMemo(() => {
     if (statusFilter === "Todos") {
-      return baseFilteredRows.filter((row) => !row.is_retired);
+      return baseFilteredRows.filter(
+        (row) =>
+          !row.is_retired &&
+          !row.is_out_of_service,
+      );
     }
 
-    return baseFilteredRows.filter((row) => row.status_label === statusFilter);
+    return baseFilteredRows.filter(
+      (row) =>
+        row.status_label ===
+        statusFilter,
+    );
   }, [baseFilteredRows, statusFilter]);
 
-  const totalVehicles = activeBaseRows.length;
+  const totalVehicles = calculableBaseRows.length;
 
-  const goodVehicles = activeBaseRows.filter(
+  const goodVehicles = calculableBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "BUENO",
   ).length;
 
-  const regularVehicles = activeBaseRows.filter(
+  const regularVehicles = calculableBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "REGULAR",
   ).length;
 
-  const badVehicles = activeBaseRows.filter(
+  const badVehicles = calculableBaseRows.filter(
     (row) => row.has_checklist && row.status_label === "MALO",
   ).length;
 
-  const withoutChecklistVehicles = activeBaseRows.filter(
+  const withoutChecklistVehicles = calculableBaseRows.filter(
     (row) => !row.has_checklist,
   ).length;
 
-  const retiredVehicles = retiredBaseRows.length;
+  const outOfServiceVehicles =
+    outOfServiceBaseRows.length;
+
+  const retiredVehicles =
+    retiredBaseRows.length;
 
   const activeFilters = hasActiveFilters({
     search,
@@ -711,7 +417,12 @@ export function VehicleCriticalityClient() {
   };
 
   const startEditing = (row: VehicleCriticalityRow) => {
-    if (row.is_retired) return;
+    if (
+      row.is_retired ||
+      row.is_out_of_service
+    ) {
+      return;
+    }
 
     setEditingVehicleCode(row.vehicle_code);
     setEditingValues({
@@ -739,13 +450,32 @@ export function VehicleCriticalityClient() {
     try {
       setSavingVehicleCode(vehicleCode);
 
+      const currentRow = rows.find(
+        (row) =>
+          normalizeText(row.vehicle_code) ===
+          normalizeText(vehicleCode),
+      );
+
+      if (!currentRow || currentRow.is_retired) {
+        throw new Error(
+          "No se encontró el vehículo activo para actualizar",
+        );
+      }
+
       const response = await fetch(
         `/api/taller/criticidad/${encodeURIComponent(vehicleCode)}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
-            replacement_score: editingValues.replacement_score,
+            service_criticality:
+              currentRow.service_criticality,
+            replacement_score:
+              editingValues.replacement_score,
+            security_score:
+              currentRow.security_score,
             notes: editingValues.notes,
           }),
         },
@@ -755,28 +485,20 @@ export function VehicleCriticalityClient() {
 
       if (!response.ok) {
         throw new Error(
-          result.error || "Error al actualizar criticidad vehicular",
+          result.error ||
+            "Error al actualizar criticidad vehicular",
         );
       }
 
-      setSettings((prev) =>
-        prev.map((setting) =>
-          normalizeText(setting.vehicle_code) === normalizeText(vehicleCode)
-            ? {
-                ...setting,
-                replacement_score: result.data?.replacement_score,
-                notes: result.data?.notes,
-                updated_at: result.data?.updated_at,
-              }
-            : setting,
-        ),
-      );
-
       toast.success("Reemplazo actualizado");
       cancelEditing();
-      fetchData();
+      await fetchData();
     } catch (error) {
-      console.error("Error updating vehicle criticality:", error);
+      console.error(
+        "Error updating vehicle criticality:",
+        error,
+      );
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -814,6 +536,12 @@ export function VehicleCriticalityClient() {
         color: "#f97316",
       },
       {
+        key: "FUERA DE SERVICIO",
+        name: "Fuera de servicio",
+        value: outOfServiceVehicles,
+        color: "#94a3b8",
+      },
+      {
         key: "DADO DE BAJA",
         name: "Dados de baja",
         value: retiredVehicles,
@@ -827,6 +555,7 @@ export function VehicleCriticalityClient() {
     regularVehicles,
     badVehicles,
     withoutChecklistVehicles,
+    outOfServiceVehicles,
     retiredVehicles,
   ]);
 
@@ -835,6 +564,7 @@ export function VehicleCriticalityClient() {
     regularVehicles +
     badVehicles +
     withoutChecklistVehicles +
+    outOfServiceVehicles +
     retiredVehicles;
 
   return (
@@ -878,7 +608,7 @@ export function VehicleCriticalityClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <SummaryCard
           title="Vehículos analizados"
           value={totalVehicles}
@@ -920,6 +650,14 @@ export function VehicleCriticalityClient() {
         />
 
         <SummaryCard
+          title="Fuera de servicio"
+          value={outOfServiceVehicles}
+          description="Activos, excluidos del cálculo"
+          active={statusFilter === "FUERA DE SERVICIO"}
+          onClick={() => handleCardFilter("FUERA DE SERVICIO")}
+        />
+
+        <SummaryCard
           title="Dados de baja"
           value={retiredVehicles}
           description="Excluidos del cálculo"
@@ -953,8 +691,10 @@ export function VehicleCriticalityClient() {
               </p>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Los vehículos dados de baja quedan visibles para control, pero
-                no entran en el cálculo de criticidad.
+                La situación administrativa y el estado operativo se toman
+                directamente de Planta Vehicular. Los vehículos fuera de servicio
+                y los dados de baja quedan visibles para control, pero no entran
+                en el cálculo de criticidad.
               </p>
             </div>
 
@@ -962,7 +702,9 @@ export function VehicleCriticalityClient() {
               {filteredRows.length} de{" "}
               {statusFilter === "DADO DE BAJA"
                 ? retiredBaseRows.length
-                : activeBaseRows.length}{" "}
+                : statusFilter === "FUERA DE SERVICIO"
+                  ? outOfServiceBaseRows.length
+                  : calculableBaseRows.length}{" "}
               vehículos
             </Badge>
           </div>
@@ -1024,6 +766,7 @@ export function VehicleCriticalityClient() {
                   <option value="REGULAR">Regular</option>
                   <option value="MALO">Crítico</option>
                   <option value="SIN CHECKLIST">Sin checklist</option>
+                  <option value="FUERA DE SERVICIO">Fuera de servicio</option>
                   <option value="DADO DE BAJA">Dado de baja</option>
                 </select>
               </div>
@@ -1164,15 +907,30 @@ export function VehicleCriticalityClient() {
                             {row.vehicle_code}
                           </td>
 
-                          <td className="px-3 py-3">{row.vehicle}</td>
+                          <td className="px-3 py-3">
+                            <div className="space-y-1.5">
+                              <div>{row.vehicle}</div>
+
+                              {row.is_out_of_service && !row.is_retired && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-slate-300 bg-slate-100 text-[10px] font-semibold text-slate-700"
+                                >
+                                  FUERA DE SERVICIO
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
 
                           <td className="px-3 py-3">{row.license_plate}</td>
 
                           <td className="px-3 py-3 text-center">
-                            {row.is_retired ? "--" : row.work_orders_count}
+                            {row.is_retired || row.is_out_of_service
+                              ? "--"
+                              : row.work_orders_count}
                           </td>
 
-                          {row.is_retired ? (
+                          {row.is_retired || row.is_out_of_service ? (
                             <>
                               <MutedCell />
                               <MutedCell />
@@ -1222,7 +980,9 @@ export function VehicleCriticalityClient() {
                                 row.total_criticality,
                               )} border`}
                             >
-                              {row.total_criticality ?? "--"}
+                              {row.is_out_of_service
+                                ? "--"
+                                : row.total_criticality ?? "--"}
                             </Badge>
                           </td>
 
@@ -1237,7 +997,7 @@ export function VehicleCriticalityClient() {
                           </td>
 
                           <td className="px-3 py-3">
-                            {row.is_retired ? (
+                            {row.is_retired || row.is_out_of_service ? (
                               <div className="text-center text-xs text-muted-foreground">
                                 Excluido
                               </div>
@@ -1306,9 +1066,19 @@ export function VehicleCriticalityClient() {
                               {row.vehicle_code}
                             </p>
                             <p className="text-sm font-medium">{row.vehicle}</p>
+
                             <p className="text-xs text-muted-foreground">
                               Dominio: {row.license_plate}
                             </p>
+
+                            {row.is_out_of_service && !row.is_retired && (
+                              <Badge
+                                variant="outline"
+                                className="mt-2 border-slate-300 bg-slate-100 text-[10px] font-semibold text-slate-700"
+                              >
+                                FUERA DE SERVICIO
+                              </Badge>
+                            )}
                           </div>
 
                           <Badge
@@ -1322,8 +1092,16 @@ export function VehicleCriticalityClient() {
 
                         {row.is_retired ? (
                           <div className="rounded-xl border bg-muted/20 p-3 text-sm text-muted-foreground">
-                            Vehículo dado de baja. Excluido del cálculo de
-                            criticidad.
+                            Vehículo dado de baja en Planta Vehicular.
+                            Excluido del cálculo de criticidad.
+                            {row.deactivation_reason
+                              ? ` Motivo: ${row.deactivation_reason}`
+                              : ""}
+                          </div>
+                        ) : row.is_out_of_service ? (
+                          <div className="rounded-xl border border-slate-300 bg-slate-100 p-3 text-sm text-slate-700">
+                            Vehículo fuera de servicio. Queda visible para control,
+                            pero se excluye temporalmente del cálculo de criticidad.
                           </div>
                         ) : (
                           <>
@@ -1718,14 +1496,23 @@ function CriticalityLegendCard() {
           </p>
 
           <p>
-            <strong className="text-foreground">Sin checklist:</strong> si el
-            vehículo activo nunca tuvo checklist cargada, no se calcula la
-            criticidad total porque no se puede determinar la seguridad.
+            <strong className="text-foreground">Sin checklist:</strong> sólo se
+            consideran vehículos activos y operativos que nunca tuvieron checklist
+            cargada. No se calcula la criticidad total porque no se puede determinar
+            la seguridad.
           </p>
 
           <p>
-            <strong className="text-foreground">Dados de baja:</strong> quedan
-            visibles para control, pero se excluyen del cálculo de criticidad.
+            <strong className="text-foreground">Fuera de servicio:</strong> el
+            estado operativo se toma desde Planta Vehicular. La unidad queda visible
+            para control, pero se excluye temporalmente del cálculo de criticidad y
+            no cuenta dentro de “Sin checklist”.
+          </p>
+
+          <p>
+            <strong className="text-foreground">Dados de baja:</strong> se toman
+            automáticamente desde Planta Vehicular. Quedan visibles para control,
+            pero se excluyen del cálculo de criticidad.
           </p>
 
           <p>
@@ -1819,6 +1606,16 @@ function CriticalityLegendCard() {
               <p>
                 <strong className="text-foreground">Sin checklist:</strong> no
                 se calcula criticidad total.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Badge className="border border-slate-300 bg-slate-100 text-slate-700">
+                F/S
+              </Badge>
+              <p>
+                <strong className="text-foreground">Fuera de servicio:</strong>{" "}
+                excluido temporalmente del cálculo.
               </p>
             </div>
 
