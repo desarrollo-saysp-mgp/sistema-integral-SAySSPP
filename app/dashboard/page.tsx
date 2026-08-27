@@ -33,6 +33,9 @@ function getModuleRoute(moduleKey: string) {
     case "work_orders":
       return "/dashboard/taller/ordenes-trabajo";
 
+    case "vehicle_fleet":
+      return "/dashboard/planta-vehicular";
+
     case "stock_inventory":
       return "/dashboard/suministros";
 
@@ -104,6 +107,19 @@ export default async function DashboardRouter() {
   }
 
   /*
+   * Taller ahora tiene dos módulos:
+   *
+   * - Órdenes de Trabajo
+   * - Planta Vehicular
+   *
+   * Por eso debe entrar siempre a Accesos
+   * y elegir el módulo.
+   */
+  if (profile.role === "Taller") {
+    redirect("/dashboard/accesos");
+  }
+
+  /*
    * Secretaría Privada entra directamente al módulo Personal.
    */
   if (profile.role === "SecretariaPrivada") {
@@ -112,6 +128,10 @@ export default async function DashboardRouter() {
 
   /*
    * Si tiene un módulo predeterminado, entra directamente.
+   *
+   * Taller ya fue tratado arriba, por lo que su antiguo
+   * default_module = work_orders no lo enviará directamente
+   * a Órdenes de Trabajo.
    */
   if (defaultModule) {
     redirect(getModuleRoute(defaultModule));
@@ -140,10 +160,6 @@ export default async function DashboardRouter() {
     profile.role === "ReclamosZyV"
   ) {
     redirect("/dashboard/complaints/home");
-  }
-
-  if (profile.role === "Taller") {
-    redirect("/dashboard/taller/ordenes-trabajo");
   }
 
   if (profile.role === "Suministros") {

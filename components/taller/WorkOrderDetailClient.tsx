@@ -55,6 +55,8 @@ type PdfStatusColors = {
 };
 
 const WORK_ORDERS_REGISTER_PATH = "/dashboard/taller/ordenes-trabajo";
+const VEHICLE_FLEET_PATH = "/dashboard/planta-vehicular";
+
 const CURRENCY_MARKER_REGEX = /\n?\[\[amount_currency:(ARS|USD)\]\]/g;
 
 const cleanValue = (value?: string | number | null) => {
@@ -106,18 +108,27 @@ const getCriticalityBadgeClass = (criticality?: string | number | null) => {
 };
 
 const getSafeReturnTo = (value?: string | null) => {
-  if (!value) return WORK_ORDERS_REGISTER_PATH;
+  if (!value) {
+    return WORK_ORDERS_REGISTER_PATH;
+  }
+
+  const isAllowedReturnPath = (pathname: string) => {
+    return (
+      pathname.startsWith(WORK_ORDERS_REGISTER_PATH) ||
+      pathname.startsWith(VEHICLE_FLEET_PATH)
+    );
+  };
 
   try {
     const decodedValue = decodeURIComponent(value);
 
-    if (!decodedValue.startsWith(WORK_ORDERS_REGISTER_PATH)) {
+    if (!isAllowedReturnPath(decodedValue)) {
       return WORK_ORDERS_REGISTER_PATH;
     }
 
     return decodedValue;
   } catch {
-    if (value.startsWith(WORK_ORDERS_REGISTER_PATH)) {
+    if (isAllowedReturnPath(value)) {
       return value;
     }
 
@@ -665,7 +676,7 @@ export function WorkOrderDetailClient({
           <Button asChild variant="ghost" className="-ml-2 gap-2">
             <Link href={returnTo}>
               <ArrowLeft className="h-4 w-4" />
-              Volver al registro
+              Volver
             </Link>
           </Button>
 
