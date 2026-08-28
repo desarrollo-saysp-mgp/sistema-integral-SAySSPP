@@ -226,9 +226,26 @@ const fetchInternalJson = async (
   request: NextRequest,
   pathname: string,
 ) => {
+  /*
+   * En producción, cuando el usuario entra por el dominio
+   * personalizado (ayspmgp.com.ar), no conviene que este
+   * endpoint vuelva a llamarse a sí mismo usando ese dominio.
+   *
+   * Vercel expone la URL real del deployment/proyecto mediante
+   * estas variables. La usamos para los fetch internos y dejamos
+   * request.nextUrl.origin como fallback para desarrollo local.
+   */
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL;
+
+  const baseUrl = vercelHost
+    ? `https://${vercelHost}`
+    : request.nextUrl.origin;
+
   const url = new URL(
     pathname,
-    request.url,
+    baseUrl,
   );
 
   const response = await fetch(url, {
@@ -240,7 +257,18 @@ const fetchInternalJson = async (
     },
   });
 
-  const result = await response.json();
+  let result: {
+    data?: unknown[];
+    error?: string;
+  };
+
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(
+      `Respuesta inválida de ${pathname}`,
+    );
+  }
 
   if (!response.ok) {
     throw new Error(
