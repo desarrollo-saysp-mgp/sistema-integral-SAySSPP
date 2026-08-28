@@ -86,6 +86,20 @@ const normalizeText = (value: unknown) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+const canAccessTaller = (profile: {
+  role: string;
+  modules: string[] | null;
+}) => {
+  const role = normalizeText(profile.role);
+
+  return (
+    role === "admin" ||
+    role === "adminlectura" ||
+    role === "taller" ||
+    profile.modules?.includes("work_orders")
+  );
+};
+
 const normalizeVehicleCode = (value: unknown) =>
   normalizeText(value).replace(/[\s.\-]/g, "");
 
@@ -222,64 +236,6 @@ const getStatusDisplay = (
   }
 };
 
-const fetchInternalJson = async (
-  request: NextRequest,
-  pathname: string,
-) => {
-  /*
-   * En producción, cuando el usuario entra por el dominio
-   * personalizado (ayspmgp.com.ar), no conviene que este
-   * endpoint vuelva a llamarse a sí mismo usando ese dominio.
-   *
-   * Vercel expone la URL real del deployment/proyecto mediante
-   * estas variables. La usamos para los fetch internos y dejamos
-   * request.nextUrl.origin como fallback para desarrollo local.
-   */
-  const vercelHost =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL;
-
-  const baseUrl = vercelHost
-    ? `https://${vercelHost}`
-    : request.nextUrl.origin;
-
-  const url = new URL(
-    pathname,
-    baseUrl,
-  );
-
-  const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      cookie:
-        request.headers.get("cookie") || "",
-    },
-  });
-
-  let result: {
-    data?: unknown[];
-    error?: string;
-  };
-
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error(
-      `Respuesta inválida de ${pathname}`,
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      result?.error ||
-        `Error consultando ${pathname}`,
-    );
-  }
-
-  return result;
-};
-
 export async function GET(
   request: NextRequest,
 ) {
@@ -302,23 +258,63 @@ export async function GET(
      */
     const supabase = await createClient();
 
-    const { searchParams } =
-      new URL(request.url);
+    /*
+     * Autenticación y autorización directa.
+     * Antes esto quedaba validado indirectamente porque resumen
+     * llamaba a otros endpoints internos. Como ahora consultamos
+     * Supabase directamente, lo validamos acá.
+     */
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "No autenticado" },
+        { status: 401 },
+      );
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role, modules")
+      .eq("id", user.id)
+      .single();
+
+    if (
+      profileError ||
+      !profile ||
+      !canAccessTaller(profile)
+    ) {
+      return NextResponse.json(
+        { error: "No autorizado para ver criticidad vehicular" },
+        { status: 403 },
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
 
     /*
      * Si llega ?code=A.6 calculamos solamente esa unidad.
-     * Sin ?code se mantiene exactamente el comportamiento
-     * del panel general de criticidad.
+     * Sin ?code se mantiene el comportamiento del panel general.
      */
     const requestedVehicleCode =
       searchParams.get("code")?.trim() || "";
 
-    const workOrdersPath =
-      requestedVehicleCode
-        ? `/api/work-orders?code=${encodeURIComponent(
-            requestedVehicleCode,
-          )}`
-        : "/api/work-orders";
+    /*
+     * IMPORTANTE:
+     * No hacemos fetch() hacia /api/work-orders, /api/taller/criticidad
+     * ni /api/taller/estado-general. Esas llamadas server -> server
+     * eran las que podían fallar detrás del dominio personalizado.
+     *
+     * Las cuatro fuentes se consultan directamente en Supabase.
+     */
+    let workOrdersQuery = supabase
+      .from("work_orders")
+      .select(
+        "vehicle_code, vehicle, license_plate, entry_date, failure_type, repair_type",
+      );
 
     let vehiclesQuery = supabase
       .from("vehicles")
@@ -336,11 +332,15 @@ export async function GET(
       );
 
     if (requestedVehicleCode) {
-      vehiclesQuery =
-        vehiclesQuery.eq(
-          "code",
-          requestedVehicleCode,
-        );
+      workOrdersQuery = workOrdersQuery.eq(
+        "vehicle_code",
+        requestedVehicleCode,
+      );
+
+      vehiclesQuery = vehiclesQuery.eq(
+        "code",
+        requestedVehicleCode,
+      );
     }
 
     const [
@@ -349,22 +349,54 @@ export async function GET(
       inspectionsResult,
       vehiclesResult,
     ] = await Promise.all([
-      fetchInternalJson(
-        request,
-        workOrdersPath,
-      ),
-      fetchInternalJson(
-        request,
-        "/api/taller/criticidad",
-      ),
-      fetchInternalJson(
-        request,
-        "/api/taller/estado-general",
-      ),
+      workOrdersQuery,
+      supabase
+        .from("vehicle_criticality_settings")
+        .select(
+          "id, vehicle_code, vehicle, license_plate, service_criticality, replacement_score, security_score, notes, created_at, updated_at",
+        ),
+      supabase
+        .from("vehicle_security_inspections")
+        .select(
+          "id, vehicle_code, inspection_date, created_at",
+        ),
       vehiclesQuery.order("code", {
         ascending: true,
       }),
     ]);
+
+    if (workOrdersResult.error) {
+      console.error(
+        "Error fetching work orders for criticality summary:",
+        workOrdersResult.error,
+      );
+
+      throw new Error(
+        "No se pudieron cargar las órdenes de trabajo para calcular la criticidad",
+      );
+    }
+
+    if (settingsResult.error) {
+      console.error(
+        "Error fetching criticality settings:",
+        settingsResult.error,
+      );
+
+      throw new Error(
+        "No se pudo cargar la configuración de criticidad",
+      );
+    }
+
+    if (inspectionsResult.error) {
+      console.error(
+        "Error fetching vehicle inspections for criticality summary:",
+        inspectionsResult.error,
+      );
+
+      throw new Error(
+        "No se pudieron cargar los checklist vehiculares",
+      );
+    }
 
     if (vehiclesResult.error) {
       console.error(
@@ -378,20 +410,16 @@ export async function GET(
     }
 
     const workOrders =
-      (workOrdersResult.data ||
-        []) as WorkOrder[];
+      (workOrdersResult.data || []) as WorkOrder[];
 
     const settings =
-      (settingsResult.data ||
-        []) as VehicleCriticalitySetting[];
+      (settingsResult.data || []) as VehicleCriticalitySetting[];
 
     const inspections =
-      (inspectionsResult.data ||
-        []) as VehicleSecurityInspection[];
+      (inspectionsResult.data || []) as VehicleSecurityInspection[];
 
     const vehicles =
-      (vehiclesResult.data ||
-        []) as VehicleMaster[];
+      (vehiclesResult.data || []) as VehicleMaster[];
 
     /*
      * =========================================================
