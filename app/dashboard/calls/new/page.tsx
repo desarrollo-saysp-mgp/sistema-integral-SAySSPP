@@ -987,11 +987,47 @@ export default function NewCallPage() {
               "canvas",
             );
 
+          const originalWidth =
+            image.naturalWidth ||
+            image.width;
+
+          const originalHeight =
+            image.naturalHeight ||
+            image.height;
+
+          const maxWidth = 500;
+
+          const targetWidth =
+            Math.min(
+              originalWidth,
+              maxWidth,
+            );
+
+          const scale =
+            originalWidth > 0
+              ? targetWidth /
+                originalWidth
+              : 1;
+
+          const targetHeight =
+            Math.max(
+              1,
+              Math.round(
+                originalHeight *
+                  scale,
+              ),
+            );
+
           canvas.width =
-            image.width * 2;
+            Math.max(
+              1,
+              Math.round(
+                targetWidth,
+              ),
+            );
 
           canvas.height =
-            image.height * 2;
+            targetHeight;
 
           const ctx =
             canvas.getContext(
@@ -1008,6 +1044,16 @@ export default function NewCallPage() {
             return;
           }
 
+          ctx.fillStyle =
+            "#ffffff";
+
+          ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+
           ctx.drawImage(
             image,
             0,
@@ -1018,7 +1064,8 @@ export default function NewCallPage() {
 
           resolve(
             canvas.toDataURL(
-              "image/png",
+              "image/jpeg",
+              0.72,
             ),
           );
         };
@@ -1051,6 +1098,7 @@ export default function NewCallPage() {
         orientation: "landscape",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
       /*
@@ -1075,11 +1123,13 @@ export default function NewCallPage() {
       if (logoDataUrl) {
         doc.addImage(
           logoDataUrl,
-          "PNG",
+          "JPEG",
           14,
           10,
           34,
           12,
+          undefined,
+          "FAST",
         );
       }
 
