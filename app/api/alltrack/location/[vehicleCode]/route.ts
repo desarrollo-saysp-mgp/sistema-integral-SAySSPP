@@ -484,350 +484,8 @@ const authenticatedAlltrackPost =
   };
 
 
-type AlltrackTotaledSession = {
-  vehiculo_id?: string | number | null;
-  tiempo_sesion?: string | number | null;
-  tiempo_motor_ocioso?: string | number | null;
-  tiempo_movimiento?: string | number | null;
-  distancia_recorrida?: string | number | null;
-};
-
-type AlltrackVehicleSession = {
-  hora?: string | null;
-  fecha?: string | null;
-  tiempo_sesion?: string | number | null;
-  tiempo_motor_ocioso?: string | number | null;
-  tiempo_movimiento?: string | number | null;
-  distancia_recorrida?: string | number | null;
-};
-
-type AlltrackTravelPoint = {
-  id?: string | number | null;
-  lat?: number | null;
-  lon?: number | null;
-  fecha?: string | null;
-  hora?: string | null;
-  ts?: string | null;
-  velocidad?: number | null;
-  odometro?: string | number | null;
-  conductor?: string | null;
-  alias_cliente?: string | null;
-  sentido?: number | null;
-};
-
-type AlltrackTravelSegment = {
-  puntos?: AlltrackTravelPoint[];
-  subPuntos?: AlltrackTravelPoint[];
-  km_recorridos?: number | null;
-  fecha_inicio?: string | null;
-  fecha_fin?: string | null;
-  hora_inicio?: string | null;
-  hora_fin?: string | null;
-};
-
-type AlltrackTravelHistoryData = {
-  tramos?: AlltrackTravelSegment[];
-};
-
-const toNumber = (
-  value: unknown,
-) => {
-  const parsed =
-    Number(value);
-
-  return Number.isFinite(
-    parsed,
-  )
-    ? parsed
-    : 0;
-};
-
-const formatSeconds = (
-  totalSeconds: number,
-) => {
-  const safeSeconds =
-    Math.max(
-      0,
-      Math.round(
-        totalSeconds,
-      ),
-    );
-
-  const hours =
-    Math.floor(
-      safeSeconds / 3600,
-    );
-
-  const minutes =
-    Math.floor(
-      (safeSeconds % 3600) /
-        60,
-    );
-
-  const seconds =
-    safeSeconds % 60;
-
-  return [
-    String(hours).padStart(
-      2,
-      "0",
-    ),
-    String(minutes).padStart(
-      2,
-      "0",
-    ),
-    String(seconds).padStart(
-      2,
-      "0",
-    ),
-  ].join(":");
-};
-
-const isValidIsoDate = (
-  value: string,
-) =>
-  /^\d{4}-\d{2}-\d{2}$/.test(
-    value,
-  ) &&
-  !Number.isNaN(
-    new Date(
-      `${value}T00:00:00`,
-    ).getTime(),
-  );
-
-const daysBetweenInclusive = (
-  from: string,
-  to: string,
-) => {
-  const fromDate =
-    new Date(
-      `${from}T00:00:00Z`,
-    );
-
-  const toDate =
-    new Date(
-      `${to}T00:00:00Z`,
-    );
-
-  const milliseconds =
-    toDate.getTime() -
-    fromDate.getTime();
-
-  return (
-    Math.floor(
-      milliseconds /
-        86_400_000,
-    ) + 1
-  );
-};
-
-const normalizeAlltrackDate = (
-  value: unknown,
-) => {
-  const text =
-    String(
-      value || "",
-    ).trim();
-
-  if (
-    /^\d{2}-\d{2}-\d{4}$/.test(
-      text,
-    )
-  ) {
-    const [
-      day,
-      month,
-      year,
-    ] =
-      text.split("-");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  if (
-    /^\d{4}-\d{2}-\d{2}$/.test(
-      text,
-    )
-  ) {
-    return text;
-  }
-
-  return text;
-};
-
-const resolveAlltrackVehicleId =
-  async ({
-    supabase,
-    vehicle,
-  }: {
-    supabase: Awaited<
-      ReturnType<
-        typeof createClient
-      >
-    >;
-    vehicle: {
-      id: string;
-      code: string;
-      vehicle: string;
-      license_plate:
-        | string
-        | null;
-      alltrack_vehicle_id:
-        | string
-        | null;
-    };
-  }) => {
-    if (
-      vehicle.alltrack_vehicle_id
-    ) {
-      return String(
-        vehicle.alltrack_vehicle_id,
-      );
-    }
-
-    const vehiclePlate =
-      normalizePlate(
-        vehicle.license_plate,
-      );
-
-    /*
-     * Primer fallback:
-     * última posición válida, porque incluye vehículos
-     * accesibles que pueden no figurar en vehiclesByFleets.
-     */
-    if (vehiclePlate) {
-      const {
-        result:
-          positionsResult,
-      } =
-        await authenticatedAlltrackPost<
-          AlltrackPosition[]
-        >({
-          pathname:
-            "/JSON__GET_lastValidPosition/",
-        });
-
-      const positions =
-        Array.isArray(
-          positionsResult.data,
-        )
-          ? positionsResult.data
-          : [];
-
-      const position =
-        positions.find(
-          (item) =>
-            normalizePlate(
-              item.patente,
-            ) ===
-            vehiclePlate,
-        );
-
-      if (
-        position?.vehiculo_id !==
-          null &&
-        position?.vehiculo_id !==
-          undefined &&
-        String(
-          position.vehiculo_id,
-        ).trim()
-      ) {
-        const resolvedId =
-          String(
-            position.vehiculo_id,
-          );
-
-        await supabase
-          .from("vehicles")
-          .update({
-            alltrack_vehicle_id:
-              resolvedId,
-          })
-          .eq(
-            "id",
-            vehicle.id,
-          );
-
-        return resolvedId;
-      }
-    }
-
-    /*
-     * Segundo fallback:
-     * alias/código municipal dentro de las flotas.
-     */
-    const {
-      result:
-        fleetsResult,
-    } =
-      await authenticatedAlltrackPost<
-        AlltrackFleet[]
-      >({
-        pathname:
-          "/JSON__GET_vehiclesByFleets/",
-      });
-
-    const fleets =
-      Array.isArray(
-        fleetsResult.data,
-      )
-        ? fleetsResult.data
-        : [];
-
-    const normalizedCode =
-      normalizeVehicleCode(
-        vehicle.code,
-      );
-
-    const fleetVehicle =
-      fleets
-        .flatMap(
-          (fleet) =>
-            Array.isArray(
-              fleet.children,
-            )
-              ? fleet.children
-              : [],
-        )
-        .find(
-          (item) =>
-            normalizeVehicleCode(
-              item.alias_cliente,
-            ) ===
-            normalizedCode,
-        );
-
-    if (
-      fleetVehicle?.id !==
-        null &&
-      fleetVehicle?.id !==
-        undefined
-    ) {
-      const resolvedId =
-        String(
-          fleetVehicle.id,
-        );
-
-      await supabase
-        .from("vehicles")
-        .update({
-          alltrack_vehicle_id:
-            resolvedId,
-        })
-        .eq(
-          "id",
-          vehicle.id,
-        );
-
-      return resolvedId;
-    }
-
-    return null;
-  };
-
-
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   {
     params,
   }: {
@@ -846,87 +504,6 @@ export async function GET(
         vehicleCode,
       ).trim();
 
-    const {
-      searchParams,
-    } =
-      new URL(
-        request.url,
-      );
-
-    const from =
-      String(
-        searchParams.get(
-          "from",
-        ) || "",
-      ).trim();
-
-    const to =
-      String(
-        searchParams.get(
-          "to",
-        ) || from,
-      ).trim();
-
-    const includeRoute =
-      searchParams.get(
-        "includeRoute",
-      ) !== "0";
-
-    if (
-      !isValidIsoDate(from) ||
-      !isValidIsoDate(to)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Debés indicar from y to con formato YYYY-MM-DD",
-          example:
-            "?from=2026-08-31&to=2026-08-31",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const rangeDays =
-      daysBetweenInclusive(
-        from,
-        to,
-      );
-
-    if (
-      rangeDays <= 0
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "La fecha hasta no puede ser anterior a la fecha desde",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    /*
-     * Para esta primera versión limitamos a 31 días.
-     * El recorrido GPS puede ser muy pesado en períodos largos.
-     */
-    if (
-      rangeDays > 31
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Por ahora el informe admite un máximo de 31 días por consulta",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
     const supabase =
       await createClient();
 
@@ -942,10 +519,7 @@ export async function GET(
     } =
       await supabase.auth.getUser();
 
-    if (
-      authError ||
-      !user
-    ) {
+    if (authError || !user) {
       return NextResponse.json(
         {
           error:
@@ -974,14 +548,12 @@ export async function GET(
     if (
       profileError ||
       !profile ||
-      !canAccess(
-        profile,
-      )
+      !canAccess(profile)
     ) {
       return NextResponse.json(
         {
           error:
-            "No autorizado para generar informes Alltrack",
+            "No autorizado para rastrear vehículos",
         },
         {
           status: 403,
@@ -991,7 +563,7 @@ export async function GET(
 
     /*
      * =========================================
-     * VEHÍCULO
+     * VEHÍCULO DE PLANTA VEHICULAR
      * =========================================
      */
 
@@ -1006,10 +578,6 @@ export async function GET(
         code,
         vehicle,
         license_plate,
-        department,
-        primary_driver_1,
-        primary_driver_2,
-        backup_driver,
         has_alltrack,
         alltrack_vehicle_id,
         active
@@ -1050,24 +618,305 @@ export async function GET(
       );
     }
 
-    const alltrackVehicleId =
-      await resolveAlltrackVehicleId(
-        {
-          supabase,
-          vehicle,
-        },
+    const vehiclePlate =
+      vehicle.license_plate
+        ? normalizePlate(
+            vehicle.license_plate,
+          )
+        : "";
+
+    const normalizedVehicleCode =
+      normalizeVehicleCode(
+        vehicle.code,
       );
 
+    /*
+     * =========================================
+     * LOGIN ALLTRACK
+     * =========================================
+     */
+
+    let {
+      token,
+    } = await getAlltrackToken();
+
+    /*
+     * token se reutiliza mientras siga vigente.
+     * Si Alltrack informa "Sesion Caducada",
+     * authenticatedAlltrackPost renueva la sesión
+     * automáticamente y reintenta una vez.
+     */
+
+    /*
+     * =========================================
+     * ÚLTIMA POSICIÓN ALLTRACK
+     * =========================================
+     *
+     * IMPORTANTE:
+     *
+     * Antes intentábamos resolver el vehículo primero con
+     * JSON__GET_vehiclesByFleets. Eso funciona para muchas
+     * unidades, pero puede omitir vehículos "cedidos" o que
+     * están disponibles para el usuario por otra relación.
+     *
+     * JSON__GET_lastValidPosition, en cambio, está documentado
+     * para devolver la última posición válida de los vehículos
+     * del usuario autenticado y además incluye vehiculo_id y
+     * patente.
+     *
+     * Por eso ahora hacemos:
+     *
+     * 1. Consultar posiciones directamente.
+     * 2. Si ya tenemos alltrack_vehicle_id, buscar por ID.
+     * 3. Si todavía no tenemos ID, buscar por patente.
+     * 4. Si encontramos por patente, guardar vehiculo_id en
+     *    public.vehicles para las siguientes consultas.
+     */
+
+    const {
+      result:
+        positionsResult,
+      token:
+        refreshedPositionToken,
+    } =
+      await authenticatedAlltrackPost<
+        AlltrackPosition[]
+      >({
+        pathname:
+          "/JSON__GET_lastValidPosition/",
+      });
+
+    token =
+      refreshedPositionToken;
+
+    const positions =
+      Array.isArray(
+        positionsResult.data,
+      )
+        ? positionsResult.data
+        : [];
+
+    const storedAlltrackVehicleId =
+      vehicle.alltrack_vehicle_id
+        ? String(
+            vehicle.alltrack_vehicle_id,
+          )
+        : null;
+
+    /*
+     * 1) Intento directo por ID ya guardado.
+     */
+    let position =
+      storedAlltrackVehicleId
+        ? positions.find(
+            (item) =>
+              String(
+                item.vehiculo_id ||
+                  "",
+              ) ===
+              storedAlltrackVehicleId,
+          ) ?? null
+        : null;
+
+    /*
+     * 2) Si no tenemos posición por ID y existe patente,
+     * intentamos por patente.
+     */
     if (
-      !alltrackVehicleId
+      !position &&
+      vehiclePlate
     ) {
+      position =
+        positions.find(
+          (item) =>
+            normalizePlate(
+              item.patente,
+            ) ===
+            vehiclePlate,
+        ) ?? null;
+    }
+
+    /*
+     * 3) Si todavía no resolvimos el vehículo (caso sin patente,
+     * patente "A definir", patente vieja, etc.), buscamos el ID
+     * en las flotas usando el código/alias municipal.
+     *
+     * Esto NO reemplaza la búsqueda directa por posición.
+     * Es solamente un fallback para obtener vehiculo_id.
+     */
+    let fallbackVehicle:
+      AlltrackFleetVehicle | null =
+      null;
+
+    let resolvedAlltrackVehicleId =
+      position?.vehiculo_id !==
+        null &&
+      position?.vehiculo_id !==
+        undefined &&
+      String(
+        position.vehiculo_id,
+      ).trim()
+        ? String(
+            position.vehiculo_id,
+          )
+        : storedAlltrackVehicleId;
+
+    if (
+      !position &&
+      !resolvedAlltrackVehicleId
+    ) {
+      const {
+        result:
+          fleetsResult,
+      } =
+        await authenticatedAlltrackPost<
+          AlltrackFleet[]
+        >({
+          pathname:
+            "/JSON__GET_vehiclesByFleets/",
+        });
+
+      const fleets =
+        Array.isArray(
+          fleetsResult.data,
+        )
+          ? fleetsResult.data
+          : [];
+
+      const fleetVehicles =
+        fleets.flatMap(
+          (fleet) =>
+            Array.isArray(
+              fleet.children,
+            )
+              ? fleet.children
+              : [],
+        );
+
+      fallbackVehicle =
+        fleetVehicles.find(
+          (item) =>
+            normalizeVehicleCode(
+              item.alias_cliente,
+            ) ===
+            normalizedVehicleCode,
+        ) ?? null;
+
+      if (
+        fallbackVehicle?.id !==
+          null &&
+        fallbackVehicle?.id !==
+          undefined
+      ) {
+        resolvedAlltrackVehicleId =
+          String(
+            fallbackVehicle.id,
+          );
+
+        position =
+          positions.find(
+            (item) =>
+              String(
+                item.vehiculo_id ||
+                  "",
+              ) ===
+              resolvedAlltrackVehicleId,
+          ) ?? null;
+      }
+    }
+
+    /*
+     * El vehículo puede existir en Alltrack pero no tener una
+     * posición válida disponible. Esto es distinto de "vehículo
+     * no encontrado".
+     */
+    if (
+      !position &&
+      resolvedAlltrackVehicleId
+    ) {
+      if (
+        !storedAlltrackVehicleId
+      ) {
+        const {
+          error:
+            updateAlltrackIdError,
+        } = await supabase
+          .from("vehicles")
+          .update({
+            alltrack_vehicle_id:
+              resolvedAlltrackVehicleId,
+          })
+          .eq(
+            "id",
+            vehicle.id,
+          );
+
+        if (
+          updateAlltrackIdError
+        ) {
+          console.error(
+            "No se pudo guardar alltrack_vehicle_id:",
+            {
+              code:
+                vehicle.code,
+              alltrack_vehicle_id:
+                resolvedAlltrackVehicleId,
+              error:
+                updateAlltrackIdError,
+            },
+          );
+        }
+      }
+
       return NextResponse.json(
         {
           error:
-            "No se pudo vincular el vehículo con Alltrack",
+            "El vehículo está vinculado con Alltrack, pero no tiene una posición válida disponible en este momento.",
+          reason:
+            "NO_VALID_POSITION",
           vehicle: {
             code:
               vehicle.code,
+            vehicle:
+              vehicle.vehicle,
+            license_plate:
+              vehicle.license_plate,
+            alltrack_vehicle_id:
+              resolvedAlltrackVehicleId,
+          },
+        },
+        {
+          status: 404,
+        },
+      );
+    }
+
+    if (!position) {
+      console.warn(
+        "Vehículo no encontrado en Alltrack:",
+        {
+          code:
+            vehicle.code,
+          plate:
+            vehicle.license_plate,
+          alltrack_vehicle_id:
+            vehicle.alltrack_vehicle_id,
+          positionsReturned:
+            positions.length,
+        },
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "El vehículo no pudo ser vinculado con Alltrack por ID, patente ni código.",
+          reason:
+            "VEHICLE_NOT_LINKED",
+          vehicle: {
+            code:
+              vehicle.code,
+            vehicle:
+              vehicle.vehicle,
             license_plate:
               vehicle.license_plate,
           },
@@ -1078,617 +927,179 @@ export async function GET(
       );
     }
 
-    /*
-     * =========================================
-     * TOTALIZADO DEL PERÍODO
-     * =========================================
-     */
-
-    const totalFormData =
-      new FormData();
-
-    totalFormData.set(
-      "fecha_desde",
-      from,
-    );
-
-    totalFormData.set(
-      "fecha_hasta",
-      to,
-    );
-
-    totalFormData.set(
-      "vehiculo_id",
-      alltrackVehicleId,
-    );
-
-    const {
-      result:
-        totalsResult,
-    } =
-      await authenticatedAlltrackPost<
-        AlltrackTotaledSession[]
-      >({
-        pathname:
-          "/JSON__GET_totaledVehicleSessions/",
-        formDataFactory:
-          () =>
-            totalFormData,
-      });
-
-    const totals =
-      Array.isArray(
-        totalsResult.data,
-      )
-        ? totalsResult.data
-        : [];
-
-    const totalRow =
-      totals.find(
-        (item) =>
-          String(
-            item.vehiculo_id ||
-              "",
-          ) ===
-          alltrackVehicleId,
-      ) ||
-      totals[0] ||
-      null;
-
-    const sessionSeconds =
-      toNumber(
-        totalRow
-          ?.tiempo_sesion,
-      );
-
-    const idleSeconds =
-      toNumber(
-        totalRow
-          ?.tiempo_motor_ocioso,
-      );
-
-    const movementSeconds =
-      toNumber(
-        totalRow
-          ?.tiempo_movimiento,
-      );
-
-    const distanceMeters =
-      toNumber(
-        totalRow
-          ?.distancia_recorrida,
-      );
-
-    const activitySeconds =
-      idleSeconds +
-      movementSeconds;
-
-    const movementPercent =
-      activitySeconds > 0
-        ? Number(
-            (
-              (movementSeconds /
-                activitySeconds) *
-              100
-            ).toFixed(2),
+    resolvedAlltrackVehicleId =
+      position.vehiculo_id !==
+        null &&
+      position.vehiculo_id !==
+        undefined &&
+      String(
+        position.vehiculo_id,
+      ).trim()
+        ? String(
+            position.vehiculo_id,
           )
-        : 0;
-
-    const idlePercent =
-      activitySeconds > 0
-        ? Number(
-            (
-              (idleSeconds /
-                activitySeconds) *
-              100
-            ).toFixed(2),
-          )
-        : 0;
+        : resolvedAlltrackVehicleId;
 
     /*
-     * =========================================
-     * SESIONES DEL VEHÍCULO
-     * =========================================
-     */
-
-    const sessionsFormData =
-      new FormData();
-
-    sessionsFormData.set(
-      "fecha_desde",
-      from,
-    );
-
-    sessionsFormData.set(
-      "fecha_hasta",
-      to,
-    );
-
-    sessionsFormData.set(
-      "hora_desde",
-      "00:00:00",
-    );
-
-    sessionsFormData.set(
-      "hora_hasta",
-      "23:59:59",
-    );
-
-    sessionsFormData.set(
-      "vehiculo_id",
-      alltrackVehicleId,
-    );
-
-    const {
-      result:
-        sessionsResult,
-    } =
-      await authenticatedAlltrackPost<
-        AlltrackVehicleSession[]
-      >({
-        pathname:
-          "/JSON__GET_vehicleSessionsByVehicleId/",
-        formDataFactory:
-          () =>
-            sessionsFormData,
-      });
-
-    const sessions =
-      Array.isArray(
-        sessionsResult.data,
-      )
-        ? sessionsResult.data
-        : [];
-
-    /*
-     * Agrupamos sesiones por fecha para obtener
-     * la tabla "Actividad por día" del informe.
-     */
-    const dailyMap =
-      new Map<
-        string,
-        {
-          date: string;
-          session_seconds: number;
-          idle_seconds: number;
-          movement_seconds: number;
-          distance_meters: number;
-          sessions_count: number;
-        }
-      >();
-
-    sessions.forEach(
-      (session) => {
-        const date =
-          normalizeAlltrackDate(
-            session.fecha,
-          );
-
-        if (!date) return;
-
-        const current =
-          dailyMap.get(
-            date,
-          ) || {
-            date,
-            session_seconds: 0,
-            idle_seconds: 0,
-            movement_seconds: 0,
-            distance_meters: 0,
-            sessions_count: 0,
-          };
-
-        current.session_seconds +=
-          toNumber(
-            session.tiempo_sesion,
-          );
-
-        current.idle_seconds +=
-          toNumber(
-            session.tiempo_motor_ocioso,
-          );
-
-        current.movement_seconds +=
-          toNumber(
-            session.tiempo_movimiento,
-          );
-
-        current.distance_meters +=
-          toNumber(
-            session.distancia_recorrida,
-          );
-
-        current.sessions_count +=
-          1;
-
-        dailyMap.set(
-          date,
-          current,
-        );
-      },
-    );
-
-    const dailyActivity =
-      Array.from(
-        dailyMap.values(),
-      )
-        .sort(
-          (
-            a,
-            b,
-          ) =>
-            a.date.localeCompare(
-              b.date,
-            ),
-        )
-        .map(
-          (day) => ({
-            date:
-              day.date,
-            sessions_count:
-              day.sessions_count,
-            session_seconds:
-              day.session_seconds,
-            session_time:
-              formatSeconds(
-                day.session_seconds,
-              ),
-            idle_seconds:
-              day.idle_seconds,
-            idle_time:
-              formatSeconds(
-                day.idle_seconds,
-              ),
-            movement_seconds:
-              day.movement_seconds,
-            movement_time:
-              formatSeconds(
-                day.movement_seconds,
-              ),
-            distance_meters:
-              Number(
-                day.distance_meters.toFixed(
-                  2,
-                ),
-              ),
-            distance_km:
-              Number(
-                (
-                  day.distance_meters /
-                  1000
-                ).toFixed(
-                  2,
-                ),
-              ),
-          }),
-        );
-
-    /*
-     * =========================================
-     * HISTORIAL GPS
-     * =========================================
+     * Si todavía no estaba vinculado en Planta Vehicular y
+     * encontramos la posición por patente, guardamos el ID
+     * automáticamente.
      *
-     * Para no devolver miles de puntos sin necesidad:
-     * - por defecto sólo incluimos ruta cuando el período
-     *   es de 1 día;
-     * - para más de 1 día se puede llamar con includeRoute=0
-     *   y después pedir recorridos por tramos/semana.
+     * No modificamos la patente ni ningún otro dato.
      */
-
-    let route:
-      {
-        segments: number;
-        points: Array<{
-          lat: number;
-          lon: number;
-          date:
-            | string
-            | null;
-          time:
-            | string
-            | null;
-          timestamp:
-            | string
-            | null;
-          speed:
-            | number
-            | null;
-          odometer:
-            | string
-            | number
-            | null;
-          driver:
-            | string
-            | null;
-        }>;
-      } | null =
-      null;
-
     if (
-      includeRoute &&
-      rangeDays === 1
+      !storedAlltrackVehicleId &&
+      resolvedAlltrackVehicleId
     ) {
-      const travelFormData =
-        new FormData();
-
-      travelFormData.set(
-        "fecha_desde",
-        from,
-      );
-
-      travelFormData.set(
-        "fecha_hasta",
-        to,
-      );
-
-      travelFormData.set(
-        "hora_desde",
-        "00:00:00",
-      );
-
-      travelFormData.set(
-        "hora_hasta",
-        "23:59:59",
-      );
-
-      travelFormData.set(
-        "vehiculo_id",
-        alltrackVehicleId,
-      );
-
-      travelFormData.set(
-        "isAgrupamiento",
-        "0",
-      );
-
-      travelFormData.set(
-        "order",
-        "ASC",
-      );
-
       const {
-        result:
-          travelResult,
-      } =
-        await authenticatedAlltrackPost<
-          AlltrackTravelHistoryData
-        >({
-          pathname:
-            "/JSON__GET_travelHistory/",
-          formDataFactory:
-            () =>
-              travelFormData,
-        });
+        error:
+          updateAlltrackIdError,
+      } = await supabase
+        .from("vehicles")
+        .update({
+          alltrack_vehicle_id:
+            resolvedAlltrackVehicleId,
+        })
+        .eq(
+          "id",
+          vehicle.id,
+        );
 
-      const tramos =
-        Array.isArray(
-          travelResult.data
-            ?.tramos,
-        )
-          ? travelResult.data
-              ?.tramos || []
-          : [];
-
-      const points =
-        tramos.flatMap(
-          (segment) => {
-            const sourcePoints =
-              Array.isArray(
-                segment.subPuntos,
-              ) &&
-              segment.subPuntos
-                .length > 0
-                ? segment.subPuntos
-                : Array.isArray(
-                    segment.puntos,
-                  )
-                  ? segment.puntos
-                  : [];
-
-            return sourcePoints
-              .filter(
-                (point) =>
-                  typeof point.lat ===
-                    "number" &&
-                  typeof point.lon ===
-                    "number",
-              )
-              .map(
-                (point) => ({
-                  lat:
-                    point.lat as number,
-                  lon:
-                    point.lon as number,
-                  date:
-                    point.fecha ||
-                    null,
-                  time:
-                    point.hora ||
-                    null,
-                  timestamp:
-                    point.ts ||
-                    null,
-                  speed:
-                    typeof point.velocidad ===
-                    "number"
-                      ? point.velocidad
-                      : null,
-                  odometer:
-                    point.odometro ??
-                    null,
-                  driver:
-                    point.conductor ||
-                    null,
-                }),
-              );
+      if (
+        updateAlltrackIdError
+      ) {
+        console.error(
+          "No se pudo guardar alltrack_vehicle_id:",
+          {
+            vehicleId:
+              vehicle.id,
+            code:
+              vehicle.code,
+            alltrackVehicleId:
+              resolvedAlltrackVehicleId,
+            error:
+              updateAlltrackIdError,
           },
         );
-
-      route = {
-        segments:
-          tramos.length,
-        points,
-      };
+      } else {
+        console.log(
+          "Vehículo vinculado automáticamente con Alltrack:",
+          {
+            code:
+              vehicle.code,
+            plate:
+              vehicle.license_plate,
+            alltrack_vehicle_id:
+              resolvedAlltrackVehicleId,
+          },
+        );
+      }
     }
+
+    /*
+     * =========================================
+     * RESPUESTA LIMPIA PARA NUESTRA APP
+     * =========================================
+     */
 
     return NextResponse.json({
       meta: {
         alltrack_token_cache:
           hasValidCachedToken(),
-        route_included:
-          Boolean(route),
-        range_days:
-          rangeDays,
       },
 
       data: {
         vehicle: {
-          id:
-            vehicle.id,
+          id: vehicle.id,
           code:
             vehicle.code,
           name:
             vehicle.vehicle,
           license_plate:
             vehicle.license_plate,
-          department:
-            vehicle.department,
-          primary_driver_1:
-            vehicle.primary_driver_1,
-          primary_driver_2:
-            vehicle.primary_driver_2,
-          backup_driver:
-            vehicle.backup_driver,
+
           alltrack_vehicle_id:
-            alltrackVehicleId,
+            resolvedAlltrackVehicleId,
+
+          alltrack: {
+            alias:
+              fallbackVehicle
+                ?.alias_cliente ??
+              null,
+            license_plate:
+              position.patente ??
+              fallbackVehicle
+                ?.patente ??
+              null,
+            brand:
+              fallbackVehicle
+                ?.marca ??
+              null,
+            model:
+              fallbackVehicle
+                ?.modelo ??
+              null,
+            type:
+              fallbackVehicle
+                ?.vehiculo_tipo ??
+              null,
+          },
         },
 
-        period: {
-          from,
-          to,
+        position: {
+          latitude:
+            position.lat ??
+            null,
+
+          longitude:
+            position.lon ??
+            null,
+
+          status:
+            position.estado ??
+            null,
+
+          speed:
+            position.velocidad ??
+            null,
+
+          driver:
+            position.conductor ??
+            null,
+
+          date:
+            position.fecha ??
+            null,
+
+          time:
+            position.hora ??
+            null,
+
+          address:
+            position.direccion ??
+            null,
+
+          odometer:
+            position.odometro ??
+            null,
+
+          hourmeter:
+            position.horometro ??
+            null,
+
+          heading:
+            position.sentido ??
+            null,
+
+          timeout:
+            position.timeout ??
+            null,
         },
-
-        summary: {
-          session_seconds:
-            sessionSeconds,
-          session_time:
-            formatSeconds(
-              sessionSeconds,
-            ),
-
-          idle_seconds:
-            idleSeconds,
-          idle_time:
-            formatSeconds(
-              idleSeconds,
-            ),
-
-          movement_seconds:
-            movementSeconds,
-          movement_time:
-            formatSeconds(
-              movementSeconds,
-            ),
-
-          distance_meters:
-            Number(
-              distanceMeters.toFixed(
-                2,
-              ),
-            ),
-
-          distance_km:
-            Number(
-              (
-                distanceMeters /
-                1000
-              ).toFixed(
-                2,
-              ),
-            ),
-
-          movement_percent:
-            movementPercent,
-
-          idle_percent:
-            idlePercent,
-        },
-
-        daily_activity:
-          dailyActivity,
-
-        sessions:
-          sessions.map(
-            (session) => ({
-              date:
-                normalizeAlltrackDate(
-                  session.fecha,
-                ),
-              time:
-                session.hora ||
-                null,
-
-              session_seconds:
-                toNumber(
-                  session.tiempo_sesion,
-                ),
-
-              session_time:
-                formatSeconds(
-                  toNumber(
-                    session.tiempo_sesion,
-                  ),
-                ),
-
-              idle_seconds:
-                toNumber(
-                  session.tiempo_motor_ocioso,
-                ),
-
-              idle_time:
-                formatSeconds(
-                  toNumber(
-                    session.tiempo_motor_ocioso,
-                  ),
-                ),
-
-              movement_seconds:
-                toNumber(
-                  session.tiempo_movimiento,
-                ),
-
-              movement_time:
-                formatSeconds(
-                  toNumber(
-                    session.tiempo_movimiento,
-                  ),
-                ),
-
-              distance_meters:
-                toNumber(
-                  session.distancia_recorrida,
-                ),
-
-              distance_km:
-                Number(
-                  (
-                    toNumber(
-                      session.distancia_recorrida,
-                    ) /
-                    1000
-                  ).toFixed(
-                    3,
-                  ),
-                ),
-            }),
-          ),
-
-        route,
       },
     });
   } catch (error) {
     console.error(
-      "Error GET /api/alltrack/report/[vehicleCode]:",
+      "Error GET /api/alltrack/location/[vehicleCode]:",
       error,
     );
 
@@ -1697,7 +1108,7 @@ export async function GET(
         error:
           error instanceof Error
             ? error.message
-            : "No se pudo generar el informe Alltrack",
+            : "Error interno al consultar Alltrack",
       },
       {
         status: 500,
