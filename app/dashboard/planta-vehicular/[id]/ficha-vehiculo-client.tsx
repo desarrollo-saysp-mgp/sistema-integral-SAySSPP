@@ -284,6 +284,41 @@ type VehicleCriticalitySummary = {
     status_display: string;
 };
 
+type AlltrackLocationData = {
+    vehicle: {
+        id: string;
+        code: string;
+        name: string;
+        license_plate: string | null;
+        alltrack_vehicle_id:
+            | string
+            | number
+            | null;
+    };
+    position: {
+        latitude: number | null;
+        longitude: number | null;
+        status: string | null;
+        speed: number | null;
+        driver: string | null;
+        date: string | null;
+        time: string | null;
+        address: string | null;
+        odometer: string | number | null;
+        hourmeter: string | number | null;
+        heading: number | null;
+        timeout: number | null;
+    };
+};
+
+type AlltrackLocationResponse = {
+    meta?: {
+        alltrack_token_cache?: boolean;
+    };
+    data?: AlltrackLocationData;
+    error?: string;
+};
+
 type ChangedField = {
     key: keyof Vehicle;
     label: string;
@@ -853,6 +888,153 @@ export function FichaVehiculoClient({
             `/dashboard/planta-vehicular/${vehicle.id}/editar`,
         );
     };
+
+    /* =======================================================
+       RASTREO ALLTRACK
+    ======================================================= */
+
+    const [
+        trackingOpen,
+        setTrackingOpen,
+    ] = useState(false);
+
+    const [
+        trackingLoading,
+        setTrackingLoading,
+    ] = useState(false);
+
+    const [
+        trackingError,
+        setTrackingError,
+    ] = useState<string | null>(
+        null,
+    );
+
+    const [
+        trackingData,
+        setTrackingData,
+    ] = useState<
+        AlltrackLocationData | null
+    >(null);
+
+    const fetchTrackingLocation =
+        useCallback(async () => {
+            if (
+                trackingLoading ||
+                !vehicle.has_alltrack
+            ) {
+                return;
+            }
+
+            try {
+                setTrackingLoading(
+                    true,
+                );
+
+                setTrackingError(
+                    null,
+                );
+
+                const response =
+                    await fetch(
+                        `/api/alltrack/location/${encodeURIComponent(
+                            vehicle.code,
+                        )}`,
+                        {
+                            method: "GET",
+                            cache: "no-store",
+                        },
+                    );
+
+                const result =
+                    (await response.json()) as AlltrackLocationResponse;
+
+                if (
+                    !response.ok ||
+                    !result.data
+                ) {
+                    throw new Error(
+                        result.error ||
+                            "No se pudo obtener la ubicación del vehículo.",
+                    );
+                }
+
+                setTrackingData(
+                    result.data,
+                );
+            } catch (error) {
+                console.error(
+                    `Error rastreando ${vehicle.code}:`,
+                    error,
+                );
+
+                setTrackingError(
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo obtener la ubicación del vehículo.",
+                );
+            } finally {
+                setTrackingLoading(
+                    false,
+                );
+            }
+        }, [
+            trackingLoading,
+            vehicle.code,
+            vehicle.has_alltrack,
+        ]);
+
+    const handleOpenTracking =
+        () => {
+            setTrackingOpen(true);
+
+            void fetchTrackingLocation();
+        };
+
+    const trackingPosition =
+        trackingData?.position;
+
+    const hasTrackingCoordinates =
+        typeof trackingPosition?.latitude ===
+            "number" &&
+        typeof trackingPosition?.longitude ===
+            "number";
+
+    const trackingMapUrl =
+        hasTrackingCoordinates
+            ? (() => {
+                const latitude =
+                    trackingPosition
+                        ?.latitude as number;
+
+                const longitude =
+                    trackingPosition
+                        ?.longitude as number;
+
+                const delta = 0.008;
+
+                const bbox = [
+                    longitude - delta,
+                    latitude - delta,
+                    longitude + delta,
+                    latitude + delta,
+                ].join(",");
+
+                const params =
+                    new URLSearchParams({
+                        bbox,
+                        layer: "mapnik",
+                        marker: `${latitude},${longitude}`,
+                    });
+
+                return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+            })()
+            : null;
+
+    const trackingExternalMapUrl =
+        hasTrackingCoordinates
+            ? `https://www.openstreetmap.org/?mlat=${trackingPosition?.latitude}&mlon=${trackingPosition?.longitude}#map=17/${trackingPosition?.latitude}/${trackingPosition?.longitude}`
+            : null;
 
     const [
         criticality,
@@ -2865,6 +3047,21 @@ export function FichaVehiculoClient({
                                     : "Exportar PDF"}
                             </Button>
 
+                            {vehicle.has_alltrack && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={
+                                        handleOpenTracking
+                                    }
+                                    className="border-emerald-200 bg-emerald-50/60 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100/80 hover:text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                                >
+                                    <MapPin className="mr-2 h-4 w-4" />
+
+                                    Rastrear vehículo
+                                </Button>
+                            )}
+
                             {canManage && (
                                 <>
                                 {vehicle.active ? (
@@ -4072,6 +4269,232 @@ export function FichaVehiculoClient({
             </div>
 
             {/* =======================================================
+          MODAL RASTREO ALLTRACK
+      ======================================================== */}
+
+            <Dialog
+                open={trackingOpen}
+                onOpenChange={
+                    setTrackingOpen
+                }
+            >
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <MapPin className="h-5 w-5 text-emerald-600" />
+
+                            Ubicación de{" "}
+                            {vehicle.code}
+                        </DialogTitle>
+
+                        <DialogDescription>
+                            {vehicle.vehicle}
+                            {vehicle.license_plate
+                                ? ` · ${vehicle.license_plate}`
+                                : ""}
+                            . Se muestra la última posición válida informada por Alltrack.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {trackingLoading &&
+                    !trackingData ? (
+                        <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-xl border bg-muted/20">
+                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+
+                            <div className="text-center">
+                                <p className="font-medium">
+                                    Consultando ubicación en Alltrack...
+                                </p>
+
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Esto puede demorar unos segundos.
+                                </p>
+                            </div>
+                        </div>
+                    ) : trackingError &&
+                      !trackingData ? (
+                        <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 rounded-xl border border-red-200 bg-red-50/60 p-6 text-center dark:border-red-900 dark:bg-red-950/20">
+                            <CircleOff className="h-9 w-9 text-red-600" />
+
+                            <div>
+                                <p className="font-semibold text-red-800 dark:text-red-300">
+                                    No se pudo obtener la ubicación
+                                </p>
+
+                                <p className="mt-1 max-w-lg text-sm text-red-700/80 dark:text-red-300/80">
+                                    {
+                                        trackingError
+                                    }
+                                </p>
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    void fetchTrackingLocation()
+                                }
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+
+                                Reintentar
+                            </Button>
+                        </div>
+                    ) : trackingData ? (
+                        <div className="space-y-4">
+                            {trackingMapUrl ? (
+                                <div className="overflow-hidden rounded-xl border bg-muted/20">
+                                    <iframe
+                                        title={`Ubicación de ${vehicle.code}`}
+                                        src={
+                                            trackingMapUrl
+                                        }
+                                        className="h-[360px] w-full border-0"
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer-when-downgrade"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex min-h-[220px] items-center justify-center rounded-xl border bg-muted/20 px-6 text-center text-sm text-muted-foreground">
+                                    Alltrack no devolvió coordenadas válidas para mostrar el mapa.
+                                </div>
+                            )}
+
+                            {trackingError && (
+                                <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-900 dark:border-yellow-900 dark:bg-yellow-950/20 dark:text-yellow-200">
+                                    No se pudo actualizar la posición. Se mantiene visible la última ubicación obtenida.
+                                </div>
+                            )}
+
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <TrackingInfoCard
+                                    label="Estado"
+                                    value={
+                                        trackingPosition
+                                            ?.status ||
+                                        "-"
+                                    }
+                                />
+
+                                <TrackingInfoCard
+                                    label="Velocidad"
+                                    value={
+                                        typeof trackingPosition
+                                            ?.speed ===
+                                        "number"
+                                            ? `${trackingPosition.speed} km/h`
+                                            : "-"
+                                    }
+                                />
+
+                                <TrackingInfoCard
+                                    label="Último reporte"
+                                    value={
+                                        [
+                                            trackingPosition
+                                                ?.date,
+                                            trackingPosition
+                                                ?.time,
+                                        ]
+                                            .filter(
+                                                Boolean,
+                                            )
+                                            .join(
+                                                " · ",
+                                            ) ||
+                                        "-"
+                                    }
+                                />
+
+                                <TrackingInfoCard
+                                    label="Odómetro"
+                                    value={
+                                        trackingPosition
+                                            ?.odometer !==
+                                            null &&
+                                        trackingPosition
+                                            ?.odometer !==
+                                            undefined
+                                            ? `${Number(
+                                                trackingPosition.odometer,
+                                            ).toLocaleString(
+                                                "es-AR",
+                                                {
+                                                    maximumFractionDigits:
+                                                        1,
+                                                },
+                                            )} km`
+                                            : "-"
+                                    }
+                                />
+                            </div>
+
+                            <div className="rounded-xl border p-3">
+                                <div className="flex items-start gap-2">
+                                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                            Dirección
+                                        </p>
+
+                                        <p className="mt-1 text-sm leading-6">
+                                            {trackingPosition
+                                                ?.address ||
+                                                "Sin dirección informada"}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                                {trackingExternalMapUrl && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        asChild
+                                    >
+                                        <a
+                                            href={
+                                                trackingExternalMapUrl
+                                            }
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            <MapPin className="mr-2 h-4 w-4" />
+
+                                            Abrir mapa
+                                        </a>
+                                    </Button>
+                                )}
+
+                                <Button
+                                    type="button"
+                                    onClick={() =>
+                                        void fetchTrackingLocation()
+                                    }
+                                    disabled={
+                                        trackingLoading
+                                    }
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                    {trackingLoading ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                    )}
+
+                                    {trackingLoading
+                                        ? "Actualizando..."
+                                        : "Actualizar ubicación"}
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+
+            {/* =======================================================
           MODAL BAJA
       ======================================================== */}
 
@@ -4477,6 +4900,26 @@ export function FichaVehiculoClient({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+function TrackingInfoCard({
+    label,
+    value,
+}: {
+    label: string;
+    value: string;
+}) {
+    return (
+        <div className="rounded-xl border bg-muted/20 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                {label}
+            </p>
+
+            <p className="mt-1.5 text-sm font-semibold leading-snug">
+                {value}
+            </p>
+        </div>
     );
 }
 
