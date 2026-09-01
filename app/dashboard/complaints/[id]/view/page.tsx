@@ -376,20 +376,39 @@ export default function ComplaintViewPage() {
     return new Promise((resolve, reject) => {
       const image = new Image();
       image.crossOrigin = "anonymous";
+
       image.onload = () => {
         const canvas = document.createElement("canvas");
-        canvas.width = image.width * 2;
-        canvas.height = image.height * 2;
+
+        const originalWidth = image.naturalWidth || image.width;
+        const originalHeight = image.naturalHeight || image.height;
+        const maxWidth = 500;
+
+        const targetWidth = Math.min(originalWidth, maxWidth);
+        const scale = originalWidth > 0 ? targetWidth / originalWidth : 1;
+        const targetHeight = Math.max(
+          1,
+          Math.round(originalHeight * scale),
+        );
+
+        canvas.width = Math.max(1, Math.round(targetWidth));
+        canvas.height = targetHeight;
 
         const ctx = canvas.getContext("2d");
+
         if (!ctx) {
           reject(new Error("No se pudo procesar la imagen"));
           return;
         }
 
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/png"));
+
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
       };
+
       image.onerror = () => reject(new Error("No se pudo cargar el logo"));
       image.src = src;
     });
@@ -441,6 +460,7 @@ export default function ComplaintViewPage() {
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
       let logoDataUrl: string | null = null;
@@ -454,7 +474,16 @@ export default function ComplaintViewPage() {
       }
 
       if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", 14, 10, 34, 12);
+        doc.addImage(
+          logoDataUrl,
+          "JPEG",
+          14,
+          10,
+          34,
+          12,
+          undefined,
+          "FAST",
+        );
       }
 
       doc.setFontSize(16);
