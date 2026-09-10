@@ -599,6 +599,48 @@ export async function PATCH(
       updateData.extra_data = nextExtraData;
     }
 
+    const hasResolutionFollowupField = hasOwn(
+      body,
+      "resolution_followup_called",
+    );
+
+    if (hasResolutionFollowupField) {
+      if (currentUser.role !== "Admin" && currentUser.role !== "Reclamos") {
+        return NextResponse.json(
+          {
+            error:
+              "No tenés permisos para modificar el seguimiento telefónico",
+          },
+          { status: 403 },
+        );
+      }
+
+      const currentExtraData =
+        currentComplaint.extra_data &&
+        typeof currentComplaint.extra_data === "object"
+          ? currentComplaint.extra_data
+          : {};
+
+      const nextExtraData = {
+        ...currentExtraData,
+        ...(updateData.extra_data && typeof updateData.extra_data === "object"
+          ? updateData.extra_data
+          : {}),
+      } as Record<string, unknown>;
+
+      const nextCalled = Boolean(body.resolution_followup_called);
+
+      nextExtraData.resolution_followup_called = nextCalled;
+      nextExtraData.resolution_followup_called_at = nextCalled
+        ? new Date().toISOString()
+        : null;
+      nextExtraData.resolution_followup_called_by = nextCalled
+        ? authUser.id
+        : null;
+
+      updateData.extra_data = nextExtraData;
+    }
+
     if (hasSPTrackingFields || (isServiciosPublicosUser && hasResolutionDate)) {
       const currentExtraData =
         currentComplaint.extra_data &&

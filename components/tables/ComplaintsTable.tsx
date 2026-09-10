@@ -34,6 +34,8 @@ import {
   Loader2,
   MessageCircle,
   CalendarCheck,
+  Phone,
+  CheckCircle2,
   ArrowUpDown,
   X,
 } from "lucide-react";
@@ -158,6 +160,10 @@ type ComplaintExtraData = {
   sp_seen?: unknown;
   sp_observations?: unknown;
   sp_resolution_date?: unknown;
+
+  resolution_followup_called?: unknown;
+  resolution_followup_called_at?: unknown;
+  resolution_followup_called_by?: unknown;
 };
 
 const getExtraData = (complaint: Complaint): ComplaintExtraData => {
@@ -324,6 +330,14 @@ export function ComplaintsTable({
     !isReadOnly &&
     (isServiciosPublicosUser || profile?.role === "Reclamos");
 
+  const canViewResolutionFollowupCall =
+    profile?.role === "Admin" ||
+    profile?.role === "AdminLectura" ||
+    profile?.role === "Reclamos";
+
+  const canEditResolutionFollowupCall =
+    profile?.role === "Admin" || profile?.role === "Reclamos";
+
   const canSendWhatsApp =
     isServiciosPublicosUser ||
     profile?.role === "Admin" ||
@@ -334,6 +348,14 @@ export function ComplaintsTable({
   const [updatingResolutionDate, setUpdatingResolutionDate] = useState<
     number | null
   >(null);
+
+  const [updatingFollowupCall, setUpdatingFollowupCall] = useState<number | null>(
+    null,
+  );
+
+  const [followupCallOverrides, setFollowupCallOverrides] = useState<
+    Record<number, boolean>
+  >({});
 
   const [resolutionDateOverrides, setResolutionDateOverrides] = useState<
     Record<number, string | null>
@@ -490,6 +512,83 @@ export function ComplaintsTable({
 
   const getComplaintStatus = (complaint: ComplaintWithDetails) => {
     return statusOverrides[complaint.id] ?? complaint.status;
+  };
+
+  const getResolutionFollowupCalled = (complaint: ComplaintWithDetails) => {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        followupCallOverrides,
+        complaint.id,
+      )
+    ) {
+      return followupCallOverrides[complaint.id];
+    }
+
+    const extra = getExtraData(complaint);
+
+    return (
+      extra.resolution_followup_called === true ||
+      extra.resolution_followup_called === "true"
+    );
+  };
+
+  const toggleResolutionFollowupCall = async (
+    complaint: ComplaintWithDetails,
+  ) => {
+    if (getComplaintStatus(complaint) !== "Resuelto") return;
+    if (!canEditResolutionFollowupCall) return;
+
+    const nextValue = !getResolutionFollowupCalled(complaint);
+
+    setUpdatingFollowupCall(complaint.id);
+    const toastId = toast.loading(
+      nextValue
+        ? "Marcando seguimiento telefónico..."
+        : "Quitando seguimiento telefónico...",
+    );
+
+    try {
+      const response = await fetch(`/api/complaints/${complaint.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resolution_followup_called: nextValue,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "No se pudo actualizar el seguimiento telefónico",
+        );
+      }
+
+      setFollowupCallOverrides((prev) => ({
+        ...prev,
+        [complaint.id]: nextValue,
+      }));
+
+      toast.success(
+        nextValue
+          ? "Llamada de seguimiento marcada"
+          : "Llamada de seguimiento desmarcada",
+        { id: toastId },
+      );
+    } catch (error) {
+      console.error("Error updating follow-up call:", error);
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar el seguimiento telefónico",
+        { id: toastId },
+      );
+    } finally {
+      setUpdatingFollowupCall(null);
+    }
   };
 
   const getResolutionDetailValue = (complaint: ComplaintWithDetails) => {
@@ -1776,6 +1875,48 @@ export function ComplaintsTable({
                         </Button>
                       )}
 
+                      {complaintStatus === "Resuelto" &&
+                        canViewResolutionFollowupCall && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void toggleResolutionFollowupCall(complaint)}
+                          disabled={
+                            updatingFollowupCall === complaint.id ||
+                            !canEditResolutionFollowupCall
+                          }
+                          title={
+                            getResolutionFollowupCalled(complaint)
+                              ? canEditResolutionFollowupCall
+                                ? "Ya se llamó. Tocar para desmarcar"
+                                : "Ya se realizó la llamada de seguimiento"
+                              : canEditResolutionFollowupCall
+                                ? "Marcar llamada de seguimiento"
+                                : "Todavía no se registró la llamada de seguimiento"
+                          }
+                          className={`gap-2 ${
+                            getResolutionFollowupCalled(complaint)
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                              : ""
+                          }`}
+                        >
+                          {updatingFollowupCall === complaint.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : getResolutionFollowupCalled(complaint) ? (
+                            <span className="relative inline-flex h-5 w-5 items-center justify-center">
+                              <Phone className="h-4 w-4 text-emerald-600" />
+                              <CheckCircle2 className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-background text-emerald-600" />
+                            </span>
+                          ) : (
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {getResolutionFollowupCalled(complaint)
+                            ? "Llamado"
+                            : "Llamada"}
+                        </Button>
+                      )}
+
                       {canEditComplaint && (
                         <Button
                           variant="outline"
@@ -1795,11 +1936,11 @@ export function ComplaintsTable({
             })}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
-            <Table>
+          <div className="relative left-1/2 hidden w-[calc(100vw-2rem)] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-sm md:block">
+            <Table className="w-full table-auto text-sm">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-[52px] text-center">
+                  <TableHead className="w-[46px] px-2 text-center text-sm">
                     <div className="flex justify-center">
                       <Checkbox
                         checked={
@@ -1819,54 +1960,54 @@ export function ComplaintsTable({
 
                   {isArboladoUser ? (
                     <>
-                      <TableHead>Número</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Dirección</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Fecha resolución</TableHead>
-                      <TableHead>Agente</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-center">Acciones</TableHead>
+                      <TableHead className="px-3 text-sm">Número</TableHead>
+                      <TableHead className="px-3 text-sm">Fecha</TableHead>
+                      <TableHead className="px-3 text-sm">Nombre</TableHead>
+                      <TableHead className="px-3 text-sm">Dirección</TableHead>
+                      <TableHead className="px-3 text-sm">Descripción</TableHead>
+                      <TableHead className="px-3 text-sm">Fecha resolución</TableHead>
+                      <TableHead className="px-3 text-sm">Agente</TableHead>
+                      <TableHead className="px-3 text-sm">Estado</TableHead>
+                      <TableHead className="w-[150px] px-2 text-center text-sm">Acciones</TableHead>
                     </>
                   ) : isZyVUser ? (
                     <>
-                      <TableHead>Número</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Dirección</TableHead>
-                      <TableHead>Servicio</TableHead>
-                      <TableHead>Causa</TableHead>
-                      <TableHead>Zona</TableHead>
-                      <TableHead>Desde</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-center">Acciones</TableHead>
+                      <TableHead className="px-3 text-sm">Número</TableHead>
+                      <TableHead className="px-3 text-sm">Fecha</TableHead>
+                      <TableHead className="px-3 text-sm">Nombre</TableHead>
+                      <TableHead className="px-3 text-sm">Dirección</TableHead>
+                      <TableHead className="px-3 text-sm">Servicio</TableHead>
+                      <TableHead className="px-3 text-sm">Causa</TableHead>
+                      <TableHead className="px-3 text-sm">Zona</TableHead>
+                      <TableHead className="px-3 text-sm">Desde</TableHead>
+                      <TableHead className="px-3 text-sm">Estado</TableHead>
+                      <TableHead className="w-[150px] px-2 text-center text-sm">Acciones</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead>Número</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Servicio</TableHead>
-                      <TableHead>Causa</TableHead>
+                      <TableHead className="px-3 text-sm">Número</TableHead>
+                      <TableHead className="px-3 text-sm">Fecha</TableHead>
+                      <TableHead className="px-3 text-sm">Nombre</TableHead>
+                      <TableHead className="px-3 text-sm">Servicio</TableHead>
+                      <TableHead className="px-3 text-sm">Causa</TableHead>
                       {isServiciosPublicosUser ? (
-                        <TableHead>Dirección</TableHead>
+                        <TableHead className="px-3 text-sm">Dirección</TableHead>
                       ) : (
-                        <TableHead>Zona</TableHead>
+                        <TableHead className="px-3 text-sm">Zona</TableHead>
                       )}
-                      <TableHead>Desde Cuándo</TableHead>
+                      <TableHead className="px-3 text-sm">Desde Cuándo</TableHead>
                       {showServiciosPublicosTrackingColumns && (
-                        <TableHead>Visto</TableHead>
+                        <TableHead className="px-3 text-sm">Visto</TableHead>
                       )}
-                      <TableHead>Fecha resolución</TableHead>
+                      <TableHead className="px-3 text-sm">Fecha resolución</TableHead>
                       {showServiciosPublicosTrackingColumns && (
-                        <TableHead>Observación Serv. Públicos</TableHead>
+                        <TableHead className="px-3 text-sm">Observación Serv. Públicos</TableHead>
                       )}
-                      <TableHead>Estado</TableHead>
+                      <TableHead className="px-3 text-sm">Estado</TableHead>
                       {!isServiciosPublicosUser && (
-                        <TableHead>Cargado por</TableHead>
+                        <TableHead className="px-3 text-sm">Cargado por</TableHead>
                       )}
-                      <TableHead className="text-center">Acciones</TableHead>
+                      <TableHead className="w-[150px] px-2 text-center text-sm">Acciones</TableHead>
                     </>
                   )}
                 </TableRow>
@@ -1909,7 +2050,7 @@ export function ComplaintsTable({
                         disabled={isUpdating}
                       >
                         <SelectTrigger
-                          className={`w-[150px] ${getStatusColor(
+                          className={`w-[138px] ${getStatusColor(
                             complaintStatus,
                           )} ${isUpdating ? "opacity-80" : ""}`}
                         >
@@ -1939,13 +2080,13 @@ export function ComplaintsTable({
                     );
 
                   const actionsCell = (
-                    <div className="flex justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleView(complaint.id)}
                         title="Ver reclamo"
-                        className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                        className="h-8 w-8 p-0 transition-all hover:bg-accent hover:text-primary active:scale-95"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -1961,7 +2102,7 @@ export function ComplaintsTable({
                               : "Cargar fecha de resolución"
                           }
                           disabled={isReadOnly || isUpdatingResolution}
-                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          className="h-8 w-8 p-0 transition-all hover:bg-accent hover:text-primary active:scale-95"
                         >
                           {isUpdatingResolution ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1977,13 +2118,48 @@ export function ComplaintsTable({
                         </Button>
                       )}
 
+                      {complaintStatus === "Resuelto" &&
+                        canViewResolutionFollowupCall && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void toggleResolutionFollowupCall(complaint)}
+                          disabled={
+                            updatingFollowupCall === complaint.id ||
+                            !canEditResolutionFollowupCall
+                          }
+                          title={
+                            getResolutionFollowupCalled(complaint)
+                              ? canEditResolutionFollowupCall
+                                ? "Ya se llamó. Tocar para desmarcar"
+                                : "Ya se realizó la llamada de seguimiento"
+                              : canEditResolutionFollowupCall
+                                ? "Marcar llamada de seguimiento"
+                                : "Todavía no se registró la llamada de seguimiento"
+                          }
+                          className="h-8 w-8 p-0 transition-all hover:bg-accent active:scale-95"
+                        >
+                          {updatingFollowupCall === complaint.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : getResolutionFollowupCalled(complaint) ? (
+                            <span className="relative inline-flex h-5 w-5 items-center justify-center">
+                              <Phone className="h-4 w-4 text-emerald-600" />
+                              <CheckCircle2 className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-background text-emerald-600" />
+                            </span>
+                          ) : (
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      )}
+
                       {canEditComplaint && (
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(complaint.id)}
                           title="Editar reclamo"
-                          className="transition-all hover:bg-accent hover:text-primary active:scale-95"
+                          className="h-8 w-8 p-0 transition-all hover:bg-accent hover:text-primary active:scale-95"
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -2000,7 +2176,7 @@ export function ComplaintsTable({
                           : "bg-muted/25 transition-colors hover:bg-accent/40"
                       }
                     >
-                      <TableCell className="text-center">
+                      <TableCell className="px-2 py-3 text-center text-sm">
                         <div className="flex justify-center">
                           <Checkbox
                             checked={isSelected}
@@ -2019,64 +2195,64 @@ export function ComplaintsTable({
 
                       {isArboladoUser ? (
                         <>
-                          <TableCell className="font-medium">
+                          <TableCell className="px-3 py-3 text-sm font-medium">
                             {getVisibleComplaintNumber(complaint)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {formatDate(complaint.complaint_date)}
                           </TableCell>
-                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {complaint.complainant_name ?? "-"}
                           </TableCell>
-                          <TableCell>{display.addressLabel}</TableCell>
-                          <TableCell>{display.descriptionLabel}</TableCell>
-                          <TableCell>{display.resolutionDateLabel}</TableCell>
-                          <TableCell>{display.agentLabel}</TableCell>
-                          <TableCell>{statusCell}</TableCell>
-                          <TableCell>{actionsCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.addressLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.descriptionLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.resolutionDateLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.agentLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{statusCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{actionsCell}</TableCell>
                         </>
                       ) : isZyVUser ? (
                         <>
-                          <TableCell className="font-medium">
+                          <TableCell className="px-3 py-3 text-sm font-medium">
                             {getVisibleComplaintNumber(complaint)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {formatDate(complaint.complaint_date)}
                           </TableCell>
-                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {complaint.complainant_name ?? "-"}
                           </TableCell>
-                          <TableCell>{display.addressLabel}</TableCell>
-                          <TableCell>{display.serviceLabel}</TableCell>
-                          <TableCell>{display.causeLabel}</TableCell>
-                          <TableCell>{display.zoneLabel}</TableCell>
-                          <TableCell>{display.sinceWhenLabel}</TableCell>
-                          <TableCell>{statusCell}</TableCell>
-                          <TableCell>{actionsCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.addressLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.serviceLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.causeLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.zoneLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.sinceWhenLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{statusCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{actionsCell}</TableCell>
                         </>
                       ) : (
                         <>
-                          <TableCell className="font-medium">
+                          <TableCell className="px-3 py-3 text-sm font-medium">
                             {complaint.complaint_number ?? "-"}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {formatDate(complaint.complaint_date)}
                           </TableCell>
-                          <TableCell className="max-w-[220px] whitespace-normal break-words">
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                             {complaint.complainant_name ?? "-"}
                           </TableCell>
-                          <TableCell>{display.serviceLabel}</TableCell>
-                          <TableCell>{display.causeLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.serviceLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.causeLabel}</TableCell>
                           {isServiciosPublicosUser ? (
-                            <TableCell className="max-w-[240px] whitespace-normal break-words">
+                            <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                               {display.addressLabel}
                             </TableCell>
                           ) : (
-                            <TableCell>{display.zoneLabel}</TableCell>
+                            <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.zoneLabel}</TableCell>
                           )}
-                          <TableCell>{display.sinceWhenLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.sinceWhenLabel}</TableCell>
                           {showServiciosPublicosTrackingColumns && (
-                            <TableCell>
+                            <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                               {isServiciosPublicosComplaint(complaint) &&
                               spTrackingData.seen ? (
                                 <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
@@ -2087,22 +2263,22 @@ export function ComplaintsTable({
                               )}
                             </TableCell>
                           )}
-                          <TableCell>{display.resolutionDateLabel}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{display.resolutionDateLabel}</TableCell>
                           {showServiciosPublicosTrackingColumns && (
-                            <TableCell className="max-w-[260px] whitespace-normal break-words">
+                            <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                               {isServiciosPublicosComplaint(complaint)
                                 ? spTrackingData.observations || "-"
                                 : "-"}
                             </TableCell>
                           )}
-                          <TableCell>{statusCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{statusCell}</TableCell>
                           {!isServiciosPublicosUser && (
-                            <TableCell>
+                            <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">
                               {complaint.loaded_by_user?.full_name ??
                                 "Usuario no disponible"}
                             </TableCell>
                           )}
-                          <TableCell>{actionsCell}</TableCell>
+                          <TableCell className="whitespace-normal break-words px-3 py-3 text-sm">{actionsCell}</TableCell>
                         </>
                       )}
                     </TableRow>
