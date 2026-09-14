@@ -1064,7 +1064,22 @@ export function NewDeliveryClient({ userId, isReadonly }: NewDeliveryClientProps
 
                     <div className="space-y-2">
                       <Label htmlFor={`quantity-${row.id}`}>Cantidad *</Label>
-                      <Input id={`quantity-${row.id}`} type="number" min="0.01" max={availableStock} step="0.01" value={row.quantity} onChange={(e) => updateRow(row.id, "quantity", e.target.value)} placeholder="0" disabled={isReadonly || saving} />
+                      <Input
+                        id={`quantity-${row.id}`}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={row.quantity}
+                        onChange={(event) => {
+                          const value = event.target.value;
+
+                          if (/^\d*$/.test(value)) {
+                            updateRow(row.id, "quantity", value);
+                          }
+                        }}
+                        placeholder="0"
+                        disabled={isReadonly || saving}
+                      />
                     </div>
 
                     <div className="space-y-2">
