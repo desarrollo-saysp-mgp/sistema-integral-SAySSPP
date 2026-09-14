@@ -196,7 +196,7 @@ export function StatisticsClient() {
       while (hasMoreMovements) {
         const movementTo = movementFrom + CHUNK_SIZE - 1;
 
-        const { data, error } = await supabase
+        let movementsQuery = supabase
           .from("supply_movements")
           .select(
             `
@@ -228,7 +228,17 @@ export function StatisticsClient() {
                 name
               )
             `,
-          )
+          );
+
+        if (dateFrom) {
+          movementsQuery = movementsQuery.gte("movement_date", dateFrom);
+        }
+
+        if (dateTo) {
+          movementsQuery = movementsQuery.lte("movement_date", dateTo);
+        }
+
+        const { data, error } = await movementsQuery
           .order("movement_date", { ascending: true })
           .range(movementFrom, movementTo);
 
@@ -357,7 +367,7 @@ export function StatisticsClient() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     void loadData();

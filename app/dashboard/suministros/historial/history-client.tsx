@@ -284,7 +284,7 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
         while (hasMore) {
           const to = from + CHUNK_SIZE - 1;
 
-          const { data, error } = await supabase
+          let query = supabase
             .from("supply_movements")
             .select(
               `
@@ -324,7 +324,23 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
                   full_name
                 )
               `,
-            )
+            );
+
+          if (dateFrom) {
+            query = query.gte("movement_date", dateFrom);
+          }
+
+          if (dateTo) {
+            query = query.lte("movement_date", dateTo);
+          }
+
+          if (movementType === "INITIAL") {
+            query = query.in("movement_type", ["INITIAL", "INITIAL_STOCK"]);
+          } else if (movementType !== "all") {
+            query = query.eq("movement_type", movementType);
+          }
+
+          const { data, error } = await query
             .order("movement_date", { ascending: false })
             .order("created_at", { ascending: false })
             .range(from, to);
@@ -431,7 +447,7 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
         setRefreshing(false);
       }
     },
-    [showToast],
+    [showToast, dateFrom, dateTo, movementType],
   );
 
   useEffect(() => {
@@ -466,42 +482,6 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
           event: "*",
           schema: "public",
           table: "supply_movements",
-        },
-        refreshHistory,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_products",
-        },
-        refreshHistory,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_categories",
-        },
-        refreshHistory,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_recipients",
-        },
-        refreshHistory,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_areas",
         },
         refreshHistory,
       )

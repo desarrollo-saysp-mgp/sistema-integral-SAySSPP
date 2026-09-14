@@ -963,17 +963,17 @@ export function NewEntryClient({
 
                       <Input
                         id={`quantity-${row.id}`}
-                        type="number"
-                        min="0.01"
-                        step="0.01"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={row.quantity}
-                        onChange={(event) =>
-                          updateRow(
-                            row.id,
-                            "quantity",
-                            event.target.value,
-                          )
-                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
+
+                          if (/^\d*$/.test(value)) {
+                            updateRow(row.id, "quantity", value);
+                          }
+                        }}
                         placeholder="0"
                         disabled={isReadonly || saving}
                       />
