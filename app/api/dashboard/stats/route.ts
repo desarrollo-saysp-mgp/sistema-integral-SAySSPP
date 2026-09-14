@@ -142,9 +142,10 @@ export async function GET(request: NextRequest) {
       }
 
       if (currentUser.role === "Reclamos") {
-        return (query as any).or(
-          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
-        );
+        return (query as any).in("form_variant", [
+          "general",
+          "import_excel",
+        ]);
       }
 
       return query;
