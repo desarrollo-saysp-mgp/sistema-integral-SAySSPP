@@ -49,11 +49,16 @@ type ComplaintNumberFields = {
 };
 
 function getServiceName(service: ServiceRelation) {
-  if (Array.isArray(service)) return service[0]?.name ?? "Sin servicio";
+  if (Array.isArray(service)) {
+    return service[0]?.name ?? "Sin servicio";
+  }
+
   return service?.name ?? "Sin servicio";
 }
 
-function getVisibleComplaintNumber(complaint: ComplaintNumberFields) {
+function getVisibleComplaintNumber(
+  complaint: ComplaintNumberFields,
+) {
   return (
     complaint.zyv_number ??
     complaint.arbolado_number ??
@@ -62,7 +67,9 @@ function getVisibleComplaintNumber(complaint: ComplaintNumberFields) {
   );
 }
 
-function isResolvedStatus(status: string | null | undefined) {
+function isResolvedStatus(
+  status: string | null | undefined,
+) {
   return status?.trim().toLowerCase() === "resuelto";
 }
 
@@ -72,7 +79,9 @@ const normalizeName = (value?: string | null) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-function isServiciosPublicosService(serviceName?: string | null) {
+function isServiciosPublicosService(
+  serviceName?: string | null,
+) {
   const name = normalizeName(serviceName);
 
   return (
@@ -107,7 +116,8 @@ export async function getAlerts() {
   } = await supabase.auth.getUser();
 
   let currentUserRole: string | null = null;
-  let currentUserEmail = user?.email?.toLowerCase() ?? "";
+  let currentUserEmail =
+    user?.email?.toLowerCase() ?? "";
 
   if (user?.id) {
     const { data: userProfile } = await supabase
@@ -116,30 +126,52 @@ export async function getAlerts() {
       .eq("id", user.id)
       .maybeSingle();
 
-    currentUserRole = userProfile?.role ?? null;
+    currentUserRole =
+      userProfile?.role ?? null;
+
     currentUserEmail =
-      userProfile?.email?.toLowerCase() ?? user?.email?.toLowerCase() ?? "";
+      userProfile?.email?.toLowerCase() ??
+      user?.email?.toLowerCase() ??
+      "";
   }
 
-  const normalizedCurrentUserEmail = normalizeName(currentUserEmail);
+  const normalizedCurrentUserEmail =
+    normalizeName(currentUserEmail);
 
   const isServiciosPublicosUser =
-    normalizedCurrentUserEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL);
+    normalizedCurrentUserEmail ===
+    normalizeName(SERVICIOS_PUBLICOS_EMAIL);
 
-  const isGirsuUser = normalizedCurrentUserEmail === normalizeName(GIRSU_EMAIL);
+  const isGirsuUser =
+    normalizedCurrentUserEmail ===
+    normalizeName(GIRSU_EMAIL);
 
-  const isArboladoUser = currentUserRole === "ReclamosArbolado";
-  const isZyvUser = currentUserRole === "ReclamosZyV";
+  const isArboladoUser =
+    currentUserRole === "ReclamosArbolado";
+
+  const isZyvUser =
+    currentUserRole === "ReclamosZyV";
+
   const isGeneralClaimsUser =
-    currentUserRole === "Reclamos" && !isServiciosPublicosUser && !isGirsuUser;
+    currentUserRole === "Reclamos" &&
+    !isServiciosPublicosUser &&
+    !isGirsuUser;
 
   let arboladoServiceIds: number[] = [];
   let zyvServiceIds: number[] = [];
   let serviciosPublicosServiceIds: number[] = [];
   let girsuServiceIds: number[] = [];
 
-  if (isArboladoUser || isZyvUser || isServiciosPublicosUser || isGirsuUser) {
-    const { data: roleServices, error: roleServicesError } = await supabase
+  if (
+    isArboladoUser ||
+    isZyvUser ||
+    isServiciosPublicosUser ||
+    isGirsuUser
+  ) {
+    const {
+      data: roleServices,
+      error: roleServicesError,
+    } = await supabase
       .from("services")
       .select("id, name");
 
@@ -149,49 +181,71 @@ export async function getAlerts() {
 
     arboladoServiceIds =
       roleServices
-        ?.filter((service) => normalizeName(service.name).includes("arbol"))
+        ?.filter((service) =>
+          normalizeName(service.name).includes("arbol"),
+        )
         .map((service) => service.id) ?? [];
 
     zyvServiceIds =
       roleServices
         ?.filter((service) => {
           const name = normalizeName(service.name);
-          return name.includes("zoonosis") || name.includes("vectores");
+
+          return (
+            name.includes("zoonosis") ||
+            name.includes("vectores")
+          );
         })
         .map((service) => service.id) ?? [];
 
     serviciosPublicosServiceIds =
       roleServices
-        ?.filter((service) => isServiciosPublicosService(service.name))
+        ?.filter((service) =>
+          isServiciosPublicosService(service.name),
+        )
         .map((service) => service.id) ?? [];
 
     girsuServiceIds =
       roleServices
-        ?.filter((service) => isGirsuService(service.name))
+        ?.filter((service) =>
+          isGirsuService(service.name),
+        )
         .map((service) => service.id) ?? [];
 
-    if (isArboladoUser && arboladoServiceIds.length === 0) {
+    if (
+      isArboladoUser &&
+      arboladoServiceIds.length === 0
+    ) {
       return {
         total: 0,
         alerts: [],
       };
     }
 
-    if (isZyvUser && zyvServiceIds.length === 0) {
+    if (
+      isZyvUser &&
+      zyvServiceIds.length === 0
+    ) {
       return {
         total: 0,
         alerts: [],
       };
     }
 
-    if (isServiciosPublicosUser && serviciosPublicosServiceIds.length === 0) {
+    if (
+      isServiciosPublicosUser &&
+      serviciosPublicosServiceIds.length === 0
+    ) {
       return {
         total: 0,
         alerts: [],
       };
     }
 
-    if (isGirsuUser && girsuServiceIds.length === 0) {
+    if (
+      isGirsuUser &&
+      girsuServiceIds.length === 0
+    ) {
       return {
         total: 0,
         alerts: [],
@@ -208,24 +262,32 @@ export async function getAlerts() {
     }
 
     if (isGirsuUser) {
-      return (query as any).in("service_id", girsuServiceIds) as T;
+      return (query as any).in(
+        "service_id",
+        girsuServiceIds,
+      ) as T;
     }
 
     if (isArboladoUser) {
       return (query as any).or(
-        `form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(",")})`,
+        `form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(
+          ",",
+        )})`,
       ) as T;
     }
 
     if (isZyvUser) {
       return (query as any).or(
-        `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`,
+        `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(
+          ",",
+        )})`,
       ) as T;
     }
 
     if (isGeneralClaimsUser) {
-      return (query as any).or(
-        "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+      return (query as any).in(
+        "form_variant",
+        ["general", "import_excel"],
       ) as T;
     }
 
@@ -233,13 +295,17 @@ export async function getAlerts() {
   };
 
   const today = new Date();
+
   const todayStart = new Date(today);
   todayStart.setHours(0, 0, 0, 0);
 
-  const todayString = todayStart.toISOString().split("T")[0];
+  const todayString =
+    todayStart.toISOString().split("T")[0];
 
   const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setDate(
+    sevenDaysAgo.getDate() - 7,
+  );
 
   let overdueQuery = supabase
     .from("complaints")
@@ -262,31 +328,45 @@ export async function getAlerts() {
       )
     `)
     .eq("status", "En proceso")
-    .lte("complaint_date", sevenDaysAgo.toISOString().split("T")[0])
-    .order("complaint_date", { ascending: true });
+    .lte(
+      "complaint_date",
+      sevenDaysAgo.toISOString().split("T")[0],
+    )
+    .order("complaint_date", {
+      ascending: true,
+    });
 
-  overdueQuery = applyUserScope(overdueQuery);
+  overdueQuery =
+    applyUserScope(overdueQuery);
 
-  const { data: overdueComplaints, error: overdueError } = await overdueQuery;
+  const {
+    data: overdueComplaints,
+    error: overdueError,
+  } = await overdueQuery;
 
   if (overdueError) {
     throw new Error(overdueError.message);
   }
 
   overdueComplaints?.forEach((complaint) => {
-    const visibleComplaintNumber = getVisibleComplaintNumber(complaint);
+    const visibleComplaintNumber =
+      getVisibleComplaintNumber(complaint);
 
     alerts.push({
       id: `overdue-${complaint.id}`,
       type: "overdue_complaint",
       title: "Reclamo demorado",
-      description: `El reclamo ${visibleComplaintNumber} lleva más de 7 días en estado En proceso.`,
+      description:
+        `El reclamo ${visibleComplaintNumber} lleva más de 7 días en estado En proceso.`,
       severity: "high",
       complaintId: complaint.id,
-      complaintNumber: visibleComplaintNumber,
-      complainantName: complaint.complainant_name,
+      complaintNumber:
+        visibleComplaintNumber,
+      complainantName:
+        complaint.complainant_name,
       serviceId: complaint.service_id,
-      serviceName: getServiceName(complaint.services),
+      serviceName:
+        getServiceName(complaint.services),
       zone: complaint.zone,
       createdAt: complaint.complaint_date,
     });
@@ -309,12 +389,22 @@ export async function getAlerts() {
         name
       )
     `)
-    .gte("complaint_date", todayString)
-    .neq("status", "Resuelto");
+    .gte(
+      "complaint_date",
+      todayString,
+    )
+    .neq(
+      "status",
+      "Resuelto",
+    );
 
-  todayQuery = applyUserScope(todayQuery);
+  todayQuery =
+    applyUserScope(todayQuery);
 
-  const { data: todayComplaints, error: todayError } = await todayQuery;
+  const {
+    data: todayComplaints,
+    error: todayError,
+  } = await todayQuery;
 
   if (todayError) {
     throw new Error(todayError.message);
@@ -326,16 +416,25 @@ export async function getAlerts() {
     complaints: RelatedComplaintAlert[];
   };
 
-  const serviceGroups = new Map<number, ServiceGroup>();
+  const serviceGroups =
+    new Map<number, ServiceGroup>();
 
   todayComplaints?.forEach((complaint) => {
     if (!complaint.service_id) return;
-    if (isResolvedStatus(complaint.status)) return;
 
-    const serviceName = getServiceName(complaint.services);
+    if (
+      isResolvedStatus(complaint.status)
+    ) {
+      return;
+    }
+
+    const serviceName =
+      getServiceName(complaint.services);
 
     const currentGroup: ServiceGroup =
-      serviceGroups.get(complaint.service_id) ?? {
+      serviceGroups.get(
+        complaint.service_id,
+      ) ?? {
         serviceId: complaint.service_id,
         serviceName,
         complaints: [],
@@ -343,30 +442,43 @@ export async function getAlerts() {
 
     currentGroup.complaints.push({
       id: complaint.id,
-      complaintNumber: getVisibleComplaintNumber(complaint),
-      complainantName: complaint.complainant_name,
-      complaintDate: complaint.complaint_date,
-      status: complaint.status,
+      complaintNumber:
+        getVisibleComplaintNumber(complaint),
+      complainantName:
+        complaint.complainant_name,
+      complaintDate:
+        complaint.complaint_date,
+      status:
+        complaint.status,
     });
 
-    serviceGroups.set(complaint.service_id, currentGroup);
+    serviceGroups.set(
+      complaint.service_id,
+      currentGroup,
+    );
   });
 
   serviceGroups.forEach((group) => {
-    const count = group.complaints.length;
+    const count =
+      group.complaints.length;
 
     if (count > 3) {
       alerts.push({
         id: `service-daily-${group.serviceId}`,
         type: "daily_service_volume",
-        title: "Alta cantidad de reclamos por servicio",
-        description: `Hoy ingresaron ${count} reclamos pendientes del servicio ${group.serviceName}.`,
+        title:
+          "Alta cantidad de reclamos por servicio",
+        description:
+          `Hoy ingresaron ${count} reclamos pendientes del servicio ${group.serviceName}.`,
         severity: "medium",
         count,
         serviceId: group.serviceId,
-        serviceName: group.serviceName,
-        createdAt: todayString,
-        relatedComplaints: group.complaints,
+        serviceName:
+          group.serviceName,
+        createdAt:
+          todayString,
+        relatedComplaints:
+          group.complaints,
       });
     }
   });
@@ -376,10 +488,23 @@ export async function getAlerts() {
     Solo aplica a reclamos generales comunes.
     No aplica para Arbolado, ZyV ni Servicios Públicos.
   */
-  if (!isArboladoUser && !isZyvUser && !isServiciosPublicosUser && !isGirsuUser) {
-    const openStatuses = ["Pendiente", "En proceso", "Derivado"];
 
-    const allowedZoneAlertServices = ["Rec. Domiciliaria", "Rec. Especial"];
+  if (
+    !isArboladoUser &&
+    !isZyvUser &&
+    !isServiciosPublicosUser &&
+    !isGirsuUser
+  ) {
+    const openStatuses = [
+      "Pendiente",
+      "En proceso",
+      "Derivado",
+    ];
+
+    const allowedZoneAlertServices = [
+      "Rec. Domiciliaria",
+      "Rec. Especial",
+    ];
 
     let openQuery = supabase
       .from("complaints")
@@ -394,60 +519,99 @@ export async function getAlerts() {
           name
         )
       `)
-      .in("status", openStatuses)
-      .not("zone", "is", null);
+      .in(
+        "status",
+        openStatuses,
+      )
+      .not(
+        "zone",
+        "is",
+        null,
+      );
 
     if (isGeneralClaimsUser) {
-      openQuery = openQuery.or(
-        "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
+      openQuery = openQuery.in(
+        "form_variant",
+        ["general", "import_excel"],
       ) as typeof openQuery;
     }
 
-    const { data: openComplaints, error: openError } = await openQuery;
+    const {
+      data: openComplaints,
+      error: openError,
+    } = await openQuery;
 
     if (openError) {
       throw new Error(openError.message);
     }
 
-    const zoneCounter = new Map<string, number>();
+    const zoneCounter =
+      new Map<string, number>();
 
-    openComplaints?.forEach((complaint) => {
-      if (!complaint.zone) return;
+    openComplaints?.forEach(
+      (complaint) => {
+        if (!complaint.zone) return;
 
-      const serviceName = getServiceName(complaint.services);
+        const serviceName =
+          getServiceName(
+            complaint.services,
+          );
 
-      if (!allowedZoneAlertServices.includes(serviceName)) return;
+        if (
+          !allowedZoneAlertServices.includes(
+            serviceName,
+          )
+        ) {
+          return;
+        }
 
-      const zone = complaint.zone.trim();
+        const zone =
+          complaint.zone.trim();
 
-      if (!zone) return;
+        if (!zone) return;
 
-      zoneCounter.set(zone, (zoneCounter.get(zone) ?? 0) + 1);
-    });
-
-    zoneCounter.forEach((count, zone) => {
-      if (count > 5) {
-        alerts.push({
-          id: `zone-open-${zone}`,
-          type: "open_zone_volume",
-          title: "Alta cantidad de reclamos abiertos por zona",
-          description: `La zona ${zone} tiene ${count} reclamos abiertos de Rec. Domiciliaria o Rec. Especial.`,
-          severity: "medium",
-          count,
+        zoneCounter.set(
           zone,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    });
+          (zoneCounter.get(zone) ?? 0) + 1,
+        );
+      },
+    );
+
+    zoneCounter.forEach(
+      (count, zone) => {
+        if (count > 5) {
+          alerts.push({
+            id: `zone-open-${zone}`,
+            type: "open_zone_volume",
+            title:
+              "Alta cantidad de reclamos abiertos por zona",
+            description:
+              `La zona ${zone} tiene ${count} reclamos abiertos de Rec. Domiciliaria o Rec. Especial.`,
+            severity: "medium",
+            count,
+            zone,
+            createdAt:
+              new Date().toISOString(),
+          });
+        }
+      },
+    );
   }
 
-  const severityOrder: Record<AlertSeverity, number> = {
+  const severityOrder: Record<
+    AlertSeverity,
+    number
+  > = {
     high: 1,
     medium: 2,
     low: 3,
   };
 
-  alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  alerts.sort(
+    (a, b) =>
+      severityOrder[a.severity] -
+      severityOrder[b.severity],
+  );
 
   return {
     total: alerts.length,
