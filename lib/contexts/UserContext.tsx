@@ -35,7 +35,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 const PROFILE_TIMEOUT_MS = 15000;
-const VISIBILITY_REFRESH_COOLDOWN_MS = 3000;
+const VISIBILITY_REFRESH_COOLDOWN_MS = 30000;
 
 /**
  * Evita que una consulta pueda quedar esperando indefinidamente.
@@ -68,6 +68,15 @@ function withTimeout<T>(
   });
 }
 
+function isProfileTimeoutError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.startsWith(
+      "La consulta excedió el tiempo máximo de",
+    )
+  );
+}
+
 export function UserProvider({
   children,
 }: {
@@ -90,6 +99,15 @@ export function UserProvider({
   const lastVisibilityRefreshRef = useRef(0);
 
   /**
+   * Evita lanzar más de una consulta de perfil para el mismo
+   * usuario al mismo tiempo.
+   */
+  const profileRequestRef = useRef<{
+    userId: string;
+    promise: Promise<User | null>;
+  } | null>(null);
+
+  /**
    * Obtiene el perfil interno del usuario.
    *
    * Incluye timeout para evitar que una consulta que quedó
@@ -98,40 +116,84 @@ export function UserProvider({
    */
   const fetchProfile = useCallback(
     async (userId: string): Promise<User | null> => {
+      if (
+        profileRequestRef.current?.userId ===
+        userId
+      ) {
+        return profileRequestRef.current.promise;
+      }
+
+      const profilePromise =
+        (async (): Promise<User | null> => {
+          try {
+            const supabase = createClient();
+
+            const { data, error } =
+              await withTimeout(
+                supabase
+                  .from("users")
+                  .select("*")
+                  .eq("id", userId)
+                  .single(),
+              );
+
+            if (error) {
+              console.error(
+                "Error fetching user profile:",
+                error.message,
+              );
+
+              return null;
+            }
+
+            if (!data) {
+              console.error(
+                "User profile not found",
+              );
+
+              return null;
+            }
+
+            return data as User;
+          } catch (error) {
+            /**
+             * Un timeout transitorio no debe mostrarse como
+             * un error fatal en el overlay de desarrollo.
+             *
+             * Los llamadores conservan el perfil existente
+             * cuando devolvemos null.
+             */
+            if (isProfileTimeoutError(error)) {
+              console.warn(
+                "La consulta del perfil tardó más de lo esperado. Se conserva el perfil actual.",
+              );
+
+              return null;
+            }
+
+            console.error(
+              "Unexpected error fetching profile:",
+              error,
+            );
+
+            return null;
+          }
+        })();
+
+      profileRequestRef.current = {
+        userId,
+        promise: profilePromise,
+      };
+
       try {
-        const supabase = createClient();
-
-        const { data, error } = await withTimeout(
-          supabase
-            .from("users")
-            .select("*")
-            .eq("id", userId)
-            .single(),
-        );
-
-        if (error) {
-          console.error(
-            "Error fetching user profile:",
-            error.message,
-          );
-
-          return null;
+        return await profilePromise;
+      } finally {
+        if (
+          profileRequestRef.current?.promise ===
+          profilePromise
+        ) {
+          profileRequestRef.current = null;
         }
-
-        if (!data) {
-          console.error("User profile not found");
-
-          return null;
-        }
-
-        return data as User;
-      } catch (error) {
-        console.error(
-          "Unexpected error fetching profile:",
-          error,
-        );
-
-        return null;
       }
     },
     [],
@@ -329,13 +391,10 @@ export function UserProvider({
             setUser(authUser);
 
             /**
-             * El token se renovó correctamente.
-             *
-             * Actualizamos también el perfil, pero fuera
-             * del callback de Auth.
+             * Renovar el token no modifica el perfil de
+             * public.users, por lo que no hacemos otra
+             * consulta innecesaria a la base.
              */
-            scheduleProfileRefresh(authUser);
-
             return;
           }
 

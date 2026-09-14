@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -22,6 +23,10 @@ import type { RnuStatsEntry } from "./page";
 
 type Props = {
   initialEntries: RnuStatsEntry[];
+  initialFrom: string;
+  initialTo: string;
+  initialType: "" | "GENERAL" | "INSTITUCION";
+  initialShowAllHistory: boolean;
 };
 
 type PdfDocument = jsPDF & {
@@ -315,12 +320,75 @@ function RankingCard({
 
 export default function EstadisticasRnuClient({
   initialEntries,
+  initialFrom,
+  initialTo,
+  initialType,
+  initialShowAllHistory,
 }: Props) {
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [type, setType] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [from, setFrom] = useState(initialFrom);
+  const [to, setTo] = useState(initialTo);
+  const [type, setType] = useState(initialType);
+  const [showAllHistory, setShowAllHistory] =
+    useState(initialShowAllHistory);
+  const [isLoadingHistory, setIsLoadingHistory] =
+    useState(false);
   const [isExportingPdf, setIsExportingPdf] =
     useState(false);
+
+  useEffect(() => {
+    setFrom(initialFrom);
+  }, [initialFrom]);
+
+  useEffect(() => {
+    setTo(initialTo);
+  }, [initialTo]);
+
+  useEffect(() => {
+    setType(initialType);
+  }, [initialType]);
+
+  useEffect(() => {
+    setShowAllHistory(initialShowAllHistory);
+    setIsLoadingHistory(false);
+  }, [initialShowAllHistory, initialEntries]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (from) {
+      params.set("desde", from);
+    }
+
+    if (to) {
+      params.set("hasta", to);
+    }
+
+    if (type) {
+      params.set("tipo", type);
+    }
+
+    if (showAllHistory) {
+      params.set("historico", "1");
+    }
+
+    const nextQuery = params.toString();
+    const currentQuery = searchParams.toString();
+
+    if (nextQuery === currentQuery) {
+      return;
+    }
+
+    const nextUrl = nextQuery
+      ? `/dashboard/rnu/estadisticas?${nextQuery}`
+      : "/dashboard/rnu/estadisticas";
+
+    router.replace(nextUrl, {
+      scroll: false,
+    });
+  }, [from, to, type, showAllHistory, router, searchParams]);
 
   const filteredEntries = useMemo(() => {
     return initialEntries.filter((entry) => {
@@ -551,9 +619,44 @@ export default function EstadisticasRnuClient({
       : 0;
 
   function clearFilters() {
+    const today = new Date();
+    const fifteenDaysAgo = new Date(today);
+
+    fifteenDaysAgo.setDate(
+      today.getDate() - 14,
+    );
+
+    const formatDateForInput = (date: Date) =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(date);
+
+    setFrom(
+      formatDateForInput(
+        fifteenDaysAgo,
+      ),
+    );
+
+    setTo(
+      formatDateForInput(today),
+    );
+
+    setType("");
+    setShowAllHistory(false);
+  }
+
+  function showFullHistory() {
+    if (showAllHistory || isLoadingHistory) {
+      return;
+    }
+
+    setIsLoadingHistory(true);
     setFrom("");
     setTo("");
-    setType("");
+    setShowAllHistory(true);
   }
 
   async function exportToPdf() {
@@ -1159,7 +1262,26 @@ export default function EstadisticasRnuClient({
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <>
+      {isLoadingHistory && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/75 backdrop-blur-sm">
+          <div className="flex min-w-[240px] flex-col items-center gap-3 rounded-2xl border bg-card px-6 py-5 shadow-xl">
+            <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+
+            <div className="text-center">
+              <p className="font-semibold">
+                Cargando...
+              </p>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cargando historial completo
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/dashboard/rnu"
@@ -1212,7 +1334,12 @@ export default function EstadisticasRnuClient({
             <select
               value={type}
               onChange={(event) =>
-                setType(event.target.value)
+                setType(
+                  event.target.value as
+                    | ""
+                    | "GENERAL"
+                    | "INSTITUCION",
+                )
               }
               className="min-h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
             >
@@ -1269,15 +1396,34 @@ export default function EstadisticasRnuClient({
           </div>
 
           <div className="flex items-end">
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold hover:bg-muted"
-            >
-              <RotateCcw className="h-4 w-4" />
+            <div className="grid w-full grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold hover:bg-muted"
+              >
+                <RotateCcw className="h-4 w-4" />
 
-              Limpiar filtros
-            </button>
+                Últimos 15 días
+              </button>
+
+              <button
+                type="button"
+                onClick={showFullHistory}
+                disabled={isLoadingHistory || showAllHistory}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoadingHistory && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+
+                {isLoadingHistory
+                  ? "Cargando..."
+                  : showAllHistory
+                    ? "Historial completo"
+                    : "Ver todo"}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1504,6 +1650,7 @@ export default function EstadisticasRnuClient({
           </p>
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }

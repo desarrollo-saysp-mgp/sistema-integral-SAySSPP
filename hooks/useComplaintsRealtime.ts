@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type UseComplaintsRealtimeOptions = {
@@ -12,6 +12,12 @@ export function useComplaintsRealtime({
   onChange,
   enabled = true,
 }: UseComplaintsRealtimeOptions) {
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -27,13 +33,13 @@ export function useComplaintsRealtime({
           table: "complaints",
         },
         () => {
-          onChange();
-        }
+          onChangeRef.current();
+        },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [enabled, onChange]);
+  }, [enabled]);
 }

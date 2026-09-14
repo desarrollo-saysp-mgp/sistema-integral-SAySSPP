@@ -19,6 +19,15 @@ export type RnuStatsEntry = {
   behavior: string | null;
 };
 
+type RnuEstadisticasPageProps = {
+  searchParams: Promise<{
+    desde?: string;
+    hasta?: string;
+    tipo?: string;
+    historico?: string;
+  }>;
+};
+
 function normalizeRole(value: unknown) {
   return String(value || "")
     .trim()
@@ -28,9 +37,27 @@ function normalizeRole(value: unknown) {
     .replace(/\s+/g, "");
 }
 
+function formatArgentinaDate(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getArgentinaDate(offsetDays = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+
+  return formatArgentinaDate(date);
+}
+
 const PAGE_SIZE = 1000;
 
-export default async function RnuEstadisticasPage() {
+export default async function RnuEstadisticasPage({
+  searchParams,
+}: RnuEstadisticasPageProps) {
   const supabase = await createClient();
 
   const {
@@ -65,12 +92,45 @@ export default async function RnuEstadisticasPage() {
     redirect("/dashboard/accesos");
   }
 
+  const params = await searchParams;
+
+  const showAllHistory = params.historico === "1";
+
+  const rawFrom =
+    typeof params.desde === "string"
+      ? params.desde.trim()
+      : "";
+
+  const rawTo =
+    typeof params.hasta === "string"
+      ? params.hasta.trim()
+      : "";
+
+  const dateFrom = showAllHistory
+    ? rawFrom
+    : rawFrom || getArgentinaDate(-14);
+
+  const dateTo = showAllHistory
+    ? rawTo
+    : rawTo || getArgentinaDate();
+
+  const rawType =
+    typeof params.tipo === "string"
+      ? params.tipo.trim()
+      : "";
+
+  const entryType =
+    rawType === "GENERAL" ||
+    rawType === "INSTITUCION"
+      ? rawType
+      : "";
+
   const entries: RnuStatsEntry[] = [];
 
   let from = 0;
 
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("rnu_entries")
       .select(`
         id,
@@ -85,7 +145,30 @@ export default async function RnuEstadisticasPage() {
         institution_name,
         activities,
         behavior
-      `)
+      `);
+
+    if (dateFrom) {
+      query = query.gte(
+        "entry_date",
+        dateFrom,
+      );
+    }
+
+    if (dateTo) {
+      query = query.lte(
+        "entry_date",
+        dateTo,
+      );
+    }
+
+    if (entryType) {
+      query = query.eq(
+        "entry_type",
+        entryType,
+      );
+    }
+
+    const { data, error } = await query
       .order("entry_date", {
         ascending: true,
       })
@@ -118,6 +201,10 @@ export default async function RnuEstadisticasPage() {
   return (
     <EstadisticasRnuClient
       initialEntries={entries}
+      initialFrom={dateFrom}
+      initialTo={dateTo}
+      initialType={entryType}
+      initialShowAllHistory={showAllHistory}
     />
   );
 }
