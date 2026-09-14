@@ -164,37 +164,40 @@ const groupBy = (
     .sort((a, b) => b.count - a.count);
 };
 
-const getGroupedStats = (complaints: ComplaintRow[], groupByParam: string) => {
+const getGroupedStats = (
+  complaints: ComplaintRow[],
+  groupByParam: string,
+) => {
   switch (groupByParam) {
     case "street":
-      return groupBy(complaints, (item) => getGroupKey(item, "street")).slice(
-        0,
-        15,
-      );
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "street"),
+      ).slice(0, 15);
 
     case "service":
-      return groupBy(complaints, (item) => getGroupKey(item, "service")).slice(
-        0,
-        15,
-      );
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "service"),
+      ).slice(0, 15);
 
     case "direction":
-      return groupBy(complaints, (item) => getGroupKey(item, "direction"));
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "direction"),
+      );
 
     case "cause":
-      return groupBy(complaints, (item) => getGroupKey(item, "cause")).slice(
-        0,
-        15,
-      );
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "cause"),
+      ).slice(0, 15);
 
     case "zone":
-      return groupBy(complaints, (item) => getGroupKey(item, "zone")).slice(
-        0,
-        16,
-      );
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "zone"),
+      ).slice(0, 16);
 
     case "status":
-      return groupBy(complaints, (item) => getGroupKey(item, "status"));
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "status"),
+      );
 
     case "contact_method":
       return groupBy(complaints, (item) =>
@@ -202,10 +205,9 @@ const getGroupedStats = (complaints: ComplaintRow[], groupByParam: string) => {
       );
 
     default:
-      return groupBy(complaints, (item) => getGroupKey(item, "street")).slice(
-        0,
-        15,
-      );
+      return groupBy(complaints, (item) =>
+        getGroupKey(item, "street"),
+      ).slice(0, 15);
   }
 };
 
@@ -219,7 +221,10 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      return NextResponse.json(
+        { error: "No autenticado" },
+        { status: 401 },
+      );
     }
 
     const { data: currentUser, error: userError } = await supabase
@@ -236,10 +241,12 @@ export async function GET(request: NextRequest) {
     }
 
     const currentUserEmail = normalizeText(currentUser.email);
+
     const isServiciosPublicosAccount =
       currentUserEmail === normalizeText(SERVICIOS_PUBLICOS_EMAIL);
 
-    const isGirsuAccount = currentUserEmail === normalizeText(GIRSU_EMAIL);
+    const isGirsuAccount =
+      currentUserEmail === normalizeText(GIRSU_EMAIL);
 
     const { searchParams } = new URL(request.url);
 
@@ -273,12 +280,17 @@ export async function GET(request: NextRequest) {
       isServiciosPublicosAccount ||
       isGirsuAccount
     ) {
-      const { data: roleServices, error: roleServicesError } = await supabase
-        .from("services")
-        .select("id, name");
+      const { data: roleServices, error: roleServicesError } =
+        await supabase
+          .from("services")
+          .select("id, name");
 
       if (roleServicesError) {
-        console.error("Error fetching role services:", roleServicesError);
+        console.error(
+          "Error fetching role services:",
+          roleServicesError,
+        );
+
         return NextResponse.json(
           { error: "Error al cargar servicios" },
           { status: 500 },
@@ -297,7 +309,9 @@ export async function GET(request: NextRequest) {
 
       serviciosPublicosServiceIds =
         roleServices
-          ?.filter((service) => isServiciosPublicosService(service.name))
+          ?.filter((service) =>
+            isServiciosPublicosService(service.name),
+          )
           .map((service) => service.id) ?? [];
 
       girsuServiceIds =
@@ -334,7 +348,10 @@ export async function GET(request: NextRequest) {
 
       if (isServiciosPublicosAccount) {
         if (serviciosPublicosServiceIds.length > 0) {
-          query = query.in("service_id", serviciosPublicosServiceIds);
+          query = query.in(
+            "service_id",
+            serviciosPublicosServiceIds,
+          );
         } else {
           query = query.eq("service_id", -999999);
         }
@@ -357,15 +374,18 @@ export async function GET(request: NextRequest) {
       } else if (currentUser.role === "ReclamosZyV") {
         if (zyvServiceIds.length > 0) {
           query = query.or(
-            `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(",")})`,
+            `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(
+              ",",
+            )})`,
           );
         } else {
           query = query.eq("form_variant", "zyv");
         }
       } else if (currentUser.role === "Reclamos") {
-        query = query.or(
-          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
-        );
+        query = query.in("form_variant", [
+          "general",
+          "import_excel",
+        ]);
       }
 
       if (dateFrom) {
@@ -394,13 +414,15 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         console.error("Error fetching complaint stats:", error);
+
         return NextResponse.json(
           { error: "Error al cargar estadísticas" },
           { status: 500 },
         );
       }
 
-      const page = (data || []) as unknown as ComplaintRow[];
+      const page =
+        (data || []) as unknown as ComplaintRow[];
 
       allComplaints.push(...page);
 
@@ -414,55 +436,77 @@ export async function GET(request: NextRequest) {
     const filteredComplaints =
       direction && direction !== "all"
         ? allComplaints.filter(
-            (complaint) => getComplaintDirection(complaint) === normalizeValue(direction),
+            (complaint) =>
+              getComplaintDirection(complaint) ===
+              normalizeValue(direction),
           )
         : allComplaints;
 
     const resolvedCount = filteredComplaints.filter(
-      (complaint) => normalizeText(complaint.status) === "resuelto",
+      (complaint) =>
+        normalizeText(complaint.status) === "resuelto",
     ).length;
 
     const openCount = allComplaints.filter(
-      (complaint) => normalizeText(complaint.status) === "en proceso",
+      (complaint) =>
+        normalizeText(complaint.status) === "en proceso",
     ).length;
 
     const resolvedPercentage =
       filteredComplaints.length > 0
-        ? Number(((resolvedCount / filteredComplaints.length) * 100).toFixed(1))
+        ? Number(
+            (
+              (resolvedCount / filteredComplaints.length) *
+              100
+            ).toFixed(1),
+          )
         : 0;
 
-    const byDirection = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "direction"),
+    const byDirection = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "direction"),
     );
 
-    const byStreet = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "street"),
+    const byStreet = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "street"),
     ).slice(0, 15);
 
-    const byService = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "service"),
+    const byService = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "service"),
     ).slice(0, 15);
 
-    const byCause = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "cause"),
+    const byCause = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "cause"),
     ).slice(0, 15);
 
-    const byStatus = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "status"),
+    const byStatus = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "status"),
     );
 
-    const byZone = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "zone"),
+    const byZone = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "zone"),
     ).slice(0, 16);
 
-    const byContactMethod = groupBy(filteredComplaints, (item) =>
-      getGroupKey(item, "contact_method"),
+    const byContactMethod = groupBy(
+      filteredComplaints,
+      (item) => getGroupKey(item, "contact_method"),
     );
 
-    const grouped = getGroupedStats(filteredComplaints, groupByParam);
+    const grouped = getGroupedStats(
+      filteredComplaints,
+      groupByParam,
+    );
 
     const oldestInProgress = filteredComplaints
-      .filter((complaint) => normalizeText(complaint.status) === "en proceso")
+      .filter(
+        (complaint) =>
+          normalizeText(complaint.status) === "en proceso",
+      )
       .map((complaint) => ({
         id: complaint.id,
         complaint_number: complaint.complaint_number,
@@ -471,21 +515,34 @@ export async function GET(request: NextRequest) {
         street_number: complaint.street_number ?? null,
         zone: normalizeValue(complaint.zone),
         status: normalizeValue(complaint.status),
-        service: normalizeValue(getRelatedName(complaint.service)),
-        cause: normalizeValue(getRelatedName(complaint.cause)),
-        delay_days: getDelayDays(complaint.complaint_date),
+        service: normalizeValue(
+          getRelatedName(complaint.service),
+        ),
+        cause: normalizeValue(
+          getRelatedName(complaint.cause),
+        ),
+        delay_days: getDelayDays(
+          complaint.complaint_date,
+        ),
       }))
       .sort((a, b) => {
         if (a.delay_days !== b.delay_days) {
           return b.delay_days - a.delay_days;
         }
 
-        const dateA = new Date(a.complaint_date).getTime();
-        const dateB = new Date(b.complaint_date).getTime();
+        const dateA =
+          new Date(a.complaint_date).getTime();
+        const dateB =
+          new Date(b.complaint_date).getTime();
 
-        if (dateA !== dateB) return dateA - dateB;
+        if (dateA !== dateB) {
+          return dateA - dateB;
+        }
 
-        return (a.complaint_number ?? a.id) - (b.complaint_number ?? b.id);
+        return (
+          (a.complaint_number ?? a.id) -
+          (b.complaint_number ?? b.id)
+        );
       })
       .slice(0, 20);
 
@@ -494,32 +551,63 @@ export async function GET(request: NextRequest) {
         ? filteredComplaints
             .filter(
               (complaint) =>
-                getGroupKey(complaint, detailGroup) === normalizeValue(detailValue),
+                getGroupKey(
+                  complaint,
+                  detailGroup,
+                ) ===
+                normalizeValue(detailValue),
             )
             .sort((a, b) => {
-              const dateA = new Date(a.complaint_date).getTime();
-              const dateB = new Date(b.complaint_date).getTime();
+              const dateA =
+                new Date(
+                  a.complaint_date,
+                ).getTime();
 
-              if (dateA !== dateB) return dateB - dateA;
+              const dateB =
+                new Date(
+                  b.complaint_date,
+                ).getTime();
 
-              const numberA = a.complaint_number ?? a.id;
-              const numberB = b.complaint_number ?? b.id;
+              if (dateA !== dateB) {
+                return dateB - dateA;
+              }
+
+              const numberA =
+                a.complaint_number ?? a.id;
+
+              const numberB =
+                b.complaint_number ?? b.id;
 
               return numberB - numberA;
             })
         : [];
 
-    const detailItems = detailRows.map((complaint) => ({
-      id: complaint.id,
-      complaint_number: complaint.complaint_number,
-      complaint_date: complaint.complaint_date,
-      address: normalizeValue(complaint.address),
-      street_number: complaint.street_number ?? null,
-      zone: normalizeValue(complaint.zone),
-      status: normalizeValue(complaint.status),
-      service: normalizeValue(getRelatedName(complaint.service)),
-      cause: normalizeValue(getRelatedName(complaint.cause)),
-    }));
+    const detailItems = detailRows.map(
+      (complaint) => ({
+        id: complaint.id,
+        complaint_number:
+          complaint.complaint_number,
+        complaint_date:
+          complaint.complaint_date,
+        address: normalizeValue(
+          complaint.address,
+        ),
+        street_number:
+          complaint.street_number ?? null,
+        zone: normalizeValue(
+          complaint.zone,
+        ),
+        status: normalizeValue(
+          complaint.status,
+        ),
+        service: normalizeValue(
+          getRelatedName(complaint.service),
+        ),
+        cause: normalizeValue(
+          getRelatedName(complaint.cause),
+        ),
+      }),
+    );
 
     return NextResponse.json({
       data: {
@@ -546,7 +634,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Unexpected error in GET /api/complaints/stats:", error);
+    console.error(
+      "Unexpected error in GET /api/complaints/stats:",
+      error,
+    );
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },

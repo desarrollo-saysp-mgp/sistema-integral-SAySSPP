@@ -141,53 +141,89 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // =====================================================
+      // OPTIMIZACIÓN:
+      // Antes se usaba:
+      //
+      // query.or(
+      //   "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null"
+      // )
+      //
+      // Actualmente los reclamos generales válidos usan
+      // "general" o "import_excel", por lo que usamos IN.
+      // Esto permite a PostgreSQL aprovechar mejor el índice.
+      // =====================================================
       if (currentUser.role === "Reclamos") {
-        query = query.or(
-          "form_variant.eq.general,form_variant.eq.import_excel,form_variant.is.null",
-        );
+        query = query.in("form_variant", ["general", "import_excel"]);
       }
 
       query = query.order("created_at", { ascending: false }).order("id", {
         ascending: false,
       });
 
-      if (search) query = query.ilike("complainant_name", `%${search}%`);
-      if (status && status !== "all") query = query.eq("status", status);
+      if (search) {
+        query = query.ilike("complainant_name", `%${search}%`);
+      }
+
+      if (status && status !== "all") {
+        query = query.eq("status", status);
+      }
 
       if (service_id && service_id !== "all") {
         query = query.eq("service_id", parseInt(service_id));
       }
 
-      if (zone && zone !== "all") query = query.eq("zone", zone);
-      if (date_from) query = query.gte("complaint_date", date_from);
-      if (date_to) query = query.lte("complaint_date", date_to);
+      if (zone && zone !== "all") {
+        query = query.eq("zone", zone);
+      }
+
+      if (date_from) {
+        query = query.gte("complaint_date", date_from);
+      }
+
+      if (date_to) {
+        query = query.lte("complaint_date", date_to);
+      }
 
       if (
         form_variant &&
         form_variant !== "all" &&
-        (currentUser.role === "Admin" || currentUser.role === "AdminLectura")
+        (currentUser.role === "Admin" ||
+          currentUser.role === "AdminLectura")
       ) {
         query = query.eq("form_variant", form_variant);
       }
 
-      const { data, error } = await query.range(from, from + pageSize - 1);
+      const { data, error } = await query.range(
+        from,
+        from + pageSize - 1,
+      );
 
       if (error) {
         console.error("Error fetching complaints:", error);
+
         return NextResponse.json(
           { error: "Error al cargar reclamos" },
           { status: 500 },
         );
       }
 
-      if (!data || data.length === 0) break;
+      if (!data || data.length === 0) {
+        break;
+      }
 
       allComplaints = [...allComplaints, ...data];
 
-      if (data.length < pageSize) break;
+      if (data.length < pageSize) {
+        break;
+      }
+
       from += pageSize;
     }
 
+    // Se mantiene esta validación exactamente como estaba.
+    // Aunque "null" ya no venga de la consulta para Reclamos,
+    // no molesta y evita cambiar más lógica de la necesaria.
     const safeComplaints =
       currentUser.role === "ReclamosArbolado"
         ? allComplaints.filter(
@@ -213,6 +249,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: safeComplaints });
   } catch (error) {
     console.error("Unexpected error in GET /api/complaints:", error);
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
@@ -382,7 +419,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.status && !validStatuses.includes(body.status)) {
-      return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Estado inválido" },
+        { status: 400 },
+      );
     }
 
     if (body.phone_number && !validatePhone(body.phone_number)) {
@@ -438,7 +478,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (formVariant === "arbolado") {
-      const rawArboladoNumber = String(body.arbolado_number || "").trim();
+      const rawArboladoNumber = String(
+        body.arbolado_number || "",
+      ).trim();
 
       if (rawArboladoNumber && !/^\d+$/.test(rawArboladoNumber)) {
         return NextResponse.json(
@@ -449,7 +491,9 @@ export async function POST(request: NextRequest) {
 
       complaintData = {
         ...complaintData,
-        arbolado_number: rawArboladoNumber ? Number(rawArboladoNumber) : null,
+        arbolado_number: rawArboladoNumber
+          ? Number(rawArboladoNumber)
+          : null,
         details: body.description_type?.trim() || null,
         contact_method: body.contact_method?.trim() || null,
         extra_data: {
@@ -494,6 +538,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Error creating complaint:", error);
+
       return NextResponse.json(
         { error: "Error al crear reclamo" },
         { status: 500 },
@@ -501,11 +546,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { data: complaint, message: "Reclamo creado exitosamente" },
+      {
+        data: complaint,
+        message: "Reclamo creado exitosamente",
+      },
       { status: 201 },
     );
   } catch (error) {
     console.error("Unexpected error in POST /api/complaints:", error);
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
