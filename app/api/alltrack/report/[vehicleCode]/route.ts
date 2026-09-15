@@ -122,6 +122,25 @@ const isSessionExpiredError = (
   );
 
 
+const isAlltrackAsciiCodecError = (
+  error: unknown,
+) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : String(error || "");
+
+  const normalized =
+    message.toLowerCase();
+
+  return (
+    normalized.includes("ascii") &&
+    normalized.includes("codec") &&
+    normalized.includes("can't encode character")
+  );
+};
+
+
 type AlltrackPosition = {
   hora?: string | null;
   fecha?: string | null;
@@ -518,6 +537,7 @@ type AlltrackTravelPoint = {
 type AlltrackTravelSegment = {
   puntos?: AlltrackTravelPoint[];
   subPuntos?: AlltrackTravelPoint[];
+  tipo_tramo?: string | null;
   km_recorridos?: number | null;
   fecha_inicio?: string | null;
   fecha_fin?: string | null;
@@ -527,6 +547,8 @@ type AlltrackTravelSegment = {
 
 type AlltrackTravelHistoryData = {
   tramos?: AlltrackTravelSegment[];
+  puntos?: AlltrackTravelPoint[];
+  cant_puntos?: number | null;
 };
 
 const toNumber = (
@@ -653,6 +675,348 @@ const normalizeAlltrackDate = (
   }
 
   return text;
+};
+
+const parseAlltrackTimestamp = (
+  value: unknown,
+) => {
+  const text =
+    String(
+      value || "",
+    ).trim();
+
+  if (!text) {
+    return null;
+  }
+
+  /*
+   * Formatos que devuelve Alltrack:
+   * - 26-12-2024 07:23:40
+   * - 2024-12-26 07:23:40
+   */
+  const dmy =
+    text.match(
+      /^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/,
+    );
+
+  if (dmy) {
+    const [
+      ,
+      day,
+      month,
+      year,
+      hour,
+      minute,
+      second,
+    ] = dmy;
+
+    const timestamp =
+      new Date(
+        `${year}-${month}-${day}T${hour}:${minute}:${second}`,
+      ).getTime();
+
+    return Number.isFinite(
+      timestamp,
+    )
+      ? timestamp
+      : null;
+  }
+
+  const ymd =
+    text.match(
+      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/,
+    );
+
+  if (ymd) {
+    const timestamp =
+      new Date(
+        text.replace(
+          " ",
+          "T",
+        ),
+      ).getTime();
+
+    return Number.isFinite(
+      timestamp,
+    )
+      ? timestamp
+      : null;
+  }
+
+  return null;
+};
+
+const getAlltrackDateTimeValue = (
+  dateValue: unknown,
+  timeValue: unknown,
+  timestampValue?: unknown,
+) => {
+  /*
+   * MUY IMPORTANTE:
+   * para ordenar puntos GPS priorizamos "ts".
+   *
+   * En travelHistory, Alltrack puede devolver "hora" que no refleja
+   * exactamente el orden real de adquisición. Si ordenamos sólo por
+   * fecha + hora aparecen líneas cruzadas/oblicuas falsas.
+   */
+  const timestamp =
+    parseAlltrackTimestamp(
+      timestampValue,
+    );
+
+  if (timestamp !== null) {
+    return timestamp;
+  }
+
+  const normalizedDate =
+    normalizeAlltrackDate(
+      dateValue,
+    );
+
+  const normalizedTime =
+    String(
+      timeValue || "00:00:00",
+    ).trim() ||
+    "00:00:00";
+
+  const value =
+    new Date(
+      `${normalizedDate}T${normalizedTime}`,
+    ).getTime();
+
+  return Number.isFinite(value)
+    ? value
+    : 0;
+};
+
+const sortTravelPointsChronologically = <
+  T extends {
+    date?: string | null;
+    time?: string | null;
+    timestamp?: string | null;
+  },
+>(
+  points: T[],
+) =>
+  [...points].sort(
+    (a, b) =>
+      getAlltrackDateTimeValue(
+        a.date,
+        a.time,
+        a.timestamp,
+      ) -
+      getAlltrackDateTimeValue(
+        b.date,
+        b.time,
+        b.timestamp,
+      ),
+  );
+
+
+const getDistanceMeters = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) => {
+  const earthRadius =
+    6_371_000;
+
+  const toRad = (
+    value: number,
+  ) =>
+    (value * Math.PI) /
+    180;
+
+  const dLat =
+    toRad(
+      lat2 - lat1,
+    );
+
+  const dLon =
+    toRad(
+      lon2 - lon1,
+    );
+
+  const a =
+    Math.sin(
+      dLat / 2,
+    ) ** 2 +
+    Math.cos(
+      toRad(lat1),
+    ) *
+      Math.cos(
+        toRad(lat2),
+      ) *
+      Math.sin(
+        dLon / 2,
+      ) ** 2;
+
+  return (
+    earthRadius *
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(
+        1 - a,
+      ),
+    )
+  );
+};
+
+/*
+ * Alltrack, en su mapa histórico, NO une necesariamente todos
+ * los puntos de una semana en una única polilínea.
+ *
+ * Si entre dos posiciones hay una detención larga / cambio de sesión,
+ * unirlas produce una diagonal "volando" sobre casas.
+ *
+ * Separamos el historial crudo en recorridos continuos usando el mismo
+ * criterio conceptual que documenta Alltrack para agrupamiento:
+ * 10 minutos de detención.
+ *
+ * También cortamos saltos GPS físicamente imposibles para evitar líneas
+ * falsas por datos aislados.
+ */
+const splitContinuousTravelPaths = <
+  T extends {
+    lat: number;
+    lon: number;
+    date?: string | null;
+    time?: string | null;
+    timestamp?: string | null;
+  },
+>(
+  input: T[],
+) => {
+  /*
+   * IMPORTANTE:
+   * JSON__GET_travelHistory ya se pide con order=ASC.
+   * Por lo tanto, respetamos EXACTAMENTE el orden en el que Alltrack
+   * devuelve los puntos.
+   *
+   * Reordenarlos nosotros por fecha/hora/ts puede mezclar puntos que
+   * tienen timestamps repetidos o incompletos y generar "rayos" y
+   * diagonales que no existen en el mapa oficial.
+   */
+  const points = [...input];
+
+  if (points.length === 0) {
+    return [] as T[][];
+  }
+
+  const MAX_GAP_MS =
+    10 * 60 * 1000;
+
+  const MAX_REASONABLE_SPEED_KMH =
+    160;
+
+  const paths: T[][] = [];
+  let current: T[] = [
+    points[0],
+  ];
+
+  for (
+    let index = 1;
+    index < points.length;
+    index += 1
+  ) {
+    const previous =
+      points[index - 1];
+
+    const point =
+      points[index];
+
+    const previousTime =
+      getAlltrackDateTimeValue(
+        previous.date,
+        previous.time,
+        previous.timestamp,
+      );
+
+    const pointTime =
+      getAlltrackDateTimeValue(
+        point.date,
+        point.time,
+        point.timestamp,
+      );
+
+    const deltaMs =
+      pointTime -
+      previousTime;
+
+    const distanceMeters =
+      getDistanceMeters(
+        previous.lat,
+        previous.lon,
+        point.lat,
+        point.lon,
+      );
+
+    const deltaHours =
+      deltaMs > 0
+        ? deltaMs /
+          3_600_000
+        : 0;
+
+    const impliedSpeedKmh =
+      deltaHours > 0
+        ? distanceMeters /
+          1000 /
+          deltaHours
+        : 0;
+
+    /*
+     * Sólo cortamos cuando existe evidencia clara de que empezó
+     * otro recorrido. Si los timestamps vienen repetidos, NO usamos
+     * eso como motivo para reordenar ni cortar.
+     */
+    const hasLongGap =
+      deltaMs >
+      MAX_GAP_MS;
+
+    const hasImpossibleJump =
+      deltaHours > 0 &&
+      distanceMeters >
+        250 &&
+      impliedSpeedKmh >
+        MAX_REASONABLE_SPEED_KMH;
+
+    if (
+      hasLongGap ||
+      hasImpossibleJump
+    ) {
+      if (
+        current.length >
+        1
+      ) {
+        paths.push(
+          current,
+        );
+      }
+
+      current = [
+        point,
+      ];
+
+      continue;
+    }
+
+    current.push(
+      point,
+    );
+  }
+
+  if (
+    current.length >
+    1
+  ) {
+    paths.push(
+      current,
+    );
+  }
+
+  return paths;
 };
 
 const resolveAlltrackVehicleId =
@@ -1080,41 +1444,96 @@ export async function GET(
 
     /*
      * =========================================
-     * TOTALIZADO DEL PERÍODO
+     * TOTALIZADO + SESIONES EN PARALELO
      * =========================================
+     *
+     * Antes estas dos consultas se hacían una detrás de otra.
+     * En rangos mensuales Alltrack puede tardar bastante, por lo
+     * que el tiempo total terminaba siendo la suma de ambas.
+     *
+     * Son consultas independientes, así que ahora se ejecutan
+     * simultáneamente. El token Alltrack ya está cacheado y el
+     * helper evita logins duplicados.
      */
 
-    const totalFormData =
-      new FormData();
+    const buildTotalsFormData =
+      () => {
+        const formData =
+          new FormData();
 
-    totalFormData.set(
-      "fecha_desde",
-      from,
-    );
+        formData.set(
+          "fecha_desde",
+          from,
+        );
+        formData.set(
+          "fecha_hasta",
+          to,
+        );
+        formData.set(
+          "vehiculo_id",
+          alltrackVehicleId,
+        );
 
-    totalFormData.set(
-      "fecha_hasta",
-      to,
-    );
+        return formData;
+      };
 
-    totalFormData.set(
-      "vehiculo_id",
-      alltrackVehicleId,
-    );
+    const buildSessionsFormData =
+      () => {
+        const formData =
+          new FormData();
 
-    const {
-      result:
-        totalsResult,
-    } =
-      await authenticatedAlltrackPost<
-        AlltrackTotaledSession[]
-      >({
-        pathname:
-          "/JSON__GET_totaledVehicleSessions/",
-        formDataFactory:
-          () =>
-            totalFormData,
-      });
+        formData.set(
+          "fecha_desde",
+          from,
+        );
+        formData.set(
+          "fecha_hasta",
+          to,
+        );
+        formData.set(
+          "hora_desde",
+          "00:00:00",
+        );
+        formData.set(
+          "hora_hasta",
+          "23:59:59",
+        );
+        formData.set(
+          "vehiculo_id",
+          alltrackVehicleId,
+        );
+
+        return formData;
+      };
+
+    const [
+      totalsResponse,
+      sessionsResponse,
+    ] =
+      await Promise.all([
+        authenticatedAlltrackPost<
+          AlltrackTotaledSession[]
+        >({
+          pathname:
+            "/JSON__GET_totaledVehicleSessions/",
+          formDataFactory:
+            buildTotalsFormData,
+        }),
+        authenticatedAlltrackPost<
+          AlltrackVehicleSession[]
+        >({
+          pathname:
+            "/JSON__GET_vehicleSessionsByVehicleId/",
+          formDataFactory:
+            buildSessionsFormData,
+        }),
+      ]);
+
+    const totalsResult =
+      totalsResponse.result;
+
+    const sessionsResult =
+      sessionsResponse.result;
 
     const totals =
       Array.isArray(
@@ -1153,85 +1572,39 @@ export async function GET(
           ?.tiempo_movimiento,
       );
 
-    const distanceMeters =
+    /*
+     * En esta cuenta distancia_recorrida coincide con kilómetros.
+     */
+    const distanceKm =
       toNumber(
         totalRow
           ?.distancia_recorrida,
       );
 
-    const activitySeconds =
-      idleSeconds +
-      movementSeconds;
-
-    const movementPercent =
-      activitySeconds > 0
-        ? Number(
-            (
-              (movementSeconds /
-                activitySeconds) *
-              100
-            ).toFixed(2),
-          )
-        : 0;
-
+    /*
+     * Réplica del porcentaje que muestra Alltrack:
+     * ocioso / sesión y movimiento como complemento.
+     */
     const idlePercent =
-      activitySeconds > 0
+      sessionSeconds > 0
         ? Number(
             (
               (idleSeconds /
-                activitySeconds) *
+                sessionSeconds) *
               100
             ).toFixed(2),
           )
         : 0;
 
-    /*
-     * =========================================
-     * SESIONES DEL VEHÍCULO
-     * =========================================
-     */
-
-    const sessionsFormData =
-      new FormData();
-
-    sessionsFormData.set(
-      "fecha_desde",
-      from,
-    );
-
-    sessionsFormData.set(
-      "fecha_hasta",
-      to,
-    );
-
-    sessionsFormData.set(
-      "hora_desde",
-      "00:00:00",
-    );
-
-    sessionsFormData.set(
-      "hora_hasta",
-      "23:59:59",
-    );
-
-    sessionsFormData.set(
-      "vehiculo_id",
-      alltrackVehicleId,
-    );
-
-    const {
-      result:
-        sessionsResult,
-    } =
-      await authenticatedAlltrackPost<
-        AlltrackVehicleSession[]
-      >({
-        pathname:
-          "/JSON__GET_vehicleSessionsByVehicleId/",
-        formDataFactory:
-          () =>
-            sessionsFormData,
-      });
+    const movementPercent =
+      sessionSeconds > 0
+        ? Number(
+            (
+              100 -
+              idlePercent
+            ).toFixed(2),
+          )
+        : 0;
 
     const sessions =
       Array.isArray(
@@ -1239,6 +1612,7 @@ export async function GET(
       )
         ? sessionsResult.data
         : [];
+
 
     /*
      * Agrupamos sesiones por fecha para obtener
@@ -1252,7 +1626,7 @@ export async function GET(
           session_seconds: number;
           idle_seconds: number;
           movement_seconds: number;
-          distance_meters: number;
+          distance_km: number;
           sessions_count: number;
         }
       >();
@@ -1274,7 +1648,7 @@ export async function GET(
             session_seconds: 0,
             idle_seconds: 0,
             movement_seconds: 0,
-            distance_meters: 0,
+            distance_km: 0,
             sessions_count: 0,
           };
 
@@ -1293,7 +1667,7 @@ export async function GET(
             session.tiempo_movimiento,
           );
 
-        current.distance_meters +=
+        current.distance_km +=
           toNumber(
             session.distancia_recorrida,
           );
@@ -1308,71 +1682,113 @@ export async function GET(
       },
     );
 
-    const dailyActivity =
-      Array.from(
-        dailyMap.values(),
-      )
-        .sort(
-          (
-            a,
-            b,
-          ) =>
-            a.date.localeCompare(
-              b.date,
-            ),
-        )
-        .map(
-          (day) => ({
-            date:
-              day.date,
-            sessions_count:
-              day.sessions_count,
-            session_seconds:
+    /*
+     * Completamos TODOS los días solicitados, incluso aquellos
+     * para los que Alltrack no devolvió ninguna sesión.
+     *
+     * De esta forma, que una fecha no tenga actividad queda
+     * explícito y no parece un error de carga del informe.
+     */
+    const dailyActivity: Array<{
+      date: string;
+      has_activity: boolean;
+      sessions_count: number;
+      session_seconds: number;
+      session_time: string;
+      idle_seconds: number;
+      idle_time: string;
+      movement_seconds: number;
+      movement_time: string;
+      distance_km: number;
+      distance_meters: number;
+    }> = [];
+
+    const currentDate =
+      new Date(`${from}T00:00:00Z`);
+
+    const finalDate =
+      new Date(`${to}T00:00:00Z`);
+
+    while (
+      currentDate.getTime() <=
+      finalDate.getTime()
+    ) {
+      const date =
+        currentDate
+          .toISOString()
+          .slice(0, 10);
+
+      const day =
+        dailyMap.get(date);
+
+      if (day) {
+        dailyActivity.push({
+          date,
+          has_activity: true,
+          sessions_count:
+            day.sessions_count,
+          session_seconds:
+            day.session_seconds,
+          session_time:
+            formatSeconds(
               day.session_seconds,
-            session_time:
-              formatSeconds(
-                day.session_seconds,
-              ),
-            idle_seconds:
+            ),
+          idle_seconds:
+            day.idle_seconds,
+          idle_time:
+            formatSeconds(
               day.idle_seconds,
-            idle_time:
-              formatSeconds(
-                day.idle_seconds,
-              ),
-            movement_seconds:
+            ),
+          movement_seconds:
+            day.movement_seconds,
+          movement_time:
+            formatSeconds(
               day.movement_seconds,
-            movement_time:
-              formatSeconds(
-                day.movement_seconds,
+            ),
+          distance_km:
+            Number(
+              day.distance_km.toFixed(
+                2,
               ),
-            distance_meters:
-              Number(
-                day.distance_meters.toFixed(
-                  2,
-                ),
-              ),
-            distance_km:
-              Number(
-                (
-                  day.distance_meters /
-                  1000
-                ).toFixed(
-                  2,
-                ),
-              ),
-          }),
-        );
+            ),
+          distance_meters:
+            Number(
+              (
+                day.distance_km *
+                1000
+              ).toFixed(2),
+            ),
+        });
+      } else {
+        dailyActivity.push({
+          date,
+          has_activity: false,
+          sessions_count: 0,
+          session_seconds: 0,
+          session_time: "-",
+          idle_seconds: 0,
+          idle_time: "-",
+          movement_seconds: 0,
+          movement_time: "-",
+          distance_km: 0,
+          distance_meters: 0,
+        });
+      }
+
+      currentDate.setUTCDate(
+        currentDate.getUTCDate() + 1,
+      );
+    }
 
     /*
      * =========================================
      * HISTORIAL GPS
      * =========================================
      *
-     * Para no devolver miles de puntos sin necesidad:
-     * - por defecto sólo incluimos ruta cuando el período
-     *   es de 1 día;
-     * - para más de 1 día se puede llamar con includeRoute=0
-     *   y después pedir recorridos por tramos/semana.
+     * Para evitar respuestas gigantes no devolvemos recorrido
+     * GPS para períodos mayores a 10 días. Esto permite pedir
+     * bloques semanales (y el último bloque de hasta 10 días)
+     * desde la ficha sin descargar un mes entero de puntos.
      */
 
     let route:
@@ -1401,64 +1817,170 @@ export async function GET(
             | string
             | null;
         }>;
+        paths: Array<
+          Array<{
+            lat: number;
+            lon: number;
+            date:
+              | string
+              | null;
+            time:
+              | string
+              | null;
+            timestamp:
+              | string
+              | null;
+            speed:
+              | number
+              | null;
+            odometer:
+              | string
+              | number
+              | null;
+            driver:
+              | string
+              | null;
+          }>
+        >;
       } | null =
       null;
 
     if (
       includeRoute &&
-      rangeDays === 1
+      rangeDays <= 10
     ) {
-      const travelFormData =
-        new FormData();
+      const buildTravelFormData =
+        (
+          grouped: boolean,
+        ) => {
+          const formData =
+            new FormData();
 
-      travelFormData.set(
-        "fecha_desde",
-        from,
-      );
+          formData.set(
+            "fecha_desde",
+            from,
+          );
 
-      travelFormData.set(
-        "fecha_hasta",
-        to,
-      );
+          formData.set(
+            "fecha_hasta",
+            to,
+          );
 
-      travelFormData.set(
-        "hora_desde",
-        "00:00:00",
-      );
+          formData.set(
+            "hora_desde",
+            "00:00:00",
+          );
 
-      travelFormData.set(
-        "hora_hasta",
-        "23:59:59",
-      );
+          formData.set(
+            "hora_hasta",
+            "23:59:59",
+          );
 
-      travelFormData.set(
-        "vehiculo_id",
-        alltrackVehicleId,
-      );
+          formData.set(
+            "vehiculo_id",
+            alltrackVehicleId,
+          );
 
-      travelFormData.set(
-        "isAgrupamiento",
-        "0",
-      );
+          formData.set(
+            "isAgrupamiento",
+            grouped
+              ? "1"
+              : "0",
+          );
 
-      travelFormData.set(
-        "order",
-        "ASC",
-      );
+          if (grouped) {
+            formData.set(
+              "intervalo_detencion",
+              "10",
+            );
+          }
 
-      const {
-        result:
-          travelResult,
-      } =
-        await authenticatedAlltrackPost<
-          AlltrackTravelHistoryData
-        >({
-          pathname:
-            "/JSON__GET_travelHistory/",
-          formDataFactory:
-            () =>
-              travelFormData,
-        });
+          formData.set(
+            "order",
+            "ASC",
+          );
+
+          return formData;
+        };
+
+      let travelResult:
+        AlltrackResponse<AlltrackTravelHistoryData>;
+
+      /*
+       * Para dibujar el mapa usamos SIEMPRE el modo agrupado.
+       *
+       * Alltrack documenta isAgrupamiento=1 justamente para separar
+       * el historial en tramos de "movimiento" y "detenido".
+       * Ese es el formato más parecido al que utiliza su mapa histórico.
+       *
+       * Con isAgrupamiento=0 recibimos una nube continua de puntos y
+       * después tenemos que adivinar dónde empieza/termina cada sesión,
+       * lo que puede generar diagonales falsas.
+       */
+      try {
+        const groupedResponse =
+          await authenticatedAlltrackPost<
+            AlltrackTravelHistoryData
+          >({
+            pathname:
+              "/JSON__GET_travelHistory/",
+            formDataFactory:
+              () =>
+                buildTravelFormData(
+                  true,
+                ),
+          });
+
+        travelResult =
+          groupedResponse.result;
+      } catch (groupedError) {
+        /*
+         * Fallback sólo por compatibilidad:
+         * si el endpoint agrupado falla por una causa distinta, intentamos
+         * puntos planos y luego los partimos por continuidad temporal.
+         */
+        console.warn(
+          "Alltrack travelHistory agrupado falló; intentando modo no agrupado.",
+          {
+            vehicleCode:
+              vehicle.code,
+            alltrackVehicleId,
+            from,
+            to,
+            error:
+              groupedError instanceof Error
+                ? groupedError.message
+                : String(
+                    groupedError,
+                  ),
+          },
+        );
+
+        const plainResponse =
+          await authenticatedAlltrackPost<
+            AlltrackTravelHistoryData
+          >({
+            pathname:
+              "/JSON__GET_travelHistory/",
+            formDataFactory:
+              () =>
+                buildTravelFormData(
+                  false,
+                ),
+          });
+
+        travelResult =
+          plainResponse.result;
+      }
+
+      const directPoints =
+        Array.isArray(
+          travelResult.data
+            ?.puntos,
+        )
+          ? travelResult.data
+              ?.puntos || []
+          : [];
 
       const tramos =
         Array.isArray(
@@ -1469,65 +1991,225 @@ export async function GET(
               ?.tramos || []
           : [];
 
-      const points =
-        tramos.flatMap(
+      const mapTravelPoint = (
+        point: AlltrackTravelPoint,
+      ) => ({
+        lat:
+          point.lat as number,
+        lon:
+          point.lon as number,
+        date:
+          point.fecha ||
+          null,
+        time:
+          point.hora ||
+          null,
+        timestamp:
+          point.ts ||
+          null,
+        speed:
+          typeof point.velocidad ===
+            "number"
+            ? point.velocidad
+            : null,
+        odometer:
+          point.odometro ??
+          null,
+        driver:
+          point.conductor ||
+          null,
+      });
+
+      const isValidTravelPoint = (
+        point: AlltrackTravelPoint,
+      ) =>
+        typeof point.lat ===
+          "number" &&
+        typeof point.lon ===
+          "number";
+
+      /*
+       * Alltrack agrupado devuelve "tramos".
+       * Cada tramo de movimiento debe dibujarse por separado.
+       * Si los aplanamos en una sola polilínea, se crean diagonales
+       * falsas entre el final de un tramo y el inicio del siguiente.
+       */
+      let paths: Array<
+        Array<ReturnType<typeof mapTravelPoint>>
+      > = [];
+
+      if (
+        tramos.length > 0
+      ) {
+        /*
+         * MAPA HISTÓRICO
+         *
+         * Alltrack puede representar también posiciones de tramos
+         * "detenido"/"ocioso". En vehículos muy lentos (barredoras,
+         * regadores, etc.) esos puntos son importantes porque una parte
+         * real del desplazamiento puede quedar clasificada así.
+         *
+         * Estrategia:
+         *
+         * 1. Siempre usamos `segment.puntos` cuando contiene una línea
+         *    válida (2 o más posiciones).
+         *
+         * 2. Si el tramo es detenido/ocioso y `puntos` no alcanza para
+         *    dibujar, usamos `subPuntos` como respaldo.
+         *
+         * 3. Los subPuntos NO se aplanan ni se conectan a otros tramos.
+         *    Se dividen por continuidad para evitar los "rayos" y líneas
+         *    falsas que tuvimos anteriormente.
+         *
+         * 4. Cada tramo/chunk queda como una polilínea independiente.
+         *
+         * Los cálculos de sesión, movimiento, ocioso y kilómetros siguen
+         * siendo exactamente los informados por Alltrack.
+         */
+        const groupedPaths:
+          Array<
+            Array<
+              ReturnType<
+                typeof mapTravelPoint
+              >
+            >
+          > = [];
+
+        tramos.forEach(
           (segment) => {
-            const sourcePoints =
+            const type =
+              normalizeText(
+                segment.tipo_tramo,
+              );
+
+            const segmentPoints =
+              Array.isArray(
+                segment.puntos,
+              )
+                ? segment.puntos
+                    .filter(
+                      isValidTravelPoint,
+                    )
+                    .map(
+                      mapTravelPoint,
+                    )
+                : [];
+
+            /*
+             * Si Alltrack ya entregó 2+ puntos principales,
+             * ésa es la geometría preferida para ese tramo.
+             */
+            if (
+              segmentPoints.length >
+              1
+            ) {
+              groupedPaths.push(
+                segmentPoints,
+              );
+
+              return;
+            }
+
+            const isStoppedLike =
+              type.includes(
+                "deten",
+              ) ||
+              type.includes(
+                "ocioso",
+              ) ||
+              type.includes(
+                "parado",
+              ) ||
+              type.includes(
+                "stop",
+              );
+
+            if (
+              !isStoppedLike
+            ) {
+              return;
+            }
+
+            const subPoints =
               Array.isArray(
                 segment.subPuntos,
-              ) &&
-              segment.subPuntos
-                .length > 0
-                ? segment.subPuntos
-                : Array.isArray(
-                    segment.puntos,
-                  )
-                  ? segment.puntos
-                  : [];
-
-            return sourcePoints
-              .filter(
-                (point) =>
-                  typeof point.lat ===
-                    "number" &&
-                  typeof point.lon ===
-                    "number",
               )
-              .map(
-                (point) => ({
-                  lat:
-                    point.lat as number,
-                  lon:
-                    point.lon as number,
-                  date:
-                    point.fecha ||
-                    null,
-                  time:
-                    point.hora ||
-                    null,
-                  timestamp:
-                    point.ts ||
-                    null,
-                  speed:
-                    typeof point.velocidad ===
-                    "number"
-                      ? point.velocidad
-                      : null,
-                  odometer:
-                    point.odometro ??
-                    null,
-                  driver:
-                    point.conductor ||
-                    null,
-                }),
+                ? segment.subPuntos
+                    .filter(
+                      isValidTravelPoint,
+                    )
+                    .map(
+                      mapTravelPoint,
+                    )
+                : [];
+
+            if (
+              subPoints.length <
+              2
+            ) {
+              return;
+            }
+
+            /*
+             * Esto es clave:
+             * NO hacemos groupedPaths.push(subPoints).
+             *
+             * Los partimos en recorridos continuos para que una parada
+             * larga o un salto GPS no genere una diagonal atravesando
+             * media ciudad.
+             */
+            const stoppedPaths =
+              splitContinuousTravelPaths(
+                subPoints,
               );
+
+            stoppedPaths.forEach(
+              (path) => {
+                if (
+                  path.length >
+                  1
+                ) {
+                  groupedPaths.push(
+                    path,
+                  );
+                }
+              },
+            );
           },
         );
+
+        paths =
+          groupedPaths;
+      } else if (
+        directPoints.length > 0
+      ) {
+        /*
+         * FALLBACK:
+         * sólo si Alltrack no devolvió tramos agrupados.
+         */
+        const mapped =
+          directPoints
+            .filter(
+              isValidTravelPoint,
+            )
+            .map(
+              mapTravelPoint,
+            );
+
+        paths =
+          splitContinuousTravelPaths(
+            mapped,
+          );
+      }
+
+      const points =
+        paths.flat();
 
       route = {
         segments:
           tramos.length,
         points,
+        paths,
       };
     }
 
@@ -1539,6 +2221,38 @@ export async function GET(
           Boolean(route),
         range_days:
           rangeDays,
+        distance_unit:
+          "km",
+        route_points_sorted:
+          Boolean(route),
+        route_points_count:
+          route?.points.length || 0,
+        route_paths_count:
+          route?.paths.length || 0,
+        route_strategy:
+          "grouped-points+stopped-subpoints-v2",
+        route_first_point:
+          route?.points[0]
+            ? {
+                date:
+                  route.points[0].date,
+                time:
+                  route.points[0].time,
+              }
+            : null,
+        route_last_point:
+          route?.points.length
+            ? {
+                date:
+                  route.points[
+                    route.points.length - 1
+                  ].date,
+                time:
+                  route.points[
+                    route.points.length - 1
+                  ].time,
+              }
+            : null,
       },
 
       data: {
@@ -1590,17 +2304,17 @@ export async function GET(
               movementSeconds,
             ),
 
-          distance_meters:
+          distance_km:
             Number(
-              distanceMeters.toFixed(
+              distanceKm.toFixed(
                 2,
               ),
             ),
 
-          distance_km:
+          distance_meters:
             Number(
               (
-                distanceMeters /
+                distanceKm *
                 1000
               ).toFixed(
                 2,
@@ -1664,20 +2378,24 @@ export async function GET(
                   ),
                 ),
 
-              distance_meters:
-                toNumber(
-                  session.distancia_recorrida,
+              distance_km:
+                Number(
+                  toNumber(
+                    session.distancia_recorrida,
+                  ).toFixed(
+                    3,
+                  ),
                 ),
 
-              distance_km:
+              distance_meters:
                 Number(
                   (
                     toNumber(
                       session.distancia_recorrida,
-                    ) /
+                    ) *
                     1000
                   ).toFixed(
-                    3,
+                    2,
                   ),
                 ),
             }),

@@ -24,6 +24,7 @@ import {
     CircleOff,
     Clock3,
     Edit,
+    FileDown,
     FilePenLine,
     Filter,
     Gauge,
@@ -318,6 +319,96 @@ type AlltrackLocationResponse = {
     data?: AlltrackLocationData;
     error?: string;
 };
+
+
+type AlltrackReportDailyActivity = {
+    date: string;
+    has_activity: boolean;
+    sessions_count: number;
+    session_seconds: number;
+    session_time: string;
+    idle_seconds: number;
+    idle_time: string;
+    movement_seconds: number;
+    movement_time: string;
+    distance_km: number;
+    distance_meters: number;
+};
+
+type AlltrackReportRoutePoint = {
+    lat: number;
+    lon: number;
+    date: string | null;
+    time: string | null;
+    timestamp: string | null;
+    speed: number | null;
+    odometer: string | number | null;
+    driver: string | null;
+};
+
+type AlltrackReportData = {
+    vehicle: {
+        id: string;
+        code: string;
+        name: string;
+        license_plate: string | null;
+        department: string | null;
+        primary_driver_1: string | null;
+        primary_driver_2: string | null;
+        backup_driver: string | null;
+        alltrack_vehicle_id: string | null;
+    };
+    period: {
+        from: string;
+        to: string;
+    };
+    summary: {
+        session_seconds: number;
+        session_time: string;
+        idle_seconds: number;
+        idle_time: string;
+        movement_seconds: number;
+        movement_time: string;
+        distance_km: number;
+        distance_meters: number;
+        movement_percent: number;
+        idle_percent: number;
+    };
+    daily_activity: AlltrackReportDailyActivity[];
+    route: {
+        segments: number;
+        points: AlltrackReportRoutePoint[];
+        paths?: AlltrackReportRoutePoint[][];
+    } | null;
+};
+
+type AlltrackReportResponse = {
+    meta?: {
+        alltrack_token_cache?: boolean;
+        route_included?: boolean;
+        range_days?: number;
+        distance_unit?: string;
+        route_points_sorted?: boolean;
+        route_points_count?: number;
+    };
+    data?: AlltrackReportData;
+    error?: string;
+};
+
+
+type AlltrackRoutePeriod = {
+    key: string;
+    label: string;
+    from: string;
+    to: string;
+};
+
+type AlltrackWeeklyRoute =
+    AlltrackRoutePeriod & {
+        loading: boolean;
+        error: string | null;
+        data: AlltrackReportData | null;
+    };
 
 type ChangedField = {
     key: keyof Vehicle;
@@ -742,6 +833,891 @@ const getTodayDate = () => {
     return `${year}-${month}-${day}`;
 };
 
+
+const getInclusiveDaysBetween = (
+    from: string,
+    to: string,
+) => {
+    if (!from || !to) return 0;
+
+    const fromDate = new Date(
+        `${from}T00:00:00`,
+    );
+
+    const toDate = new Date(
+        `${to}T00:00:00`,
+    );
+
+    if (
+        Number.isNaN(fromDate.getTime()) ||
+        Number.isNaN(toDate.getTime())
+    ) {
+        return 0;
+    }
+
+    return (
+        Math.floor(
+            (toDate.getTime() -
+                fromDate.getTime()) /
+                86_400_000,
+        ) + 1
+    );
+};
+
+
+const addDaysToIsoDate = (
+    value: string,
+    days: number,
+) => {
+    const date = new Date(
+        `${value}T00:00:00Z`,
+    );
+
+    date.setUTCDate(
+        date.getUTCDate() + days,
+    );
+
+    return date
+        .toISOString()
+        .slice(0, 10);
+};
+
+const buildAlltrackRoutePeriods = (
+    from: string,
+    to: string,
+): AlltrackRoutePeriod[] => {
+    const totalDays =
+        getInclusiveDaysBetween(
+            from,
+            to,
+        );
+
+    if (totalDays <= 0) {
+        return [];
+    }
+
+    const periods: AlltrackRoutePeriod[] = [];
+
+    let periodFrom = from;
+    let periodNumber = 1;
+
+    while (periodFrom <= to) {
+        /*
+         * Para un período mensual hacemos 3 bloques de 7 días
+         * y el cuarto toma todo el remanente. Así, un mes de
+         * 31 días queda 01-07, 08-14, 15-21 y 22-31.
+         */
+        const periodTo =
+            periodNumber < 4
+                ? [
+                      addDaysToIsoDate(
+                          periodFrom,
+                          6,
+                      ),
+                      to,
+                  ].sort()[0]
+                : to;
+
+        periods.push({
+            key: `${periodFrom}_${periodTo}`,
+            label: `Período ${periodNumber}`,
+            from: periodFrom,
+            to: periodTo,
+        });
+
+        if (periodTo >= to) {
+            break;
+        }
+
+        periodFrom =
+            addDaysToIsoDate(
+                periodTo,
+                1,
+            );
+
+        periodNumber += 1;
+
+        if (periodNumber > 4) {
+            break;
+        }
+    }
+
+    return periods;
+};
+
+const downsampleRoutePoints = (
+    points: AlltrackReportRoutePoint[],
+    maxPoints = 1400,
+) => {
+    if (points.length <= maxPoints) {
+        return points;
+    }
+
+    const step =
+        Math.ceil(
+            points.length / maxPoints,
+        );
+
+    const sampled =
+        points.filter(
+            (_, index) =>
+                index % step === 0,
+        );
+
+    const lastPoint =
+        points[points.length - 1];
+
+    if (
+        sampled[
+            sampled.length - 1
+        ] !== lastPoint
+    ) {
+        sampled.push(lastPoint);
+    }
+
+    return sampled;
+};
+
+const buildAlltrackRouteMapHtml = (
+    points: AlltrackReportRoutePoint[],
+    paths?: AlltrackReportRoutePoint[][],
+) => {
+    const sourcePaths =
+        paths &&
+        paths.length > 0
+            ? paths
+            : [points];
+
+    const sampledPaths =
+        sourcePaths
+            .map((path) =>
+                downsampleRoutePoints(
+                    path,
+                    900,
+                ).map((point) => [
+                    point.lat,
+                    point.lon,
+                ]),
+            )
+            .filter(
+                (path) =>
+                    path.length > 0,
+            );
+
+    const serializedPaths =
+        JSON.stringify(
+            sampledPaths,
+        ).replace(
+            /</g,
+            "\u003c",
+        );
+
+    return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    body { background: #f8fafc; }
+    .leaflet-control-attribution { font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+  <script>
+    const paths = ${serializedPaths};
+    const map = L.map('map', { zoomControl: true });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const allLatLngs = paths.flat();
+
+    if (allLatLngs.length > 0) {
+      const group = L.featureGroup().addTo(map);
+
+      paths.forEach((path) => {
+        if (path.length < 2) return;
+
+        L.polyline(path, {
+          color: '#2563eb',
+          weight: 5,
+          opacity: 0.95
+        }).addTo(group);
+      });
+
+      L.circleMarker(allLatLngs[0], {
+        radius: 7,
+        color: '#059669',
+        fillColor: '#10b981',
+        fillOpacity: 1,
+        weight: 2
+      }).addTo(group).bindTooltip('Inicio');
+
+      L.circleMarker(allLatLngs[allLatLngs.length - 1], {
+        radius: 7,
+        color: '#db2777',
+        fillColor: '#ff4fb8',
+        fillOpacity: 1,
+        weight: 2
+      }).addTo(group).bindTooltip('Fin');
+
+      map.fitBounds(group.getBounds(), {
+        padding: [8, 8],
+        maxZoom: 18
+      });
+    } else {
+      map.setView([-35.66, -63.76], 12);
+    }
+  <\/script>
+</body>
+</html>`;
+};
+
+const loadCorsImage = (
+    src: string,
+): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+        const image =
+            new Image();
+
+        image.crossOrigin =
+            "anonymous";
+
+        image.onload = () =>
+            resolve(image);
+
+        image.onerror = () =>
+            reject(
+                new Error(
+                    `No se pudo cargar ${src}`,
+                ),
+            );
+
+        image.src = src;
+    });
+
+const projectOsmPoint = (
+    lat: number,
+    lon: number,
+    zoom: number,
+) => {
+    const tileSize = 256;
+
+    const scale =
+        tileSize *
+        Math.pow(
+            2,
+            zoom,
+        );
+
+    const boundedLat =
+        Math.max(
+            -85.05112878,
+            Math.min(
+                85.05112878,
+                lat,
+            ),
+        );
+
+    const sin =
+        Math.sin(
+            (boundedLat *
+                Math.PI) /
+                180,
+        );
+
+    return {
+        x:
+            ((lon + 180) /
+                360) *
+            scale,
+        y:
+            (0.5 -
+                Math.log(
+                    (1 + sin) /
+                        (1 - sin),
+                ) /
+                    (4 *
+                        Math.PI)) *
+            scale,
+    };
+};
+
+const getRouteMapZoom = (
+    points: AlltrackReportRoutePoint[],
+    width: number,
+    height: number,
+    padding = 18,
+) => {
+    for (
+        let zoom = 17;
+        zoom >= 8;
+        zoom -= 1
+    ) {
+        const projected = points.map(
+            (point) =>
+                projectOsmPoint(
+                    point.lat,
+                    point.lon,
+                    zoom,
+                ),
+        );
+
+        const xs = projected.map(
+            (point) => point.x,
+        );
+        const ys = projected.map(
+            (point) => point.y,
+        );
+
+        const routeWidth =
+            Math.max(...xs) -
+            Math.min(...xs);
+        const routeHeight =
+            Math.max(...ys) -
+            Math.min(...ys);
+
+        if (
+            routeWidth <=
+                width - padding * 2 &&
+            routeHeight <=
+                height - padding * 2
+        ) {
+            return zoom;
+        }
+    }
+
+    return 8;
+};
+
+const renderAlltrackRouteMapToDataUrl = async (
+    points: AlltrackReportRoutePoint[],
+    width = 2400,
+    height = 1350,
+    paths?: AlltrackReportRoutePoint[][],
+): Promise<string | null> => {
+    if (points.length < 2) {
+        return null;
+    }
+
+    const sourcePaths =
+        paths &&
+        paths.length > 0
+            ? paths
+            : [points];
+
+    const sampledPaths =
+        sourcePaths
+            .map((path) =>
+                downsampleRoutePoints(
+                    path,
+                    900,
+                ),
+            )
+            .filter(
+                (path) =>
+                    path.length > 0,
+            );
+
+    const sampled =
+        sampledPaths.flat();
+
+    const zoom = getRouteMapZoom(
+        sampled,
+        width,
+        height,
+    );
+
+    const projectedPaths =
+        sampledPaths.map(
+            (path) =>
+                path.map(
+                    (point) => ({
+                        ...projectOsmPoint(
+                            point.lat,
+                            point.lon,
+                            zoom,
+                        ),
+                        source: point,
+                    }),
+                ),
+        );
+
+    const projected =
+        projectedPaths.flat();
+
+    const xs = projected.map(
+        (point) => point.x,
+    );
+    const ys = projected.map(
+        (point) => point.y,
+    );
+
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const centerX =
+        (minX + maxX) / 2;
+    const centerY =
+        (minY + maxY) / 2;
+
+    const originX =
+        centerX - width / 2;
+    const originY =
+        centerY - height / 2;
+
+    const canvas =
+        document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context =
+        canvas.getContext("2d");
+
+    if (!context) {
+        return null;
+    }
+
+    context.fillStyle = "#f8fafc";
+    context.fillRect(
+        0,
+        0,
+        width,
+        height,
+    );
+
+    const tileSize = 256;
+    const tileCount = Math.pow(
+        2,
+        zoom,
+    );
+
+    const startTileX = Math.floor(
+        originX / tileSize,
+    );
+    const endTileX = Math.floor(
+        (originX + width) /
+            tileSize,
+    );
+    const startTileY = Math.floor(
+        originY / tileSize,
+    );
+    const endTileY = Math.floor(
+        (originY + height) /
+            tileSize,
+    );
+
+    const tileRequests: Array<
+        Promise<void>
+    > = [];
+
+    for (
+        let tileX = startTileX;
+        tileX <= endTileX;
+        tileX += 1
+    ) {
+        for (
+            let tileY = startTileY;
+            tileY <= endTileY;
+            tileY += 1
+        ) {
+            if (
+                tileY < 0 ||
+                tileY >= tileCount
+            ) {
+                continue;
+            }
+
+            const wrappedX =
+                ((tileX % tileCount) +
+                    tileCount) %
+                tileCount;
+
+            const tileUrl =
+                `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`;
+
+            tileRequests.push(
+                loadCorsImage(tileUrl)
+                    .then((image) => {
+                        context.drawImage(
+                            image,
+                            tileX *
+                                tileSize -
+                                originX,
+                            tileY *
+                                tileSize -
+                                originY,
+                            tileSize,
+                            tileSize,
+                        );
+                    })
+                    .catch(() => {
+                        // Si falla un tile puntual dejamos el fondo claro.
+                    }),
+            );
+        }
+    }
+
+    await Promise.all(
+        tileRequests,
+    );
+
+    context.save();
+    context.lineJoin = "round";
+    context.lineCap = "round";
+    context.strokeStyle = "#2563eb";
+    context.lineWidth = 8;
+    context.globalAlpha = 0.98;
+
+    projectedPaths.forEach(
+        (path) => {
+            if (
+                path.length <
+                2
+            ) {
+                return;
+            }
+
+            context.beginPath();
+
+            path.forEach(
+                (point, index) => {
+                    const x =
+                        point.x -
+                        originX;
+                    const y =
+                        point.y -
+                        originY;
+
+                    if (index === 0) {
+                        context.moveTo(
+                            x,
+                            y,
+                        );
+                    } else {
+                        context.lineTo(
+                            x,
+                            y,
+                        );
+                    }
+                },
+            );
+
+            context.stroke();
+        },
+    );
+
+    context.restore();
+
+    const drawMarker = (
+        x: number,
+        y: number,
+        fill: string,
+        stroke: string,
+    ) => {
+        context.beginPath();
+        context.arc(
+            x,
+            y,
+            10,
+            0,
+            Math.PI * 2,
+        );
+        context.fillStyle = fill;
+        context.fill();
+        context.lineWidth = 4;
+        context.strokeStyle = stroke;
+        context.stroke();
+    };
+
+    const first = projected[0];
+    const last =
+        projected[
+            projected.length - 1
+        ];
+
+    drawMarker(
+        first.x - originX,
+        first.y - originY,
+        "#10b981",
+        "#047857",
+    );
+    drawMarker(
+        last.x - originX,
+        last.y - originY,
+        "#ff4fb8",
+        "#be185d",
+    );
+
+    /*
+     * ZOOM INTELIGENTE PARA EL PDF
+     * -----------------------------------------
+     * El zoom de OSM trabaja por niveles enteros. Eso hace que,
+     * en algunos períodos, el nivel siguiente ya no entre y el
+     * nivel elegido deje demasiado "aire" alrededor del recorrido.
+     *
+     * Para solucionarlo SIN perder ningún punto:
+     * 1. renderizamos el mapa completo como hasta ahora;
+     * 2. calculamos el rectángulo real ocupado por TODO el recorrido;
+     * 3. recortamos solamente el espacio sobrante;
+     * 4. respetamos la relación 16:9 del mapa final.
+     *
+     * De esta forma ningún tramo queda afuera, pero los períodos
+     * con recorridos más concentrados quedan mucho más acercados.
+     */
+    const routeCanvasPoints =
+        projected.map((point) => ({
+            x: point.x - originX,
+            y: point.y - originY,
+        }));
+
+    const routeXs =
+        routeCanvasPoints.map(
+            (point) => point.x,
+        );
+    const routeYs =
+        routeCanvasPoints.map(
+            (point) => point.y,
+        );
+
+    const routeMinX =
+        Math.min(...routeXs);
+    const routeMaxX =
+        Math.max(...routeXs);
+    const routeMinY =
+        Math.min(...routeYs);
+    const routeMaxY =
+        Math.max(...routeYs);
+
+    // Margen visual alrededor de TODO el trayecto.
+    const routePadding = 55;
+
+    let cropLeft =
+        Math.max(
+            0,
+            routeMinX -
+                routePadding,
+        );
+    let cropTop =
+        Math.max(
+            0,
+            routeMinY -
+                routePadding,
+        );
+    let cropRight =
+        Math.min(
+            width,
+            routeMaxX +
+                routePadding,
+        );
+    let cropBottom =
+        Math.min(
+            height,
+            routeMaxY +
+                routePadding,
+        );
+
+    let cropWidth =
+        Math.max(
+            1,
+            cropRight -
+                cropLeft,
+        );
+    let cropHeight =
+        Math.max(
+            1,
+            cropBottom -
+                cropTop,
+        );
+
+    const targetAspect =
+        width / height;
+
+    /*
+     * Expandimos el recorte, nunca lo achicamos, para conservar
+     * todos los puntos y mantener la misma proporción del PDF.
+     */
+    if (
+        cropWidth /
+            cropHeight >
+        targetAspect
+    ) {
+        const desiredHeight =
+            cropWidth /
+            targetAspect;
+        const extra =
+            desiredHeight -
+            cropHeight;
+
+        cropTop -= extra / 2;
+        cropBottom += extra / 2;
+    } else {
+        const desiredWidth =
+            cropHeight *
+            targetAspect;
+        const extra =
+            desiredWidth -
+            cropWidth;
+
+        cropLeft -= extra / 2;
+        cropRight += extra / 2;
+    }
+
+    /*
+     * Si al expandir chocamos con un borde del canvas, movemos
+     * el rectángulo manteniendo su tamaño todo lo posible.
+     */
+    if (cropLeft < 0) {
+        cropRight -= cropLeft;
+        cropLeft = 0;
+    }
+
+    if (cropTop < 0) {
+        cropBottom -= cropTop;
+        cropTop = 0;
+    }
+
+    if (cropRight > width) {
+        const overflow =
+            cropRight -
+            width;
+        cropLeft -= overflow;
+        cropRight = width;
+    }
+
+    if (cropBottom > height) {
+        const overflow =
+            cropBottom -
+            height;
+        cropTop -= overflow;
+        cropBottom = height;
+    }
+
+    cropLeft =
+        Math.max(
+            0,
+            cropLeft,
+        );
+    cropTop =
+        Math.max(
+            0,
+            cropTop,
+        );
+
+    cropWidth =
+        Math.max(
+            1,
+            cropRight -
+                cropLeft,
+        );
+    cropHeight =
+        Math.max(
+            1,
+            cropBottom -
+                cropTop,
+        );
+
+    /*
+     * Sólo aplicamos el recorte cuando realmente mejora el mapa.
+     * En períodos como el primero, que ya estaba bien encuadrado,
+     * prácticamente se conserva el encuadre original.
+     */
+    const widthOccupancy =
+        cropWidth / width;
+    const heightOccupancy =
+        cropHeight / height;
+
+    const shouldCrop =
+        widthOccupancy < 0.94 ||
+        heightOccupancy < 0.94;
+
+    const outputCanvas =
+        document.createElement(
+            "canvas",
+        );
+
+    outputCanvas.width =
+        width;
+    outputCanvas.height =
+        height;
+
+    const outputContext =
+        outputCanvas.getContext(
+            "2d",
+        );
+
+    if (!outputContext) {
+        return canvas.toDataURL(
+            "image/jpeg",
+            0.9,
+        );
+    }
+
+    outputContext.fillStyle =
+        "#f8fafc";
+    outputContext.fillRect(
+        0,
+        0,
+        width,
+        height,
+    );
+
+    if (shouldCrop) {
+        outputContext.drawImage(
+            canvas,
+            cropLeft,
+            cropTop,
+            cropWidth,
+            cropHeight,
+            0,
+            0,
+            width,
+            height,
+        );
+    } else {
+        outputContext.drawImage(
+            canvas,
+            0,
+            0,
+        );
+    }
+
+    /*
+     * La atribución se vuelve a dibujar luego del recorte,
+     * para que siempre quede visible en la esquina inferior.
+     */
+    outputContext.fillStyle =
+        "rgba(255,255,255,0.88)";
+    outputContext.fillRect(
+        12,
+        height - 34,
+        275,
+        24,
+    );
+    outputContext.fillStyle =
+        "#475569";
+    outputContext.font =
+        "16px Arial, sans-serif";
+    outputContext.fillText(
+        "© OpenStreetMap contributors",
+        20,
+        height - 17,
+    );
+
+    return outputCanvas.toDataURL(
+        "image/jpeg",
+        0.9,
+    );
+};
+
 const getComparableValue = (
     value: unknown,
 ) => {
@@ -866,6 +1842,11 @@ export function FichaVehiculoClient({
     const [
         isExportingPdf,
         setIsExportingPdf,
+    ] = useState(false);
+
+    const [
+        isExportingAlltrackPdf,
+        setIsExportingAlltrackPdf,
     ] = useState(false);
 
     useEffect(() => {
@@ -1035,6 +2016,1383 @@ export function FichaVehiculoClient({
         hasTrackingCoordinates
             ? `https://www.openstreetmap.org/?mlat=${trackingPosition?.latitude}&mlon=${trackingPosition?.longitude}#map=17/${trackingPosition?.latitude}/${trackingPosition?.longitude}`
             : null;
+
+    /* =======================================================
+       INFORME ALLTRACK
+    ======================================================= */
+
+    /*
+     * Cache corto en el navegador.
+     * Si se vuelve a abrir el mismo vehículo/período no volvemos
+     * a pedir todo a Alltrack inmediatamente.
+     */
+    const ALLTRACK_REPORT_CACHE_TTL =
+        10 * 60 * 1000;
+
+    const ALLTRACK_ROUTE_CACHE_TTL =
+        5 * 60 * 1000;
+
+    const readAlltrackSessionCache = <T,>(
+        key: string,
+        ttl: number,
+    ): T | null => {
+        try {
+            const raw =
+                sessionStorage.getItem(
+                    key,
+                );
+
+            if (!raw) {
+                return null;
+            }
+
+            const parsed = JSON.parse(
+                raw,
+            ) as {
+                savedAt: number;
+                data: T;
+            };
+
+            if (
+                !parsed?.savedAt ||
+                Date.now() -
+                    parsed.savedAt >
+                    ttl
+            ) {
+                sessionStorage.removeItem(
+                    key,
+                );
+                return null;
+            }
+
+            return parsed.data;
+        } catch {
+            return null;
+        }
+    };
+
+    const writeAlltrackSessionCache = <T,>(
+        key: string,
+        data: T,
+    ) => {
+        try {
+            sessionStorage.setItem(
+                key,
+                JSON.stringify({
+                    savedAt:
+                        Date.now(),
+                    data,
+                }),
+            );
+        } catch {
+            // Si el navegador no permite cache o supera cuota,
+            // simplemente continuamos sin cache.
+        }
+    };
+
+    const [
+        alltrackReportOpen,
+        setAlltrackReportOpen,
+    ] = useState(false);
+
+    const [
+        alltrackReportLoading,
+        setAlltrackReportLoading,
+    ] = useState(false);
+
+    const [
+        alltrackReportError,
+        setAlltrackReportError,
+    ] = useState<string | null>(null);
+
+    const [
+        alltrackReportData,
+        setAlltrackReportData,
+    ] = useState<AlltrackReportData | null>(
+        null,
+    );
+
+    const [
+        alltrackReportFrom,
+        setAlltrackReportFrom,
+    ] = useState(getTodayDate());
+
+    const [
+        alltrackReportTo,
+        setAlltrackReportTo,
+    ] = useState(getTodayDate());
+
+    const [
+        alltrackWeeklyRoutes,
+        setAlltrackWeeklyRoutes,
+    ] = useState<AlltrackWeeklyRoute[]>([]);
+
+    const [
+        alltrackWeeklyRoutesLoading,
+        setAlltrackWeeklyRoutesLoading,
+    ] = useState(false);
+
+    const fetchAlltrackWeeklyRoutes =
+        useCallback(
+            async (
+                from: string,
+                to: string,
+            ) => {
+                const periods =
+                    buildAlltrackRoutePeriods(
+                        from,
+                        to,
+                    );
+
+                if (periods.length === 0) {
+                    setAlltrackWeeklyRoutes(
+                        [],
+                    );
+                    return;
+                }
+
+                const initialPeriods =
+                    periods.map(
+                        (period) => {
+                            const cacheKey =
+                                `alltrack-route-stable-v1:${vehicle.code}:${period.from}:${period.to}`;
+
+                            const cached =
+                                readAlltrackSessionCache<AlltrackReportData>(
+                                    cacheKey,
+                                    ALLTRACK_ROUTE_CACHE_TTL,
+                                );
+
+                            return {
+                                ...period,
+                                loading:
+                                    !cached,
+                                error: null,
+                                data:
+                                    cached,
+                            };
+                        },
+                    );
+
+                setAlltrackWeeklyRoutes(
+                    initialPeriods,
+                );
+
+                const missingPeriods =
+                    initialPeriods.filter(
+                        (period) =>
+                            !period.data,
+                    );
+
+                if (
+                    missingPeriods.length ===
+                    0
+                ) {
+                    setAlltrackWeeklyRoutesLoading(
+                        false,
+                    );
+                    return;
+                }
+
+                setAlltrackWeeklyRoutesLoading(
+                    true,
+                );
+
+                try {
+                    /*
+                     * Antes los 4 bloques se consultaban en serie.
+                     * Ahora se piden en paralelo. Así un informe mensual
+                     * tarda aproximadamente lo que tarda el bloque más
+                     * lento, no la suma de los cuatro.
+                     */
+                    await Promise.allSettled(
+                        missingPeriods.map(
+                            async (
+                                period,
+                            ) => {
+                                try {
+                                    const params =
+                                        new URLSearchParams({
+                                            from: period.from,
+                                            to: period.to,
+                                            includeRoute:
+                                                "1",
+                                        });
+
+                                    const response =
+                                        await fetch(
+                                            `/api/alltrack/report/${encodeURIComponent(
+                                                vehicle.code,
+                                            )}?${params.toString()}`,
+                                            {
+                                                method: "GET",
+                                                cache: "no-store",
+                                            },
+                                        );
+
+                                    const result =
+                                        (await response.json()) as AlltrackReportResponse;
+
+                                    if (
+                                        !response.ok ||
+                                        !result.data
+                                    ) {
+                                        throw new Error(
+                                            result.error ||
+                                                "No se pudo obtener el recorrido de este período.",
+                                        );
+                                    }
+
+                                    const cacheKey =
+                                        `alltrack-route-stable-v1:${vehicle.code}:${period.from}:${period.to}`;
+
+                                    writeAlltrackSessionCache(
+                                        cacheKey,
+                                        result.data,
+                                    );
+
+                                    setAlltrackWeeklyRoutes(
+                                        (current) =>
+                                            current.map(
+                                                (item) =>
+                                                    item.key ===
+                                                    period.key
+                                                        ? {
+                                                              ...item,
+                                                              loading:
+                                                                  false,
+                                                              error:
+                                                                  null,
+                                                              data:
+                                                                  result.data ||
+                                                                  null,
+                                                          }
+                                                        : item,
+                                            ),
+                                    );
+                                } catch (error) {
+                                    console.error(
+                                        `Error cargando recorrido Alltrack ${period.from} - ${period.to}:`,
+                                        error,
+                                    );
+
+                                    setAlltrackWeeklyRoutes(
+                                        (current) =>
+                                            current.map(
+                                                (item) =>
+                                                    item.key ===
+                                                    period.key
+                                                        ? {
+                                                              ...item,
+                                                              loading:
+                                                                  false,
+                                                              error:
+                                                                  error instanceof Error
+                                                                      ? error.message
+                                                                      : "No se pudo cargar este recorrido.",
+                                                              data:
+                                                                  null,
+                                                          }
+                                                        : item,
+                                            ),
+                                    );
+                                }
+                            },
+                        ),
+                    );
+                } finally {
+                    setAlltrackWeeklyRoutesLoading(
+                        false,
+                    );
+                }
+            },
+            [vehicle.code],
+        );
+
+
+
+    const exportAlltrackReportToPdf =
+        useCallback(async () => {
+            if (
+                isExportingAlltrackPdf ||
+                !alltrackReportData
+            ) {
+                return;
+            }
+
+            if (
+                alltrackWeeklyRoutesLoading ||
+                alltrackWeeklyRoutes.some(
+                    (period) => period.loading,
+                )
+            ) {
+                toast.error(
+                    "Esperá a que terminen de cargar los recorridos antes de exportar.",
+                );
+                return;
+            }
+
+            try {
+                setIsExportingAlltrackPdf(
+                    true,
+                );
+
+                const doc = new jsPDF({
+                    orientation: "portrait",
+                    unit: "mm",
+                    format: "a4",
+                    compress: true,
+                }) as PdfDocument;
+
+                const pageWidth =
+                    doc.internal.pageSize.getWidth();
+                const pageHeight =
+                    doc.internal.pageSize.getHeight();
+                const marginX = 14;
+                const contentWidth =
+                    pageWidth - marginX * 2;
+
+                let logoDataUrl:
+                    | string
+                    | null = null;
+
+                try {
+                    logoDataUrl =
+                        await loadImageAsDataUrl(
+                            "/logo-general-pico-horizontal.png",
+                            420,
+                            0.68,
+                        );
+                } catch (error) {
+                    console.warn(
+                        "No se pudo cargar el logo para el informe Alltrack:",
+                        error,
+                    );
+                }
+
+                const addHeader = (
+                    title: string,
+                    subtitle?: string,
+                ) => {
+                    const currentPageWidth =
+                        doc.internal.pageSize.getWidth();
+
+                    if (logoDataUrl) {
+                        doc.addImage(
+                            logoDataUrl,
+                            "JPEG",
+                            marginX,
+                            8,
+                            32,
+                            11,
+                            undefined,
+                            "FAST",
+                        );
+                    }
+
+                    doc.setFont(
+                        "helvetica",
+                        "bold",
+                    );
+                    doc.setFontSize(16);
+                    doc.setTextColor(
+                        30,
+                        41,
+                        59,
+                    );
+                    doc.text(
+                        title,
+                        51,
+                        13,
+                    );
+
+                    doc.setFont(
+                        "helvetica",
+                        "normal",
+                    );
+                    doc.setFontSize(8.8);
+                    doc.setTextColor(
+                        71,
+                        85,
+                        105,
+                    );
+                    doc.text(
+                        subtitle ||
+                            "Secretaría de Ambiente y Servicios Públicos",
+                        51,
+                        19,
+                    );
+
+                    doc.setDrawColor(
+                        226,
+                        232,
+                        240,
+                    );
+                    doc.line(
+                        marginX,
+                        25,
+                        currentPageWidth - marginX,
+                        25,
+                    );
+                };
+
+                addHeader(
+                    "Informe de Actividad Alltrack",
+                    "Sistema Integral SAySSPP · Planta Vehicular",
+                );
+
+                let currentY = 33;
+
+                doc.setFont(
+                    "helvetica",
+                    "bold",
+                );
+                doc.setFontSize(15);
+                doc.setTextColor(
+                    15,
+                    23,
+                    42,
+                );
+                doc.text(
+                    `${alltrackReportData.vehicle.code} · ${alltrackReportData.vehicle.name}`,
+                    marginX,
+                    currentY,
+                );
+
+                doc.setFont(
+                    "helvetica",
+                    "normal",
+                );
+                doc.setFontSize(9);
+                doc.setTextColor(
+                    71,
+                    85,
+                    105,
+                );
+
+                const vehicleMeta = [
+                    alltrackReportData.vehicle.license_plate
+                        ? `Dominio: ${alltrackReportData.vehicle.license_plate}`
+                        : "Dominio: -",
+                    alltrackReportData.vehicle.department
+                        ? `Dirección: ${alltrackReportData.vehicle.department}`
+                        : null,
+                    alltrackReportData.vehicle.primary_driver_1
+                        ? `Chofer: ${alltrackReportData.vehicle.primary_driver_1}`
+                        : null,
+                ]
+                    .filter(Boolean)
+                    .join(" · ");
+
+                doc.text(
+                    vehicleMeta,
+                    marginX,
+                    currentY + 6,
+                );
+
+                doc.text(
+                    `Período: ${formatDate(
+                        alltrackReportData.period.from,
+                    )} al ${formatDate(
+                        alltrackReportData.period.to,
+                    )}`,
+                    marginX,
+                    currentY + 12,
+                );
+
+                currentY += 21;
+
+                const summaryCards = [
+                    {
+                        label: "Sesión",
+                        value:
+                            alltrackReportData.summary.session_time,
+                    },
+                    {
+                        label: "Movimiento",
+                        value:
+                            alltrackReportData.summary.movement_time,
+                    },
+                    {
+                        label: "Ocioso",
+                        value:
+                            alltrackReportData.summary.idle_time,
+                    },
+                    {
+                        label: "Recorrido",
+                        value: `${alltrackReportData.summary.distance_km.toLocaleString(
+                            "es-AR",
+                            {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                            },
+                        )} km`,
+                    },
+                ];
+
+                const cardGap = 3;
+                const cardWidth =
+                    (contentWidth -
+                        cardGap * 3) /
+                    4;
+
+                summaryCards.forEach(
+                    (card, index) => {
+                        const x =
+                            marginX +
+                            index *
+                                (cardWidth +
+                                    cardGap);
+
+                        doc.setFillColor(
+                            248,
+                            250,
+                            252,
+                        );
+                        doc.setDrawColor(
+                            226,
+                            232,
+                            240,
+                        );
+                        doc.roundedRect(
+                            x,
+                            currentY,
+                            cardWidth,
+                            20,
+                            2,
+                            2,
+                            "FD",
+                        );
+
+                        doc.setFont(
+                            "helvetica",
+                            "normal",
+                        );
+                        doc.setFontSize(7.4);
+                        doc.setTextColor(
+                            100,
+                            116,
+                            139,
+                        );
+                        doc.text(
+                            card.label.toUpperCase(),
+                            x + 3,
+                            currentY + 6,
+                        );
+
+                        doc.setFont(
+                            "helvetica",
+                            "bold",
+                        );
+                        doc.setFontSize(10.5);
+                        doc.setTextColor(
+                            15,
+                            23,
+                            42,
+                        );
+                        doc.text(
+                            card.value,
+                            x + 3,
+                            currentY + 14,
+                        );
+                    },
+                );
+
+                currentY += 27;
+
+                const movementPercent =
+                    alltrackReportData.summary.movement_percent;
+                const idlePercent =
+                    alltrackReportData.summary.idle_percent;
+                const barWidth =
+                    (contentWidth - 5) / 2;
+
+                const drawPercentCard = (
+                    x: number,
+                    label: string,
+                    percent: number,
+                    rgb: [number, number, number],
+                ) => {
+                    doc.setFillColor(
+                        255,
+                        255,
+                        255,
+                    );
+                    doc.setDrawColor(
+                        rgb[0],
+                        rgb[1],
+                        rgb[2],
+                    );
+                    doc.roundedRect(
+                        x,
+                        currentY,
+                        barWidth,
+                        21,
+                        2,
+                        2,
+                        "FD",
+                    );
+
+                    doc.setFont(
+                        "helvetica",
+                        "bold",
+                    );
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(
+                        30,
+                        41,
+                        59,
+                    );
+                    doc.text(
+                        label,
+                        x + 3,
+                        currentY + 6,
+                    );
+
+                    doc.setTextColor(
+                        rgb[0],
+                        rgb[1],
+                        rgb[2],
+                    );
+                    doc.text(
+                        `${percent.toLocaleString(
+                            "es-AR",
+                            {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                            },
+                        )}%`,
+                        x +
+                            barWidth -
+                            3,
+                        currentY + 6,
+                        {
+                            align: "right",
+                        },
+                    );
+
+                    doc.setFillColor(
+                        241,
+                        245,
+                        249,
+                    );
+                    doc.roundedRect(
+                        x + 3,
+                        currentY + 12,
+                        barWidth - 6,
+                        3,
+                        1.5,
+                        1.5,
+                        "F",
+                    );
+
+                    doc.setFillColor(
+                        rgb[0],
+                        rgb[1],
+                        rgb[2],
+                    );
+                    doc.roundedRect(
+                        x + 3,
+                        currentY + 12,
+                        Math.max(
+                            0.5,
+                            (barWidth - 6) *
+                                (Math.min(
+                                    100,
+                                    Math.max(
+                                        0,
+                                        percent,
+                                    ),
+                                ) /
+                                    100),
+                        ),
+                        3,
+                        1.5,
+                        1.5,
+                        "F",
+                    );
+                };
+
+                drawPercentCard(
+                    marginX,
+                    "Tiempo en movimiento",
+                    movementPercent,
+                    [245, 158, 11],
+                );
+                drawPercentCard(
+                    marginX +
+                        barWidth +
+                        5,
+                    "Tiempo ocioso",
+                    idlePercent,
+                    [255, 79, 184],
+                );
+
+                currentY += 29;
+
+                doc.setFont(
+                    "helvetica",
+                    "bold",
+                );
+                doc.setFontSize(11);
+                doc.setTextColor(
+                    15,
+                    23,
+                    42,
+                );
+                doc.text(
+                    "Actividad por día",
+                    marginX,
+                    currentY,
+                );
+
+                doc.setFont(
+                    "helvetica",
+                    "normal",
+                );
+                doc.setFontSize(7.7);
+                doc.setTextColor(
+                    100,
+                    116,
+                    139,
+                );
+                doc.text(
+                    "Los días sin sesiones se identifican como sin actividad reportada por Alltrack.",
+                    marginX,
+                    currentY + 5,
+                );
+
+                autoTable(doc, {
+                    startY: currentY + 9,
+                    margin: {
+                        left: marginX,
+                        right: marginX,
+                    },
+                    head: [
+                        [
+                            "Fecha",
+                            "Sesión",
+                            "Ocioso",
+                            "Movimiento",
+                            "Recorrido",
+                        ],
+                    ],
+                    body:
+                        alltrackReportData.daily_activity.map(
+                            (day) =>
+                                day.has_activity
+                                    ? [
+                                          formatDate(
+                                              day.date,
+                                          ),
+                                          day.session_time,
+                                          day.idle_time,
+                                          day.movement_time,
+                                          `${day.distance_km.toLocaleString(
+                                              "es-AR",
+                                              {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                              },
+                                          )} km`,
+                                      ]
+                                    : [
+                                          formatDate(
+                                              day.date,
+                                          ),
+                                          "Sin actividad reportada",
+                                          "-",
+                                          "-",
+                                          "-",
+                                      ],
+                        ),
+                    theme: "grid",
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 7.4,
+                        cellPadding: 2.1,
+                        textColor: [
+                            51,
+                            65,
+                            85,
+                        ],
+                        lineColor: [
+                            226,
+                            232,
+                            240,
+                        ],
+                        lineWidth: 0.2,
+                    },
+                    headStyles: {
+                        fillColor: [
+                            15,
+                            157,
+                            136,
+                        ],
+                        textColor: [
+                            255,
+                            255,
+                            255,
+                        ],
+                        fontStyle: "bold",
+                    },
+                    alternateRowStyles: {
+                        fillColor: [
+                            248,
+                            250,
+                            252,
+                        ],
+                    },
+                    columnStyles: {
+                        4: {
+                            halign: "right",
+                        },
+                    },
+                });
+
+                for (
+                    const period of alltrackWeeklyRoutes
+                ) {
+                    /*
+                     * RECORRIDOS:
+                     * A4 horizontal, con el mapa ocupando prácticamente
+                     * toda la hoja y un encuadre mucho más ajustado.
+                     */
+                    doc.addPage(
+                        "a4",
+                        "landscape",
+                    );
+
+                    const landscapeWidth =
+                        doc.internal.pageSize.getWidth();
+                    const landscapeHeight =
+                        doc.internal.pageSize.getHeight();
+
+                    // En páginas de mapa usamos menos margen que en el resumen.
+                    const mapMarginX = 5;
+                    const landscapeContentWidth =
+                        landscapeWidth -
+                        mapMarginX * 2;
+
+                    /*
+                     * Cabecera compacta.
+                     * No usamos la cabecera grande para ganar altura útil.
+                     */
+                    if (logoDataUrl) {
+                        doc.addImage(
+                            logoDataUrl,
+                            "JPEG",
+                            mapMarginX,
+                            5,
+                            24,
+                            8,
+                            undefined,
+                            "FAST",
+                        );
+                    }
+
+                    doc.setFont(
+                        "helvetica",
+                        "bold",
+                    );
+                    doc.setFontSize(13);
+                    doc.setTextColor(
+                        30,
+                        41,
+                        59,
+                    );
+                    doc.text(
+                        "Recorrido Alltrack",
+                        33,
+                        9,
+                    );
+
+                    doc.setFont(
+                        "helvetica",
+                        "normal",
+                    );
+                    doc.setFontSize(7.7);
+                    doc.setTextColor(
+                        71,
+                        85,
+                        105,
+                    );
+                    doc.text(
+                        `${vehicle.code} · ${formatDate(
+                            period.from,
+                        )} al ${formatDate(
+                            period.to,
+                        )}`,
+                        33,
+                        13,
+                    );
+
+                    doc.setDrawColor(
+                        226,
+                        232,
+                        240,
+                    );
+                    doc.line(
+                        mapMarginX,
+                        16,
+                        landscapeWidth -
+                            mapMarginX,
+                        16,
+                    );
+
+                    if (period.data) {
+                        const summary =
+                            period.data.summary;
+
+                        /*
+                         * Métricas súper compactas en una sola línea.
+                         */
+                        doc.setFont(
+                            "helvetica",
+                            "bold",
+                        );
+                        doc.setFontSize(9.5);
+                        doc.setTextColor(
+                            15,
+                            23,
+                            42,
+                        );
+                        doc.text(
+                            period.label,
+                            mapMarginX,
+                            22,
+                        );
+
+                        doc.setFont(
+                            "helvetica",
+                            "normal",
+                        );
+                        doc.setFontSize(7.4);
+                        doc.setTextColor(
+                            71,
+                            85,
+                            105,
+                        );
+
+                        const metricsLine =
+                            `${formatDate(
+                                period.from,
+                            )} al ${formatDate(
+                                period.to,
+                            )}   ·   Recorrido: ${summary.distance_km.toLocaleString(
+                                "es-AR",
+                                {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                },
+                            )} km   ·   Movimiento: ${summary.movement_time}   ·   Ocioso: ${summary.idle_time}`;
+
+                        doc.text(
+                            metricsLine,
+                            mapMarginX,
+                            27,
+                        );
+
+                        const points =
+                            period.data.route
+                                ?.points || [];
+
+                        if (points.length > 1) {
+                            /*
+                             * Render 16:9 de alta resolución.
+                             * El padding del cálculo de zoom es mínimo,
+                             * pero siempre conserva TODOS los puntos.
+                             */
+                            const mapDataUrl =
+                                await renderAlltrackRouteMapToDataUrl(
+                                    points,
+                                    2400,
+                                    1350,
+                                    period.data.route
+                                        ?.paths,
+                                );
+
+                            if (mapDataUrl) {
+                                const mapTop = 30;
+                                // Dejamos una franja mínima debajo del mapa para la nota
+                                // de precisión, evitando tapar cualquier parte del recorrido.
+                                const mapBottom =
+                                    landscapeHeight -
+                                    14;
+                                const mapHeight =
+                                    mapBottom -
+                                    mapTop;
+
+                                doc.setDrawColor(
+                                    203,
+                                    213,
+                                    225,
+                                );
+                                doc.roundedRect(
+                                    mapMarginX,
+                                    mapTop,
+                                    landscapeContentWidth,
+                                    mapHeight,
+                                    1.5,
+                                    1.5,
+                                );
+
+                                doc.addImage(
+                                    mapDataUrl,
+                                    "JPEG",
+                                    mapMarginX + 0.6,
+                                    mapTop + 0.6,
+                                    landscapeContentWidth -
+                                        1.2,
+                                    mapHeight -
+                                        1.2,
+                                    undefined,
+                                    "FAST",
+                                );
+
+                                /*
+                                 * Nota de precisión FUERA del mapa.
+                                 * No dibujamos fondo ni bloque sobre la captura para no
+                                 * tapar ninguna parte del recorrido.
+                                 */
+                                const routeAccuracyNote =
+                                    "Para una mayor exactitud en la visualización del recorrido, consultar Alltrack.";
+
+                                doc.setFont(
+                                    "helvetica",
+                                    "normal",
+                                );
+                                doc.setFontSize(5.4);
+                                doc.setTextColor(
+                                    100,
+                                    116,
+                                    139,
+                                );
+                                doc.text(
+                                    routeAccuracyNote,
+                                    mapMarginX,
+                                    landscapeHeight - 9.7,
+                                );
+                            }
+                        } else {
+                            const emptyTop = 30;
+                            const emptyHeight =
+                                landscapeHeight -
+                                emptyTop -
+                                13;
+
+                            doc.setFillColor(
+                                248,
+                                250,
+                                252,
+                            );
+                            doc.setDrawColor(
+                                226,
+                                232,
+                                240,
+                            );
+                            doc.roundedRect(
+                                mapMarginX,
+                                emptyTop,
+                                landscapeContentWidth,
+                                emptyHeight,
+                                2,
+                                2,
+                                "FD",
+                            );
+                            doc.setFontSize(11);
+                            doc.setTextColor(
+                                100,
+                                116,
+                                139,
+                            );
+                            doc.text(
+                                "Sin recorrido GPS suficiente para dibujar este período.",
+                                landscapeWidth /
+                                    2,
+                                emptyTop +
+                                    emptyHeight /
+                                        2,
+                                {
+                                    align: "center",
+                                },
+                            );
+                        }
+                    } else {
+                        doc.setFontSize(10);
+                        doc.setTextColor(
+                            185,
+                            28,
+                            28,
+                        );
+                        doc.text(
+                            period.error ||
+                                "No se pudo cargar el recorrido de este período.",
+                            mapMarginX,
+                            28,
+                        );
+                    }
+                }
+
+                const totalPages =
+                    doc.getNumberOfPages();
+
+                for (
+                    let page = 1;
+                    page <= totalPages;
+                    page += 1
+                ) {
+                    doc.setPage(page);
+
+                    const footerPageWidth =
+                        doc.internal.pageSize.getWidth();
+                    const footerPageHeight =
+                        doc.internal.pageSize.getHeight();
+
+                    doc.setDrawColor(
+                        226,
+                        232,
+                        240,
+                    );
+                    doc.line(
+                        marginX,
+                        footerPageHeight - 13,
+                        footerPageWidth -
+                            marginX,
+                        footerPageHeight - 13,
+                    );
+                    doc.setFont(
+                        "helvetica",
+                        "normal",
+                    );
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(
+                        100,
+                        116,
+                        139,
+                    );
+                    doc.text(
+                        "Sistema Integral SAySSPP · Informe Alltrack",
+                        marginX,
+                        footerPageHeight - 7,
+                    );
+                    doc.text(
+                        `Página ${page} de ${totalPages}`,
+                        footerPageWidth -
+                            marginX,
+                        footerPageHeight - 7,
+                        {
+                            align: "right",
+                        },
+                    );
+                }
+
+                const safeCode =
+                    vehicle.code.replace(
+                        /[^a-z0-9_-]+/gi,
+                        "-",
+                    );
+                const fileName =
+                    `Informe-Alltrack-${safeCode}-${alltrackReportData.period.from}-a-${alltrackReportData.period.to}.pdf`;
+
+                doc.save(fileName);
+
+                toast.success(
+                    "Informe Alltrack exportado correctamente",
+                );
+            } catch (error) {
+                console.error(
+                    "Error exportando informe Alltrack a PDF:",
+                    error,
+                );
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo exportar el informe Alltrack",
+                );
+            } finally {
+                setIsExportingAlltrackPdf(
+                    false,
+                );
+            }
+        }, [
+            alltrackReportData,
+            alltrackWeeklyRoutes,
+            alltrackWeeklyRoutesLoading,
+            isExportingAlltrackPdf,
+            vehicle.code,
+        ]);
+
+    const fetchAlltrackReport =
+        useCallback(async () => {
+            if (
+                alltrackReportLoading ||
+                !vehicle.has_alltrack
+            ) {
+                return;
+            }
+
+            if (
+                !alltrackReportFrom ||
+                !alltrackReportTo
+            ) {
+                toast.error(
+                    "Seleccioná las fechas del informe",
+                );
+
+                return;
+            }
+
+            if (
+                alltrackReportTo <
+                alltrackReportFrom
+            ) {
+                toast.error(
+                    "La fecha hasta no puede ser anterior a la fecha desde",
+                );
+
+                return;
+            }
+
+            const rangeDays =
+                getInclusiveDaysBetween(
+                    alltrackReportFrom,
+                    alltrackReportTo,
+                );
+
+            if (
+                rangeDays <= 0 ||
+                rangeDays > 31
+            ) {
+                toast.error(
+                    "El informe admite un máximo de 31 días por consulta",
+                );
+
+                return;
+            }
+
+            try {
+                setAlltrackReportLoading(
+                    true,
+                );
+
+                setAlltrackReportError(
+                    null,
+                );
+
+                setAlltrackWeeklyRoutes(
+                    [],
+                );
+
+                const reportCacheKey =
+                    `alltrack-report-stable-v1:${vehicle.code}:${alltrackReportFrom}:${alltrackReportTo}`;
+
+                const cachedReport =
+                    readAlltrackSessionCache<AlltrackReportData>(
+                        reportCacheKey,
+                        ALLTRACK_REPORT_CACHE_TTL,
+                    );
+
+                if (cachedReport) {
+                    setAlltrackReportData(
+                        cachedReport,
+                    );
+
+                    setAlltrackReportLoading(
+                        false,
+                    );
+
+                    void fetchAlltrackWeeklyRoutes(
+                        alltrackReportFrom,
+                        alltrackReportTo,
+                    );
+
+                    return;
+                }
+
+                const params =
+                    new URLSearchParams({
+                        from: alltrackReportFrom,
+                        to: alltrackReportTo,
+                        includeRoute: "0",
+                    });
+
+                const response =
+                    await fetch(
+                        `/api/alltrack/report/${encodeURIComponent(
+                            vehicle.code,
+                        )}?${params.toString()}`,
+                        {
+                            method: "GET",
+                            cache: "no-store",
+                        },
+                    );
+
+                const result =
+                    (await response.json()) as AlltrackReportResponse;
+
+                if (
+                    !response.ok ||
+                    !result.data
+                ) {
+                    throw new Error(
+                        result.error ||
+                            "No se pudo generar el informe Alltrack.",
+                    );
+                }
+
+                setAlltrackReportData(
+                    result.data,
+                );
+
+                writeAlltrackSessionCache(
+                    reportCacheKey,
+                    result.data,
+                );
+
+                void fetchAlltrackWeeklyRoutes(
+                    alltrackReportFrom,
+                    alltrackReportTo,
+                );
+            } catch (error) {
+                console.error(
+                    `Error generando informe Alltrack de ${vehicle.code}:`,
+                    error,
+                );
+
+                setAlltrackReportData(
+                    null,
+                );
+
+                setAlltrackReportError(
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo generar el informe Alltrack.",
+                );
+            } finally {
+                setAlltrackReportLoading(
+                    false,
+                );
+            }
+        }, [
+            alltrackReportFrom,
+            alltrackReportLoading,
+            alltrackReportTo,
+            fetchAlltrackWeeklyRoutes,
+            vehicle.code,
+            vehicle.has_alltrack,
+        ]);
+
+    const handleOpenAlltrackReport = () => {
+        setAlltrackReportOpen(true);
+        setAlltrackReportError(null);
+    };
+
+    const alltrackReportRangeDays =
+        getInclusiveDaysBetween(
+            alltrackReportFrom,
+            alltrackReportTo,
+        );
 
     const [
         criticality,
@@ -3062,6 +5420,22 @@ export function FichaVehiculoClient({
                                 </Button>
                             )}
 
+
+                            {vehicle.has_alltrack && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={
+                                        handleOpenAlltrackReport
+                                    }
+                                    className="border-sky-200 bg-sky-50/60 text-sky-800 hover:border-sky-300 hover:bg-sky-100/80 hover:text-sky-900 dark:border-sky-900 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                >
+                                    <Activity className="mr-2 h-4 w-4" />
+
+                                    Informe Alltrack
+                                </Button>
+                            )}
+
                             {canManage && (
                                 <>
                                 {vehicle.active ? (
@@ -4495,6 +6869,627 @@ export function FichaVehiculoClient({
             </Dialog>
 
             {/* =======================================================
+          MODAL INFORME ALLTRACK
+      ======================================================== */}
+
+            <Dialog
+                open={alltrackReportOpen}
+                onOpenChange={(open) => {
+                    if (
+                        alltrackReportLoading
+                    ) {
+                        return;
+                    }
+
+                    setAlltrackReportOpen(open);
+                }}
+            >
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Activity className="h-5 w-5 text-sky-600" />
+
+                            Informe Alltrack · {vehicle.code}
+                        </DialogTitle>
+
+                        <DialogDescription>
+                            Generá un resumen de actividad para {vehicle.vehicle}
+                            {vehicle.license_plate
+                                ? ` · ${vehicle.license_plate}`
+                                : ""}
+                            . El período máximo por consulta es de 31 días.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-5">
+                        <div className="rounded-xl border bg-muted/20 p-4">
+                            <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                                <div className="space-y-2">
+                                    <Label htmlFor="alltrack-report-from">
+                                        Desde
+                                    </Label>
+
+                                    <Input
+                                        id="alltrack-report-from"
+                                        type="date"
+                                        value={alltrackReportFrom}
+                                        onChange={(event) => {
+                                            setAlltrackReportFrom(
+                                                event.target.value,
+                                            );
+
+                                            setAlltrackReportData(
+                                                null,
+                                            );
+
+                                            setAlltrackReportError(
+                                                null,
+                                            );
+
+                                            setAlltrackWeeklyRoutes(
+                                                [],
+                                            );
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="alltrack-report-to">
+                                        Hasta
+                                    </Label>
+
+                                    <Input
+                                        id="alltrack-report-to"
+                                        type="date"
+                                        value={alltrackReportTo}
+                                        onChange={(event) => {
+                                            setAlltrackReportTo(
+                                                event.target.value,
+                                            );
+
+                                            setAlltrackReportData(
+                                                null,
+                                            );
+
+                                            setAlltrackReportError(
+                                                null,
+                                            );
+
+                                            setAlltrackWeeklyRoutes(
+                                                [],
+                                            );
+                                        }}
+                                    />
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    onClick={() =>
+                                        void fetchAlltrackReport()
+                                    }
+                                    disabled={
+                                        alltrackReportLoading ||
+                                        !alltrackReportFrom ||
+                                        !alltrackReportTo ||
+                                        alltrackReportRangeDays <= 0 ||
+                                        alltrackReportRangeDays > 31
+                                    }
+                                    className="bg-sky-600 text-white hover:bg-sky-700"
+                                >
+                                    {alltrackReportLoading ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Activity className="mr-2 h-4 w-4" />
+                                    )}
+
+                                    {alltrackReportLoading
+                                        ? "Generando..."
+                                        : "Generar informe"}
+                                </Button>
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span>
+                                    Período seleccionado: {alltrackReportRangeDays > 0
+                                        ? `${alltrackReportRangeDays} día${
+                                              alltrackReportRangeDays === 1
+                                                  ? ""
+                                                  : "s"
+                                          }`
+                                        : "-"}
+                                </span>
+
+                                {alltrackReportRangeDays > 1 && (
+                                    <span>
+                                        Los recorridos se cargan en hasta 4 bloques para evitar una única respuesta mensual demasiado pesada.
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {alltrackReportLoading ? (
+                            <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-xl border bg-muted/10">
+                                <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
+
+                                <div className="text-center">
+                                    <p className="font-medium">
+                                        Consultando Alltrack...
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Estamos obteniendo sesiones, tiempos y kilómetros del período seleccionado.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : alltrackReportError ? (
+                            <div className="flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-xl border border-red-200 bg-red-50/60 p-6 text-center dark:border-red-900 dark:bg-red-950/20">
+                                <CircleOff className="h-9 w-9 text-red-600" />
+
+                                <div>
+                                    <p className="font-semibold text-red-800 dark:text-red-300">
+                                        No se pudo generar el informe
+                                    </p>
+
+                                    <p className="mt-1 max-w-2xl text-sm text-red-700/80 dark:text-red-300/80">
+                                        {alltrackReportError}
+                                    </p>
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        void fetchAlltrackReport()
+                                    }
+                                >
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+
+                                    Reintentar
+                                </Button>
+                            </div>
+                        ) : alltrackReportData ? (
+                            <div className="space-y-5">
+                                <div className="rounded-xl border p-4">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <p className="text-lg font-semibold">
+                                                {alltrackReportData.vehicle.code} · {alltrackReportData.vehicle.name}
+                                            </p>
+
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                {alltrackReportData.vehicle.license_plate || "Sin dominio"}
+                                                {alltrackReportData.vehicle.department
+                                                    ? ` · ${alltrackReportData.vehicle.department}`
+                                                    : ""}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge
+                                                variant="outline"
+                                                className="w-fit"
+                                            >
+                                                {formatDate(
+                                                    alltrackReportData.period.from,
+                                                )}
+                                                {alltrackReportData.period.from !==
+                                                    alltrackReportData.period.to &&
+                                                    ` al ${formatDate(
+                                                        alltrackReportData.period.to,
+                                                    )}`}
+                                            </Badge>
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={
+                                                    isExportingAlltrackPdf ||
+                                                    alltrackWeeklyRoutesLoading ||
+                                                    alltrackWeeklyRoutes.some(
+                                                        (period) => period.loading,
+                                                    )
+                                                }
+                                                onClick={() =>
+                                                    void exportAlltrackReportToPdf()
+                                                }
+                                            >
+                                                {isExportingAlltrackPdf ? (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <FileDown className="mr-2 h-4 w-4" />
+                                                )}
+                                                {isExportingAlltrackPdf
+                                                    ? "Exportando..."
+                                                    : "Exportar PDF"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                    <TrackingInfoCard
+                                        label="Sesión"
+                                        value={alltrackReportData.summary.session_time}
+                                    />
+
+                                    <TrackingInfoCard
+                                        label="Movimiento"
+                                        value={alltrackReportData.summary.movement_time}
+                                    />
+
+                                    <TrackingInfoCard
+                                        label="Ocioso"
+                                        value={alltrackReportData.summary.idle_time}
+                                    />
+
+                                    <TrackingInfoCard
+                                        label="Recorrido"
+                                        value={`${alltrackReportData.summary.distance_km.toLocaleString(
+                                            "es-AR",
+                                            {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                            },
+                                        )} km`}
+                                    />
+
+                                    <TrackingInfoCard
+                                        label="Recorridos"
+                                        value={`${buildAlltrackRoutePeriods(
+                                            alltrackReportData.period.from,
+                                            alltrackReportData.period.to,
+                                        ).length} período${
+                                            buildAlltrackRoutePeriods(
+                                                alltrackReportData.period.from,
+                                                alltrackReportData.period.to,
+                                            ).length === 1
+                                                ? ""
+                                                : "s"
+                                        }`}
+                                    />
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="rounded-xl border border-[#f59e0b]/30 bg-[#fff7e6]/60 p-4 dark:bg-[#f59e0b]/5">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-sm font-medium">
+                                                Tiempo en movimiento
+                                            </span>
+
+                                            <span className="text-lg font-semibold text-[#f59e0b]">
+                                                {alltrackReportData.summary.movement_percent.toLocaleString(
+                                                    "es-AR",
+                                                    {
+                                                        minimumFractionDigits: 2,
+                                                        maximumFractionDigits: 2,
+                                                    },
+                                                )}%
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-[#f59e0b]"
+                                                style={{
+                                                    width: `${Math.min(
+                                                        100,
+                                                        Math.max(
+                                                            0,
+                                                            alltrackReportData.summary.movement_percent,
+                                                        ),
+                                                    )}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-xl border border-[#ff4fb8]/30 bg-[#fff0fa]/60 p-4 dark:bg-[#ff4fb8]/5">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-sm font-medium">
+                                                Tiempo ocioso
+                                            </span>
+
+                                            <span className="text-lg font-semibold text-[#ff4fb8]">
+                                                {alltrackReportData.summary.idle_percent.toLocaleString(
+                                                    "es-AR",
+                                                    {
+                                                        minimumFractionDigits: 2,
+                                                        maximumFractionDigits: 2,
+                                                    },
+                                                )}%
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-[#ff4fb8]"
+                                                style={{
+                                                    width: `${Math.min(
+                                                        100,
+                                                        Math.max(
+                                                            0,
+                                                            alltrackReportData.summary.idle_percent,
+                                                        ),
+                                                    )}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border">
+                                    <div className="border-b px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <CalendarDays className="h-4 w-4 text-sky-600" />
+
+                                            <h3 className="font-semibold">
+                                                Actividad por día
+                                            </h3>
+                                        </div>
+
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Se muestran todos los días del período. Si Alltrack no devuelve sesiones para una fecha, se indica como sin actividad reportada.
+                                        </p>
+                                    </div>
+
+                                    {alltrackReportData.daily_activity.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[760px] text-sm">
+                                                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                                    <tr>
+                                                        <th className="px-4 py-3 font-medium">
+                                                            Fecha
+                                                        </th>
+                                                        <th className="px-4 py-3 font-medium">
+                                                            Sesión
+                                                        </th>
+                                                        <th className="px-4 py-3 font-medium">
+                                                            Ocioso
+                                                        </th>
+                                                        <th className="px-4 py-3 font-medium">
+                                                            Movimiento
+                                                        </th>
+                                                        <th className="px-4 py-3 text-right font-medium">
+                                                            Recorrido
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+
+                                                <tbody>
+                                                    {alltrackReportData.daily_activity.map(
+                                                        (day) => (
+                                                            <tr
+                                                                key={day.date}
+                                                                className={[
+                                                                    "border-t",
+                                                                    !day.has_activity
+                                                                        ? "bg-muted/20"
+                                                                        : "",
+                                                                ].join(" ")}
+                                                            >
+                                                                <td className="px-4 py-3 font-medium">
+                                                                    {formatDate(
+                                                                        day.date,
+                                                                    )}
+                                                                </td>
+
+                                                                {day.has_activity ? (
+                                                                    <>
+                                                                        <td className="px-4 py-3">
+                                                                            {day.session_time}
+                                                                        </td>
+                                                                        <td className="px-4 py-3">
+                                                                            {day.idle_time}
+                                                                        </td>
+                                                                        <td className="px-4 py-3">
+                                                                            {day.movement_time}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right font-semibold">
+                                                                            {day.distance_km.toLocaleString(
+                                                                                "es-AR",
+                                                                                {
+                                                                                    minimumFractionDigits: 2,
+                                                                                    maximumFractionDigits: 2,
+                                                                                },
+                                                                            )} km
+                                                                        </td>
+                                                                    </>
+                                                                ) : (
+                                                                    <td
+                                                                        colSpan={4}
+                                                                        className="px-4 py-3 text-sm text-muted-foreground"
+                                                                    >
+                                                                        <span className="inline-flex items-center gap-2">
+                                                                            <CircleOff className="h-4 w-4" />
+                                                                            Sin actividad reportada por Alltrack
+                                                                        </span>
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        ),
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                                            No hay actividad registrada para el período seleccionado.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="rounded-xl border">
+                                    <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <MapPin className="h-4 w-4 text-sky-600" />
+
+                                                <h3 className="font-semibold">
+                                                    Recorridos del período
+                                                </h3>
+                                            </div>
+
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                Para un mes se divide el recorrido en 4 bloques: tres semanas de 7 días y un último bloque con los días restantes.
+                                            </p>
+                                        </div>
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={alltrackWeeklyRoutesLoading}
+                                            onClick={() =>
+                                                void fetchAlltrackWeeklyRoutes(
+                                                    alltrackReportData.period.from,
+                                                    alltrackReportData.period.to,
+                                                )
+                                            }
+                                        >
+                                            {alltrackWeeklyRoutesLoading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                            )}
+
+                                            {alltrackWeeklyRoutesLoading
+                                                ? "Cargando recorridos..."
+                                                : "Actualizar recorridos"}
+                                        </Button>
+                                    </div>
+
+                                    <div className="space-y-4 p-4">
+                                        {alltrackWeeklyRoutes.length === 0 ? (
+                                            <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed text-center text-sm text-muted-foreground">
+                                                Los recorridos se cargarán automáticamente después de generar el informe.
+                                            </div>
+                                        ) : (
+                                            alltrackWeeklyRoutes.map(
+                                                (period) => {
+                                                    const points =
+                                                        period.data?.route?.points || [];
+
+                                                    return (
+                                                        <div
+                                                            key={period.key}
+                                                            className="overflow-hidden rounded-xl border"
+                                                        >
+                                                            <div className="flex flex-col gap-2 border-b bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                                                <div>
+                                                                    <p className="font-semibold">
+                                                                        {period.label}
+                                                                    </p>
+
+                                                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                                                        {formatDate(period.from)} al {formatDate(period.to)}
+                                                                    </p>
+                                                                </div>
+
+                                                                {period.data ? (
+                                                                    <div className="flex flex-wrap gap-2 text-xs">
+                                                                        <Badge variant="outline">
+                                                                            {period.data.summary.distance_km.toLocaleString(
+                                                                                "es-AR",
+                                                                                {
+                                                                                    minimumFractionDigits: 2,
+                                                                                    maximumFractionDigits: 2,
+                                                                                },
+                                                                            )} km
+                                                                        </Badge>
+                                                                        <Badge variant="outline">
+                                                                            Movimiento {period.data.summary.movement_time}
+                                                                        </Badge>
+                                                                        <Badge variant="outline">
+                                                                            Ocioso {period.data.summary.idle_time}
+                                                                        </Badge>
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+
+                                                            {period.loading ? (
+                                                                <div className="flex min-h-[300px] flex-col items-center justify-center gap-3">
+                                                                    <Loader2 className="h-7 w-7 animate-spin text-sky-600" />
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        Cargando recorrido...
+                                                                    </p>
+                                                                </div>
+                                                            ) : period.error ? (
+                                                                <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 bg-red-50/50 p-6 text-center dark:bg-red-950/10">
+                                                                    <CircleOff className="h-7 w-7 text-red-600" />
+                                                                    <div>
+                                                                        <p className="font-medium text-red-700 dark:text-red-300">
+                                                                            No se pudo cargar este recorrido
+                                                                        </p>
+                                                                        <p className="mt-1 text-sm text-red-700/70 dark:text-red-300/70">
+                                                                            {period.error}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            ) : points.length > 1 ? (
+                                                                <div>
+                                                                    <AlltrackRouteMap
+                                                                        points={points}
+                                                                        title={`${vehicle.code} · ${formatDate(
+                                                                            period.from,
+                                                                        )} al ${formatDate(
+                                                                            period.to,
+                                                                        )}`}
+                                                                    />
+
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+                                                                        <span>
+                                                                            {points.length.toLocaleString(
+                                                                                "es-AR",
+                                                                            )} puntos GPS recibidos
+                                                                        </span>
+
+                                                                        <span>
+                                                                            <span className="font-medium text-emerald-600">● Inicio</span> · <span className="font-medium text-[#ff4fb8]">● Fin</span> · <span className="font-medium text-[#2563eb]">— Recorrido</span>
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="border-t px-4 py-1 text-[10px] leading-tight text-muted-foreground/80">
+                                                                        Para una mayor exactitud en la visualización del recorrido, consultar Alltrack.
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 p-6 text-center">
+                                                                    <MapPin className="h-7 w-7 text-muted-foreground/50" />
+                                                                    <p className="font-medium">
+                                                                        Sin recorrido GPS reportado
+                                                                    </p>
+                                                                    <p className="max-w-xl text-sm text-muted-foreground">
+                                                                        Alltrack no devolvió suficientes puntos de posición para dibujar el recorrido de este bloque.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                },
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex min-h-[240px] flex-col items-center justify-center rounded-xl border border-dashed px-6 text-center">
+                                <Activity className="h-9 w-9 text-muted-foreground/60" />
+
+                                <p className="mt-3 font-medium">
+                                    Seleccioná el período del informe
+                                </p>
+
+                                <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                                    Al generar el informe se mostrarán los tiempos de sesión, movimiento, ociosidad, kilómetros y la actividad diaria del vehículo.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* =======================================================
           MODAL BAJA
       ======================================================== */}
 
@@ -5281,6 +8276,32 @@ function getHistoryConfig(
 /* =========================================================
    UI AUXILIAR
 ========================================================= */
+
+function AlltrackRouteMap({
+    points,
+    title,
+}: {
+    points: AlltrackReportRoutePoint[];
+    title: string;
+}) {
+    const srcDoc = useMemo(
+        () =>
+            buildAlltrackRouteMapHtml(
+                points,
+            ),
+        [points],
+    );
+
+    return (
+        <iframe
+            title={title}
+            srcDoc={srcDoc}
+            className="h-[360px] w-full border-0 bg-slate-50 sm:h-[420px]"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+        />
+    );
+}
 
 function WorkOrderPreviewRow({
     order,

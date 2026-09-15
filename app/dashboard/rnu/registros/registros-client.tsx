@@ -3,10 +3,13 @@
 import Link from "next/link";
 import {
   useEffect,
-  useMemo,
   useState,
   useTransition,
 } from "react";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -28,6 +31,17 @@ import { deleteRnuEntry } from "../actions";
 type Props = {
   initialEntries: RnuEntry[];
   userRole: string;
+  initialSearch: string;
+  initialType: "" | "GENERAL" | "INSTITUCION";
+  initialFrom: string;
+  initialTo: string;
+  currentPage: number;
+  totalPages: number;
+  totalEntries: number;
+  todayVisitorCount: number;
+  todayGeneralCount: number;
+  todayInstitutionCount: number;
+  todayRecordsCount: number;
 };
 
 const ITEMS_PER_PAGE = 20;
@@ -110,15 +124,35 @@ function getTodayArgentina() {
 export default function RegistrosRnuClient({
   initialEntries,
   userRole,
+  initialSearch,
+  initialType,
+  initialFrom,
+  initialTo,
+  currentPage,
+  totalPages,
+  totalEntries,
+  todayVisitorCount,
+  todayGeneralCount,
+  todayInstitutionCount,
+  todayRecordsCount,
 }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [entries, setEntries] =
     useState(initialEntries);
 
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] =
+    useState(initialSearch);
+
+  const [type, setType] =
+    useState(initialType);
+
+  const [from, setFrom] =
+    useState(initialFrom);
+
+  const [to, setTo] =
+    useState(initialTo);
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
@@ -126,144 +160,127 @@ export default function RegistrosRnuClient({
   const [isPending, startTransition] =
     useTransition();
 
+  const [
+    isNavigating,
+    startNavigationTransition,
+  ] = useTransition();
+
   const canEdit =
     userRole === "admin" ||
     userRole === "rnu";
 
-  const today = getTodayArgentina();
+  useEffect(() => {
+    setEntries(initialEntries);
+  }, [initialEntries]);
 
-  const todayEntries = useMemo(
-    () =>
-      entries.filter(
-        (entry) =>
-          entry.entry_date === today,
-      ),
-    [entries, today],
-  );
+  useEffect(() => {
+    setSearch(initialSearch);
+  }, [initialSearch]);
 
-  const todayVisitorCount =
-    todayEntries.reduce(
-      (total, entry) =>
-        total +
-        Number(entry.visitor_count || 0),
-      0,
-    );
+  useEffect(() => {
+    setType(initialType);
+  }, [initialType]);
 
-  const todayGeneralCount =
-    todayEntries.filter(
-      (entry) =>
-        entry.entry_type === "GENERAL",
-    ).length;
+  useEffect(() => {
+    setFrom(initialFrom);
+  }, [initialFrom]);
 
-  const todayInstitutionCount =
-    todayEntries.filter(
-      (entry) =>
-        entry.entry_type ===
-        "INSTITUCION",
-    ).length;
+  useEffect(() => {
+    setTo(initialTo);
+  }, [initialTo]);
 
-  const filteredEntries = useMemo(() => {
-    const normalizedSearch =
-      normalizeSearch(search);
+  function buildUrl({
+    page = 1,
+    nextSearch = search,
+    nextType = type,
+    nextFrom = from,
+    nextTo = to,
+  }: {
+    page?: number;
+    nextSearch?: string;
+    nextType?: string;
+    nextFrom?: string;
+    nextTo?: string;
+  }) {
+    const params = new URLSearchParams();
+    const cleanSearch = nextSearch.trim();
 
-    return entries.filter((entry) => {
-      if (
-        type &&
-        entry.entry_type !== type
-      ) {
-        return false;
-      }
+    if (page > 1) params.set("pagina", String(page));
+    if (cleanSearch) params.set("buscar", cleanSearch);
+    if (nextType) params.set("tipo", nextType);
+    if (nextFrom) params.set("desde", nextFrom);
+    if (nextTo) params.set("hasta", nextTo);
 
-      if (
-        from &&
-        entry.entry_date < from
-      ) {
-        return false;
-      }
+    const query = params.toString();
 
-      if (
-        to &&
-        entry.entry_date > to
-      ) {
-        return false;
-      }
+    return query
+      ? `/dashboard/rnu/registros?${query}`
+      : "/dashboard/rnu/registros";
+  }
 
-      if (normalizedSearch) {
-        const searchableText =
-          normalizeSearch(
-            [
-              entry.province_locality,
-              entry.institution_name,
-              entry.responsible_name,
-              getTransportLabel(
-                entry.transport_type,
-              ),
-              getReasonLabel(
-                entry.entry_reasons,
-              ),
-            ]
-              .filter(Boolean)
-              .join(" "),
-          );
-
-        if (
-          !searchableText.includes(
-            normalizedSearch,
-          )
-        ) {
-          return false;
-        }
-      }
-
-      return true;
+  function navigateTo({
+    page = 1,
+    nextSearch = search,
+    nextType = type,
+    nextFrom = from,
+    nextTo = to,
+  }: {
+    page?: number;
+    nextSearch?: string;
+    nextType?: string;
+    nextFrom?: string;
+    nextTo?: string;
+  }) {
+    const nextUrl = buildUrl({
+      page,
+      nextSearch,
+      nextType,
+      nextFrom,
+      nextTo,
     });
-  }, [
-    entries,
-    search,
-    type,
-    from,
-    to,
-  ]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(
-      filteredEntries.length / ITEMS_PER_PAGE,
-    ),
-  );
+    const currentQuery = searchParams.toString();
+    const currentUrl = currentQuery
+      ? `/dashboard/rnu/registros?${currentQuery}`
+      : "/dashboard/rnu/registros";
 
-  const paginatedEntries = useMemo(() => {
-    const start =
-      (currentPage - 1) * ITEMS_PER_PAGE;
+    if (nextUrl === currentUrl) return;
 
-    const end = start + ITEMS_PER_PAGE;
+    startNavigationTransition(() => {
+      router.replace(nextUrl, { scroll: false });
+    });
+  }
 
-    return filteredEntries.slice(start, end);
-  }, [filteredEntries, currentPage]);
+  useEffect(() => {
+    if (search.trim() === initialSearch) return;
+
+    const timeoutId = window.setTimeout(() => {
+      navigateTo({
+        page: 1,
+        nextSearch: search,
+      });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, initialSearch]);
 
   const firstVisibleRecord =
-    filteredEntries.length === 0
+    totalEntries === 0
       ? 0
-      : (currentPage - 1) *
-          ITEMS_PER_PAGE +
-        1;
+      : (currentPage - 1) * ITEMS_PER_PAGE + 1;
 
-  const lastVisibleRecord = Math.min(
-    currentPage * ITEMS_PER_PAGE,
-    filteredEntries.length,
-  );
+  const lastVisibleRecord =
+    totalEntries === 0
+      ? 0
+      : Math.min(
+          firstVisibleRecord + entries.length - 1,
+          totalEntries,
+        );
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, type, from, to]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
-
-  function getPageNumbers() {
+  function getPageNumbers(): number[] {
     if (totalPages <= 7) {
       return Array.from(
         { length: totalPages },
@@ -301,7 +318,14 @@ export default function RegistrosRnuClient({
     setType("");
     setFrom("");
     setTo("");
-    setCurrentPage(1);
+
+    navigateTo({
+      page: 1,
+      nextSearch: "",
+      nextType: "",
+      nextFrom: "",
+      nextTo: "",
+    });
   }
 
   function handleDelete(
@@ -333,6 +357,12 @@ export default function RegistrosRnuClient({
               item.id !== entry.id,
           ),
         );
+
+        if (entries.length === 1 && currentPage > 1) {
+          navigateTo({ page: currentPage - 1 });
+        } else {
+          router.refresh();
+        }
       } catch (error) {
         alert(
           error instanceof Error
@@ -346,7 +376,17 @@ export default function RegistrosRnuClient({
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <>
+      {isNavigating && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/70 backdrop-blur-sm">
+          <div className="rounded-2xl border bg-card px-6 py-5 text-center shadow-xl">
+            <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-muted border-t-emerald-600" />
+            <p className="mt-3 font-semibold">Cargando...</p>
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
       <div className="mb-5">
         <Link
           href="/dashboard/rnu"
@@ -437,7 +477,7 @@ export default function RegistrosRnuClient({
               </p>
 
               <p className="text-xl font-bold sm:text-2xl">
-                {todayEntries.length}
+                {todayRecordsCount}
               </p>
             </div>
           </div>
@@ -479,9 +519,20 @@ export default function RegistrosRnuClient({
 
             <select
               value={type}
-              onChange={(event) =>
-                setType(event.target.value)
-              }
+              onChange={(event) => {
+                const nextType =
+                  event.target.value as
+                    | ""
+                    | "GENERAL"
+                    | "INSTITUCION";
+
+                setType(nextType);
+
+                navigateTo({
+                  page: 1,
+                  nextType,
+                });
+              }}
               className="min-h-11 w-full rounded-xl border bg-background px-3 text-sm"
             >
               <option value="">
@@ -509,11 +560,11 @@ export default function RegistrosRnuClient({
               <input
                 type="date"
                 value={from}
-                onChange={(event) =>
-                  setFrom(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+                  const nextFrom = event.target.value;
+                  setFrom(nextFrom);
+                  navigateTo({ page: 1, nextFrom });
+                }}
                 className="min-h-11 w-full rounded-xl border bg-background pl-10 pr-3 text-sm"
               />
             </div>
@@ -530,11 +581,11 @@ export default function RegistrosRnuClient({
               <input
                 type="date"
                 value={to}
-                onChange={(event) =>
-                  setTo(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+                  const nextTo = event.target.value;
+                  setTo(nextTo);
+                  navigateTo({ page: 1, nextTo });
+                }}
                 className="min-h-11 w-full rounded-xl border bg-background pl-10 pr-3 text-sm"
               />
             </div>
@@ -553,14 +604,14 @@ export default function RegistrosRnuClient({
         </div>
 
         <p className="mt-4 text-sm text-muted-foreground">
-          {filteredEntries.length}{" "}
-          {filteredEntries.length === 1
+          {totalEntries}{" "}
+          {totalEntries === 1
             ? "registro encontrado"
             : "registros encontrados"}
         </p>
       </section>
 
-      {filteredEntries.length === 0 ? (
+      {totalEntries === 0 ? (
         <section className="rounded-2xl border bg-card p-8 text-center shadow-sm">
           <p className="text-muted-foreground">
             No se encontraron registros.
@@ -570,7 +621,7 @@ export default function RegistrosRnuClient({
         <>
           {/* CELULAR + TABLET */}
           <div className="grid grid-cols-1 gap-4 xl:hidden md:grid-cols-2">
-            {paginatedEntries.map(
+            {entries.map(
               (entry) => {
                 const isInstitution =
                   entry.entry_type ===
@@ -753,7 +804,7 @@ export default function RegistrosRnuClient({
               </thead>
 
               <tbody>
-                {paginatedEntries.map(
+                {entries.map(
                   (entry) => {
                     const isInstitution =
                       entry.entry_type ===
@@ -875,7 +926,7 @@ export default function RegistrosRnuClient({
                 </span>{" "}
                 de{" "}
                 <span className="font-semibold text-foreground">
-                  {filteredEntries.length}
+                  {totalEntries}
                 </span>{" "}
                 registros
               </p>
@@ -884,9 +935,9 @@ export default function RegistrosRnuClient({
                 <button
                   type="button"
                   onClick={() =>
-                    setCurrentPage((page) =>
-                      Math.max(1, page - 1),
-                    )
+                    navigateTo({
+                      page: Math.max(1, currentPage - 1),
+                    })
                   }
                   disabled={currentPage === 1}
                   className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border bg-background px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
@@ -900,7 +951,7 @@ export default function RegistrosRnuClient({
                     key={pageNumber}
                     type="button"
                     onClick={() =>
-                      setCurrentPage(pageNumber)
+                      navigateTo({ page: pageNumber })
                     }
                     className={`hidden h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition-colors sm:inline-flex ${
                       currentPage === pageNumber
@@ -919,12 +970,12 @@ export default function RegistrosRnuClient({
                 <button
                   type="button"
                   onClick={() =>
-                    setCurrentPage((page) =>
-                      Math.min(
+                    navigateTo({
+                      page: Math.min(
                         totalPages,
-                        page + 1,
+                        currentPage + 1,
                       ),
-                    )
+                    })
                   }
                   disabled={currentPage === totalPages}
                   className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border bg-background px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
@@ -937,6 +988,7 @@ export default function RegistrosRnuClient({
           </section>
         </>
       )}
-    </main>
+      </main>
+    </>
   );
 }
