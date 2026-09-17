@@ -634,6 +634,57 @@ export default function StatsPage() {
   const mainStat = stats?.byStreet?.[0];
   const mostDelayedComplaint = stats?.oldestInProgress?.[0];
 
+  /*
+   * Los contadores principales se derivan de byStatus porque esa colección
+   * ya viene con todos los filtros aplicados (dirección, servicio, zona,
+   * fechas, etc.). Así evitamos inconsistencias si openCount/resolvedCount
+   * del backend llegan calculados antes de alguno de esos filtros.
+   */
+  const filteredResolvedCount = useMemo(() => {
+    if (!stats) return 0;
+
+    const resolvedItem = stats.byStatus?.find(
+      (item) => normalizeText(item.name) === "resuelto",
+    );
+
+    /*
+     * Si byStatus existe pero no trae "Resuelto", dentro del filtro
+     * actual significa que hay 0 reclamos resueltos.
+     * No debemos volver a stats.resolvedCount porque ese valor puede
+     * corresponder al total global sin el filtro de Dirección.
+     */
+    if (Array.isArray(stats.byStatus)) {
+      return resolvedItem?.count ?? 0;
+    }
+
+    return stats.resolvedCount ?? 0;
+  }, [stats]);
+
+  const filteredOpenCount = useMemo(() => {
+    if (!stats) return 0;
+
+    const openItem = stats.byStatus?.find(
+      (item) => normalizeText(item.name) === "en proceso",
+    );
+
+    /*
+     * Si byStatus existe pero no contiene "En proceso", el valor correcto
+     * para el filtro actual es 0. Antes caíamos a stats.openCount y por eso
+     * Arbolado mostraba 43 aunque sus 423 reclamos estaban resueltos.
+     */
+    if (Array.isArray(stats.byStatus)) {
+      return openItem?.count ?? 0;
+    }
+
+    return stats.openCount ?? 0;
+  }, [stats]);
+
+  const filteredResolvedPercentage = useMemo(() => {
+    if (!stats || stats.total <= 0) return 0;
+
+    return Math.round((filteredResolvedCount / stats.total) * 1000) / 10;
+  }, [stats, filteredResolvedCount]);
+
   const detailPageCount = Math.max(
     Math.ceil(detailItems.length / DETAIL_PAGE_SIZE),
     1,
@@ -1383,7 +1434,7 @@ export default function StatsPage() {
         26,
       );
       doc.text(
-        `Total analizado: ${stats.total} · Resueltos: ${stats.resolvedCount ?? 0} · Abiertos: ${stats.openCount ?? 0} · % resueltos: ${stats.resolvedPercentage ?? 0}%`,
+        `Total analizado: ${stats.total} · Resueltos: ${filteredResolvedCount} · Abiertos: ${filteredOpenCount} · % resueltos: ${filteredResolvedPercentage}%`,
         14,
         32,
       );
@@ -1714,7 +1765,12 @@ export default function StatsPage() {
           <button
             type="button"
             disabled={loading}
-            onClick={() => openDetailModal("status", { name: "Resuelto", count: stats?.resolvedCount ?? 0 })}
+            onClick={() =>
+              openDetailModal("status", {
+                name: "Resuelto",
+                count: filteredResolvedCount,
+              })
+            }
             className="text-left disabled:cursor-default"
           >
             <Card className="h-full rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 text-card-foreground shadow-sm transition hover:border-emerald-400 hover:shadow-md dark:border-emerald-900/50 dark:from-emerald-950/40 dark:via-card dark:to-emerald-950/30 dark:hover:border-emerald-700">
@@ -1727,7 +1783,7 @@ export default function StatsPage() {
 
               <CardContent>
                 <div className="text-4xl font-bold text-foreground">
-                  {loading ? "..." : stats?.resolvedCount ?? 0}
+                  {loading ? "..." : filteredResolvedCount}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Cerrados dentro del filtro
@@ -1739,7 +1795,12 @@ export default function StatsPage() {
           <button
             type="button"
             disabled={loading}
-            onClick={() => openDetailModal("status", { name: "En proceso", count: stats?.openCount ?? 0 })}
+            onClick={() =>
+              openDetailModal("status", {
+                name: "En proceso",
+                count: filteredOpenCount,
+              })
+            }
             className="text-left disabled:cursor-default"
           >
             <Card className="h-full rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 text-card-foreground shadow-sm transition hover:border-amber-400 hover:shadow-md dark:border-amber-900/50 dark:from-amber-950/40 dark:via-card dark:to-yellow-950/30 dark:hover:border-amber-700">
@@ -1752,7 +1813,7 @@ export default function StatsPage() {
 
               <CardContent>
                 <div className="text-4xl font-bold text-foreground">
-                  {loading ? "..." : stats?.openCount ?? 0}
+                  {loading ? "..." : filteredOpenCount}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   En proceso dentro del filtro
@@ -1763,7 +1824,7 @@ export default function StatsPage() {
 
           <Card
             className={`rounded-2xl text-card-foreground shadow-sm ${getResolvedPalette(
-              stats?.resolvedPercentage ?? 0,
+              filteredResolvedPercentage,
             ).card}`}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -1772,7 +1833,7 @@ export default function StatsPage() {
               </CardTitle>
               <TrendingUp
                 className={`h-5 w-5 ${getResolvedPalette(
-                  stats?.resolvedPercentage ?? 0,
+                  filteredResolvedPercentage,
                 ).icon}`}
               />
             </CardHeader>
@@ -1780,10 +1841,10 @@ export default function StatsPage() {
             <CardContent>
               <div
                 className={`text-4xl font-black ${getResolvedPalette(
-                  stats?.resolvedPercentage ?? 0,
+                  filteredResolvedPercentage,
                 ).text}`}
               >
-                {loading ? "..." : `${stats?.resolvedPercentage ?? 0}%`}
+                {loading ? "..." : `${filteredResolvedPercentage}%`}
               </div>
               <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-white/10">
                 <div
