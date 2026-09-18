@@ -256,99 +256,17 @@ export function SuministrosDashboardClient({
   useEffect(() => {
     let mounted = true;
 
-    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const supabase = createClient();
-
     /**
      * Carga inicial del resumen.
      */
     void loadStockSummary();
 
-    /*
-     * El nombre incluye un identificador único para evitar conflictos
-     * con React Strict Mode y el Hot Reload de Next.js.
-     */
-    const channelName = `suministros-panel-${crypto.randomUUID()}`;
-
     /**
-     * Reconsulta el resumen cuando existe un cambio Realtime.
-     *
-     * Esperamos 300 ms para agrupar eventos muy cercanos.
-     */
-    const refreshAfterChange = () => {
-      if (!mounted) return;
-
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      refreshTimeout = setTimeout(() => {
-        if (mounted) {
-          void loadStockSummary(true);
-        }
-      }, 300);
-    };
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_movements",
-        },
-        refreshAfterChange,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_products",
-        },
-        refreshAfterChange,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_categories",
-        },
-        refreshAfterChange,
-      )
-      .subscribe((status, subscriptionError) => {
-        if (status === "SUBSCRIBED") {
-          console.log(
-            "Realtime de Suministros conectado.",
-          );
-        }
-
-        if (status === "CHANNEL_ERROR") {
-          console.warn(
-            "Realtime de Suministros tuvo un error de conexión.",
-            subscriptionError,
-          );
-        }
-
-        if (status === "TIMED_OUT") {
-          console.warn(
-            "La conexión Realtime de Suministros demoró demasiado.",
-          );
-        }
-
-        if (status === "CLOSED") {
-          console.log(
-            "Canal Realtime de Suministros cerrado.",
-          );
-        }
-      });
-
-    /**
-     * Fuerza una actualización cuando el usuario vuelve
+     * Actualiza el resumen cuando el usuario vuelve
      * después de haber dejado la pestaña inactiva.
+     *
+     * De esta forma evitamos mantener un canal Realtime
+     * abierto solamente para los indicadores del panel.
      */
     const refreshAfterVisibilityResume = () => {
       if (!mounted) return;
@@ -364,17 +282,9 @@ export function SuministrosDashboardClient({
 
       lastVisibilityRefreshRef.current = now;
 
-      console.log(
-        "Suministros volvió a primer plano. Actualizando stock...",
-      );
-
       void loadStockSummary(true);
     };
 
-    /**
-     * Chrome dispara este evento cuando una pestaña
-     * vuelve a ser visible.
-     */
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") {
         return;
@@ -383,14 +293,6 @@ export function SuministrosDashboardClient({
       refreshAfterVisibilityResume();
     };
 
-    /**
-     * Respaldo adicional para casos como:
-     *
-     * - PC bloqueada
-     * - navegador minimizado
-     * - cambio de aplicación
-     * - pestaña suspendida
-     */
     const handleWindowFocus = () => {
       refreshAfterVisibilityResume();
     };
@@ -417,12 +319,6 @@ export function SuministrosDashboardClient({
         "focus",
         handleWindowFocus,
       );
-
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      void supabase.removeChannel(channel);
     };
   }, [loadStockSummary]);
 
