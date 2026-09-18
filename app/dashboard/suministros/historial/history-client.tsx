@@ -126,6 +126,20 @@ type HistoryClientProps = {
 const CHUNK_SIZE = 1000;
 const PAGE_SIZE = 25;
 
+const formatArgentinaDate = (date: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+
+const getArgentinaDate = (offsetDays = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return formatArgentinaDate(date);
+};
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -234,8 +248,9 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
   const [movementType, setMovementType] =
     useState<MovementFilter>("all");
   const [categoryId, setCategoryId] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => getArgentinaDate(-14));
+  const [dateTo, setDateTo] = useState(() => getArgentinaDate());
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("date_desc");
   const [page, setPage] = useState(1);
 
@@ -452,57 +467,6 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
 
   useEffect(() => {
     void loadHistory();
-
-    const supabase = createClient();
-
-    let mounted = true;
-    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const channelName = `suministros-historial-${crypto.randomUUID()}`;
-
-    const refreshHistory = () => {
-      if (!mounted) return;
-
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      refreshTimeout = setTimeout(() => {
-        if (mounted) {
-          void loadHistory(true);
-        }
-      }, 300);
-    };
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_movements",
-        },
-        refreshHistory,
-      )
-      .subscribe((status, subscriptionError) => {
-        if (status === "CHANNEL_ERROR") {
-          console.warn(
-            "Realtime del historial tuvo un error.",
-            subscriptionError,
-          );
-        }
-      });
-
-    return () => {
-      mounted = false;
-
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      void supabase.removeChannel(channel);
-    };
   }, [loadHistory]);
 
   const filteredAndSortedMovements = useMemo(() => {
@@ -650,21 +614,33 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
     };
   }, [filteredAndSortedMovements]);
 
+  const defaultDateFrom = getArgentinaDate(-14);
+  const defaultDateTo = getArgentinaDate();
+
   const hasActiveFilters =
     search.trim() !== "" ||
     movementType !== "all" ||
     categoryId !== "all" ||
-    dateFrom !== "" ||
-    dateTo !== "" ||
+    dateFrom !== defaultDateFrom ||
+    dateTo !== defaultDateTo ||
+    showAllHistory ||
     sortBy !== "date_desc";
 
-  const clearFilters = () => {
+  const showLast15Days = () => {
     setSearch("");
     setMovementType("all");
     setCategoryId("all");
+    setDateFrom(defaultDateFrom);
+    setDateTo(defaultDateTo);
+    setShowAllHistory(false);
+    setSortBy("date_desc");
+    setPage(1);
+  };
+
+  const showFullHistory = () => {
     setDateFrom("");
     setDateTo("");
-    setSortBy("date_desc");
+    setShowAllHistory(true);
     setPage(1);
   };
 
@@ -963,138 +939,190 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
 
       <Card className="rounded-2xl">
         <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_190px_220px_160px_160px_minmax(230px,270px)_auto]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
+              <div className="relative xl:col-span-3">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar producto, referencia, destino..."
-                className="pl-9"
-              />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar producto, referencia, destino..."
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="xl:col-span-3">
+                <Select
+                  value={movementType}
+                  onValueChange={(value) =>
+                    setMovementType(value as MovementFilter)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Tipo de movimiento" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todos los movimientos
+                    </SelectItem>
+                    <SelectItem value="ENTRY">Entradas</SelectItem>
+                    <SelectItem value="DELIVERY">Entregas</SelectItem>
+                    <SelectItem value="ADJUSTMENT_IN">
+                      Ajustes de entrada
+                    </SelectItem>
+                    <SelectItem value="ADJUSTMENT_OUT">
+                      Ajustes de salida
+                    </SelectItem>
+                    <SelectItem value="INITIAL">
+                      Stock inicial
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="xl:col-span-3">
+                <Select
+                  value={categoryId}
+                  onValueChange={setCategoryId}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todas las categorías" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todas las categorías
+                    </SelectItem>
+
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="xl:col-span-3">
+                <Select
+                  value={sortBy}
+                  onValueChange={(value) =>
+                    setSortBy(value as SortOption)
+                  }
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <ArrowUpDown className="mr-2 size-4 shrink-0" />
+                    <SelectValue placeholder="Ordenar por" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="date_desc">
+                      Más recientes
+                    </SelectItem>
+                    <SelectItem value="date_asc">
+                      Más antiguos
+                    </SelectItem>
+                    <SelectItem value="product_asc">
+                      Producto A–Z
+                    </SelectItem>
+                    <SelectItem value="product_desc">
+                      Producto Z–A
+                    </SelectItem>
+                    <SelectItem value="quantity_desc">
+                      Cantidad: mayor a menor
+                    </SelectItem>
+                    <SelectItem value="quantity_asc">
+                      Cantidad: menor a mayor
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <Select
-              value={movementType}
-              onValueChange={(value) =>
-                setMovementType(value as MovementFilter)
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Tipo de movimiento" />
-              </SelectTrigger>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
+              <div className="space-y-1 xl:col-span-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Desde
+                </p>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(event) => {
+                      setDateFrom(event.target.value);
+                      setShowAllHistory(false);
+                    }}
+                    className="w-full min-w-0 pl-9"
+                    aria-label="Fecha desde"
+                  />
+                </div>
+              </div>
 
-              <SelectContent>
-                <SelectItem value="all">
-                  Todos los movimientos
-                </SelectItem>
-                <SelectItem value="ENTRY">Entradas</SelectItem>
-                <SelectItem value="DELIVERY">Entregas</SelectItem>
-                <SelectItem value="ADJUSTMENT_IN">
-                  Ajustes de entrada
-                </SelectItem>
-                <SelectItem value="ADJUSTMENT_OUT">
-                  Ajustes de salida
-                </SelectItem>
-                <SelectItem value="INITIAL">
-                  Stock inicial
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              <div className="space-y-1 xl:col-span-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Hasta
+                </p>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(event) => {
+                      setDateTo(event.target.value);
+                      setShowAllHistory(false);
+                    }}
+                    className="w-full min-w-0 pl-9"
+                    aria-label="Fecha hasta"
+                  />
+                </div>
+              </div>
 
-            <Select
-              value={categoryId}
-              onValueChange={setCategoryId}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Todas las categorías" />
-              </SelectTrigger>
+              <div className="flex items-end xl:col-span-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full whitespace-nowrap"
+                  onClick={showLast15Days}
+                  disabled={!hasActiveFilters}
+                >
+                  Últimos 15 días
+                </Button>
+              </div>
 
-              <SelectContent>
-                <SelectItem value="all">
-                  Todas las categorías
-                </SelectItem>
-
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)}
-                className="pl-9"
-                aria-label="Fecha desde"
-              />
+              <div className="flex items-end xl:col-span-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full whitespace-nowrap"
+                  onClick={showFullHistory}
+                  disabled={showAllHistory}
+                >
+                  Todo el histórico
+                </Button>
+              </div>
             </div>
-
-            <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(event) => setDateTo(event.target.value)}
-                className="pl-9"
-                aria-label="Fecha hasta"
-              />
-            </div>
-
-            <Select
-              value={sortBy}
-              onValueChange={(value) =>
-                setSortBy(value as SortOption)
-              }
-            >
-              <SelectTrigger className="w-full min-w-0">
-                <ArrowUpDown className="mr-2 size-4 shrink-0" />
-                <SelectValue placeholder="Ordenar por" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="date_desc">
-                  Más recientes
-                </SelectItem>
-                <SelectItem value="date_asc">
-                  Más antiguos
-                </SelectItem>
-                <SelectItem value="product_asc">
-                  Producto A–Z
-                </SelectItem>
-                <SelectItem value="product_desc">
-                  Producto Z–A
-                </SelectItem>
-                <SelectItem value="quantity_desc">
-                  Cantidad: mayor a menor
-                </SelectItem>
-                <SelectItem value="quantity_asc">
-                  Cantidad: menor a mayor
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full whitespace-nowrap xl:w-auto"
-              onClick={clearFilters}
-              disabled={!hasActiveFilters}
-            >
-              Limpiar filtros
-            </Button>
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            {filteredAndSortedMovements.length === 1
-              ? "1 movimiento encontrado"
-              : `${filteredAndSortedMovements.length} movimientos encontrados`}
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              {filteredAndSortedMovements.length === 1
+                ? "1 movimiento encontrado"
+                : `${filteredAndSortedMovements.length} movimientos encontrados`}
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              {showAllHistory
+                ? "Mostrando todo el histórico."
+                : dateFrom || dateTo
+                  ? `Período: ${dateFrom ? formatDate(dateFrom) : "Sin inicio"} al ${
+                      dateTo ? formatDate(dateTo) : "Sin fin"
+                    }.`
+                  : "Sin período seleccionado."}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -1466,8 +1494,8 @@ export function HistoryClient({ isReadonly }: HistoryClientProps) {
       )}
 
       <p className="text-center text-xs text-muted-foreground">
-        El historial se actualiza automáticamente cuando otra cuenta
-        registra o modifica movimientos.
+        El historial se actualiza al abrir la pantalla, cambiar filtros o
+        presionar el botón Actualizar.
         {isReadonly ? " Tu cuenta está en modo solo lectura." : ""}
       </p>
     </div>
