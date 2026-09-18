@@ -164,6 +164,14 @@ export function StatisticsClient() {
   const [productId, setProductId] = useState("all");
   const [movementType, setMovementType] = useState("all");
   const [search, setSearch] = useState("");
+
+  const [appliedDateFrom, setAppliedDateFrom] = useState(defaultDateFrom);
+  const [appliedDateTo, setAppliedDateTo] = useState(today);
+  const [appliedCategoryId, setAppliedCategoryId] = useState("all");
+  const [appliedProductId, setAppliedProductId] = useState("all");
+  const [appliedMovementType, setAppliedMovementType] = useState("all");
+  const [appliedSearch, setAppliedSearch] = useState("");
+
   const [selectedDeliveryMonth, setSelectedDeliveryMonth] = useState("all");
 
   const [loading, setLoading] = useState(true);
@@ -179,7 +187,12 @@ export function StatisticsClient() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const loadData = useCallback(async (showRefreshLoader = false) => {
+  const loadData = useCallback(
+    async (
+      showRefreshLoader = false,
+      queryDateFrom = appliedDateFrom,
+      queryDateTo = appliedDateTo,
+    ) => {
     if (showRefreshLoader) {
       setRefreshing(true);
     } else {
@@ -230,12 +243,12 @@ export function StatisticsClient() {
             `,
           );
 
-        if (dateFrom) {
-          movementsQuery = movementsQuery.gte("movement_date", dateFrom);
+        if (queryDateFrom) {
+          movementsQuery = movementsQuery.gte("movement_date", queryDateFrom);
         }
 
-        if (dateTo) {
-          movementsQuery = movementsQuery.lte("movement_date", dateTo);
+        if (queryDateTo) {
+          movementsQuery = movementsQuery.lte("movement_date", queryDateTo);
         }
 
         const { data, error } = await movementsQuery
@@ -367,64 +380,15 @@ export function StatisticsClient() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFrom, dateTo]);
+    },
+    [appliedDateFrom, appliedDateTo],
+  );
 
   useEffect(() => {
-    void loadData();
-
-    const supabase = createClient();
-    let mounted = true;
-    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleRefresh = () => {
-      if (!mounted) return;
-
-      if (refreshTimeout) clearTimeout(refreshTimeout);
-
-      refreshTimeout = setTimeout(() => {
-        if (mounted) void loadData(true);
-      }, 350);
-    };
-
-    const channel = supabase
-      .channel(`suministros-estadisticas-${crypto.randomUUID()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_movements",
-        },
-        scheduleRefresh,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_products",
-        },
-        scheduleRefresh,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supply_categories",
-        },
-        scheduleRefresh,
-      )
-      .subscribe();
-
-    return () => {
-      mounted = false;
-
-      if (refreshTimeout) clearTimeout(refreshTimeout);
-
-      void supabase.removeChannel(channel);
-    };
-  }, [loadData]);
+    void loadData(false, appliedDateFrom, appliedDateTo);
+    // Carga inicial solamente. Los cambios de filtros se aplican con "Analizar".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (
@@ -449,18 +413,23 @@ export function StatisticsClient() {
   );
 
   const filteredMovements = useMemo(() => {
-    const normalizedSearch = normalizeText(search);
+    const normalizedSearch = normalizeText(appliedSearch);
 
     return movements.filter((movement) => {
       const movementDate = movement.movementDate.slice(0, 10);
-      const matchesDateFrom = !dateFrom || movementDate >= dateFrom;
-      const matchesDateTo = !dateTo || movementDate <= dateTo;
+      const matchesDateFrom =
+        !appliedDateFrom || movementDate >= appliedDateFrom;
+      const matchesDateTo =
+        !appliedDateTo || movementDate <= appliedDateTo;
       const matchesCategory =
-        categoryId === "all" || movement.categoryId === categoryId;
+        appliedCategoryId === "all" ||
+        movement.categoryId === appliedCategoryId;
       const matchesProduct =
-        productId === "all" || movement.productId === productId;
+        appliedProductId === "all" ||
+        movement.productId === appliedProductId;
       const matchesType =
-        movementType === "all" || movement.movementType === movementType;
+        appliedMovementType === "all" ||
+        movement.movementType === appliedMovementType;
       const matchesSearch =
         !normalizedSearch ||
         normalizeText(movement.productName).includes(normalizedSearch) ||
@@ -479,22 +448,24 @@ export function StatisticsClient() {
     });
   }, [
     movements,
-    dateFrom,
-    dateTo,
-    categoryId,
-    productId,
-    movementType,
-    search,
+    appliedDateFrom,
+    appliedDateTo,
+    appliedCategoryId,
+    appliedProductId,
+    appliedMovementType,
+    appliedSearch,
   ]);
 
   const filteredStockRows = useMemo(
     () =>
       stockRows.filter(
         (row) =>
-          (categoryId === "all" || row.category_id === categoryId) &&
-          (productId === "all" || row.product_id === productId),
+          (appliedCategoryId === "all" ||
+            row.category_id === appliedCategoryId) &&
+          (appliedProductId === "all" ||
+            row.product_id === appliedProductId),
       ),
-    [stockRows, categoryId, productId],
+    [stockRows, appliedCategoryId, appliedProductId],
   );
 
   const indicators = useMemo(() => {
@@ -685,14 +656,46 @@ export function StatisticsClient() {
       });
   }, [filteredMovements, selectedDeliveryMonth]);
 
-  const clearFilters = () => {
-    setDateFrom(defaultDateFrom());
-    setDateTo(today());
+  const hasPendingFilters =
+    dateFrom !== appliedDateFrom ||
+    dateTo !== appliedDateTo ||
+    categoryId !== appliedCategoryId ||
+    productId !== appliedProductId ||
+    movementType !== appliedMovementType ||
+    search.trim() !== appliedSearch;
+
+  const analyzeFilters = async () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+    setAppliedCategoryId(categoryId);
+    setAppliedProductId(productId);
+    setAppliedMovementType(movementType);
+    setAppliedSearch(search.trim());
+    setSelectedDeliveryMonth("all");
+
+    await loadData(true, dateFrom, dateTo);
+  };
+
+  const clearFilters = async () => {
+    const nextDateFrom = defaultDateFrom();
+    const nextDateTo = today();
+
+    setDateFrom(nextDateFrom);
+    setDateTo(nextDateTo);
     setCategoryId("all");
     setProductId("all");
     setMovementType("all");
     setSearch("");
     setSelectedDeliveryMonth("all");
+
+    setAppliedDateFrom(nextDateFrom);
+    setAppliedDateTo(nextDateTo);
+    setAppliedCategoryId("all");
+    setAppliedProductId("all");
+    setAppliedMovementType("all");
+    setAppliedSearch("");
+
+    await loadData(true, nextDateFrom, nextDateTo);
   };
 
   if (loading) {
@@ -736,7 +739,9 @@ export function StatisticsClient() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => void loadData(true)}
+            onClick={() =>
+              void loadData(true, appliedDateFrom, appliedDateTo)
+            }
             disabled={refreshing}
           >
             {refreshing ? (
@@ -824,20 +829,43 @@ export function StatisticsClient() {
               </SelectContent>
             </Select>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full whitespace-nowrap xl:w-auto"
-              onClick={clearFilters}
-            >
-              Limpiar filtros
-            </Button>
+            <div className="flex w-full gap-2 xl:w-auto">
+              <Button
+                type="button"
+                className="flex-1 whitespace-nowrap xl:flex-none"
+                onClick={() => void analyzeFilters()}
+                disabled={refreshing || !hasPendingFilters}
+              >
+                {refreshing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <BarChart3 className="mr-2 size-4" />
+                )}
+                Analizar
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 whitespace-nowrap xl:flex-none"
+                onClick={() => void clearFilters()}
+                disabled={refreshing}
+              >
+                Limpiar
+              </Button>
+            </div>
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            {filteredMovements.length} movimientos dentro del período
-            seleccionado.
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              {filteredMovements.length} movimientos en el análisis actual.
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              Configurá los filtros y presioná <strong>Analizar</strong> para
+              aplicar los cambios.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
