@@ -67,8 +67,14 @@ type ConfirmationAction =
   | "delete"
   | null;
 
-export function PersonnelClient() {
-  const { user, canManagePersonnel } = useUser();
+type PersonnelClientProps = {
+  isReadOnly: boolean;
+};
+
+export function PersonnelClient({
+  isReadOnly,
+}: PersonnelClientProps) {
+  const { user } = useUser();
 
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,17 +141,14 @@ export function PersonnelClient() {
 
     return {
       total: activePersonnel.length,
-
       permanent: activePersonnel.filter(
         (item) =>
           item.tipo_contrato === "PLANTA_PERMANENTE",
       ).length,
-
       monotributists: activePersonnel.filter(
         (item) =>
           item.tipo_contrato === "MONOTRIBUTISTA",
       ).length,
-
       contributionsContract: activePersonnel.filter(
         (item) =>
           item.tipo_contrato === "CONTRATO_CON_APORTES",
@@ -196,16 +199,20 @@ export function PersonnelClient() {
   };
 
   const handleNewPersonnel = () => {
+    if (isReadOnly) return;
     setSelectedPerson(null);
     setFormOpen(true);
   };
 
   const handleEditPersonnel = (person: Personnel) => {
+    if (isReadOnly) return;
     setSelectedPerson(person);
     setFormOpen(true);
   };
 
   const handleFormOpenChange = (open: boolean) => {
+    if (isReadOnly && open) return;
+
     setFormOpen(open);
 
     if (!open) {
@@ -216,6 +223,13 @@ export function PersonnelClient() {
   const handleSavePersonnel = async (
     formData: PersonnelInsert,
   ): Promise<{ success: boolean; error?: string }> => {
+    if (isReadOnly) {
+      return {
+        success: false,
+        error: "No tenés permisos para modificar personal.",
+      };
+    }
+
     const supabase = createClient();
 
     try {
@@ -255,7 +269,6 @@ export function PersonnelClient() {
         );
 
         toast.success("Personal actualizado correctamente.");
-
         return { success: true };
       }
 
@@ -299,7 +312,6 @@ export function PersonnelClient() {
       );
 
       toast.success("Personal creado correctamente.");
-
       return { success: true };
     } catch (saveError) {
       console.error(
@@ -319,7 +331,7 @@ export function PersonnelClient() {
     action: Exclude<ConfirmationAction, null>,
     person: Personnel,
   ) => {
-    if (updatingId) return;
+    if (isReadOnly || updatingId) return;
 
     setConfirmationAction(action);
     setConfirmationPerson(person);
@@ -335,7 +347,7 @@ export function PersonnelClient() {
   const deactivatePersonnel = async (
     person: Personnel,
   ) => {
-    if (!person.activo || updatingId) return;
+    if (isReadOnly || !person.activo || updatingId) return;
 
     setUpdatingId(person.id);
 
@@ -376,9 +388,7 @@ export function PersonnelClient() {
 
       toast.success(
         "La persona fue dada de baja correctamente.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } catch (deactivateError) {
       console.error(
@@ -388,9 +398,7 @@ export function PersonnelClient() {
 
       toast.error(
         "No se pudo dar de baja el registro.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } finally {
       setUpdatingId(null);
@@ -402,7 +410,7 @@ export function PersonnelClient() {
   const reactivatePersonnel = async (
     person: Personnel,
   ) => {
-    if (person.activo || updatingId) return;
+    if (isReadOnly || person.activo || updatingId) return;
 
     setUpdatingId(person.id);
 
@@ -442,9 +450,7 @@ export function PersonnelClient() {
 
       toast.success(
         "La persona fue reactivada correctamente.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } catch (reactivateError) {
       console.error(
@@ -454,9 +460,7 @@ export function PersonnelClient() {
 
       toast.error(
         "No se pudo reactivar el registro.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } finally {
       setUpdatingId(null);
@@ -468,7 +472,7 @@ export function PersonnelClient() {
   const deletePersonnel = async (
     person: Personnel,
   ) => {
-    if (person.activo || updatingId) return;
+    if (isReadOnly || person.activo || updatingId) return;
 
     setUpdatingId(person.id);
 
@@ -497,9 +501,7 @@ export function PersonnelClient() {
 
       toast.success(
         "El registro fue eliminado definitivamente.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } catch (deleteError) {
       console.error(
@@ -509,9 +511,7 @@ export function PersonnelClient() {
 
       toast.error(
         "No se pudo eliminar el registro.",
-        {
-          id: toastId,
-        },
+        { id: toastId },
       );
     } finally {
       setUpdatingId(null);
@@ -521,7 +521,13 @@ export function PersonnelClient() {
   };
 
   const executeConfirmedAction = async () => {
-    if (!confirmationPerson || !confirmationAction) return;
+    if (
+      isReadOnly ||
+      !confirmationPerson ||
+      !confirmationAction
+    ) {
+      return;
+    }
 
     if (confirmationAction === "deactivate") {
       await deactivatePersonnel(confirmationPerson);
@@ -598,7 +604,6 @@ export function PersonnelClient() {
         <div className="mx-auto flex min-h-[55vh] w-full max-w-[1600px] items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="size-8 animate-spin" />
-
             <p className="text-sm">
               Cargando módulo de Personal...
             </p>
@@ -606,10 +611,6 @@ export function PersonnelClient() {
         </div>
       </>
     );
-  }
-
-  if (!canManagePersonnel) {
-    return null;
   }
 
   const ConfirmationIcon =
@@ -627,7 +628,9 @@ export function PersonnelClient() {
             </h1>
 
             <p className="mt-2 text-muted-foreground">
-              Administración del personal de la Secretaría.
+              {isReadOnly
+                ? "Consulta del personal de la Secretaría. Modo solo lectura."
+                : "Administración del personal de la Secretaría."}
             </p>
           </div>
 
@@ -653,13 +656,15 @@ export function PersonnelClient() {
               Exportar PDF
             </Button>
 
-            <Button
-              type="button"
-              onClick={handleNewPersonnel}
-            >
-              <Plus className="mr-2 size-4" />
-              Nuevo personal
-            </Button>
+            {!isReadOnly && (
+              <Button
+                type="button"
+                onClick={handleNewPersonnel}
+              >
+                <Plus className="mr-2 size-4" />
+                Nuevo personal
+              </Button>
+            )}
           </div>
         </div>
 
@@ -706,12 +711,10 @@ export function PersonnelClient() {
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
                   <Users className="size-5" />
                 </div>
-
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Personal activo
                   </p>
-
                   <p className="text-2xl font-bold">
                     {indicators.total}
                   </p>
@@ -724,12 +727,10 @@ export function PersonnelClient() {
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
                   <BadgeCheck className="size-5" />
                 </div>
-
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Planta permanente
                   </p>
-
                   <p className="text-2xl font-bold">
                     {indicators.permanent}
                   </p>
@@ -742,12 +743,10 @@ export function PersonnelClient() {
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
                   <ReceiptText className="size-5" />
                 </div>
-
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Monotributistas
                   </p>
-
                   <p className="text-2xl font-bold">
                     {indicators.monotributists}
                   </p>
@@ -760,12 +759,10 @@ export function PersonnelClient() {
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
                   <BriefcaseBusiness className="size-5" />
                 </div>
-
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Contratos con aportes
                   </p>
-
                   <p className="text-2xl font-bold">
                     {indicators.contributionsContract}
                   </p>
@@ -782,13 +779,16 @@ export function PersonnelClient() {
             </h2>
 
             <p className="text-sm text-muted-foreground">
-              Buscá, filtrá, editá o administrá las bajas del personal.
+              {isReadOnly
+                ? "Buscá, filtrá y consultá los registros del personal."
+                : "Buscá, filtrá, editá o administrá las bajas del personal."}
             </p>
           </div>
 
           <PersonnelTable
             personnel={personnel}
             updatingId={updatingId}
+            isReadOnly={isReadOnly}
             onEdit={handleEditPersonnel}
             onDeactivate={(person) =>
               openConfirmation("deactivate", person)
@@ -804,73 +804,77 @@ export function PersonnelClient() {
         </section>
       </div>
 
-      <PersonnelForm
-        open={formOpen}
-        person={selectedPerson}
-        directionOptions={directionOptions}
-        areaOptions={areaOptions}
-        taskOptions={taskOptions}
-        onOpenChange={handleFormOpenChange}
-        onSubmit={handleSavePersonnel}
-      />
+      {!isReadOnly && (
+        <>
+          <PersonnelForm
+            open={formOpen}
+            person={selectedPerson}
+            directionOptions={directionOptions}
+            areaOptions={areaOptions}
+            taskOptions={taskOptions}
+            onOpenChange={handleFormOpenChange}
+            onSubmit={handleSavePersonnel}
+          />
 
-      <AlertDialog
-        open={Boolean(
-          confirmationAction && confirmationPerson,
-        )}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeConfirmation();
-          }
-        }}
-      >
-        <AlertDialogContent className="sm:max-w-[500px]">
-          <AlertDialogHeader>
-            <div className="mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
-              <ConfirmationIcon
-                className={
-                  confirmationAction === "reactivate"
-                    ? "size-6"
-                    : "size-6 text-destructive"
-                }
-              />
-            </div>
-
-            <AlertDialogTitle>
-              {confirmationContent?.title}
-            </AlertDialogTitle>
-
-            <AlertDialogDescription className="leading-6">
-              {confirmationContent?.description}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={Boolean(updatingId)}
-            >
-              Cancelar
-            </AlertDialogCancel>
-
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                void executeConfirmedAction();
-              }}
-              disabled={Boolean(updatingId)}
-              className={
-                confirmationContent?.actionClassName
+          <AlertDialog
+            open={Boolean(
+              confirmationAction && confirmationPerson,
+            )}
+            onOpenChange={(open) => {
+              if (!open) {
+                closeConfirmation();
               }
-            >
-              {updatingId && (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              )}
+            }}
+          >
+            <AlertDialogContent className="sm:max-w-[500px]">
+              <AlertDialogHeader>
+                <div className="mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
+                  <ConfirmationIcon
+                    className={
+                      confirmationAction === "reactivate"
+                        ? "size-6"
+                        : "size-6 text-destructive"
+                    }
+                  />
+                </div>
 
-              {confirmationContent?.actionLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                <AlertDialogTitle>
+                  {confirmationContent?.title}
+                </AlertDialogTitle>
+
+                <AlertDialogDescription className="leading-6">
+                  {confirmationContent?.description}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  disabled={Boolean(updatingId)}
+                >
+                  Cancelar
+                </AlertDialogCancel>
+
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void executeConfirmedAction();
+                  }}
+                  disabled={Boolean(updatingId)}
+                  className={
+                    confirmationContent?.actionClassName
+                  }
+                >
+                  {updatingId && (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  )}
+
+                  {confirmationContent?.actionLabel}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </>
   );
 }
