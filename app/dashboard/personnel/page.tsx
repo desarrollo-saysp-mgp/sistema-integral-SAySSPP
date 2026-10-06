@@ -16,7 +16,7 @@ export default async function PersonnelPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, modules")
+    .select("role, modules, is_readonly")
     .eq("id", authUser.id)
     .single();
 
@@ -24,13 +24,22 @@ export default async function PersonnelPage() {
     redirect("/dashboard");
   }
 
+  const normalizedRole = String(profile.role ?? "")
+    .trim()
+    .toLowerCase();
+
   const canAccessPersonnel =
-    profile.role === "Admin" ||
-    profile.role === "SecretariaPrivada";
+    normalizedRole === "admin" ||
+    normalizedRole === "adminlectura" ||
+    normalizedRole === "secretariaprivada";
 
   if (!canAccessPersonnel) {
     redirect("/dashboard");
   }
 
-  return <PersonnelClient />;
+  const isReadOnly =
+    normalizedRole === "adminlectura" ||
+    profile.is_readonly === true;
+
+  return <PersonnelClient isReadOnly={isReadOnly} />;
 }

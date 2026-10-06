@@ -45,6 +45,7 @@ type StatusFilter = "active" | "inactive" | "all";
 interface PersonnelTableProps {
   personnel: Personnel[];
   updatingId?: string | null;
+  isReadOnly?: boolean;
   onEdit: (person: Personnel) => void;
   onDeactivate: (person: Personnel) => void;
   onReactivate?: (person: Personnel) => void;
@@ -68,13 +69,10 @@ const formatContractType = (
   switch (contractType) {
     case "PLANTA_PERMANENTE":
       return "Planta permanente";
-
     case "MONOTRIBUTISTA":
       return "Monotributista";
-
     case "CONTRATO_CON_APORTES":
       return "Contrato con aportes";
-
     default:
       return contractType;
   }
@@ -86,13 +84,10 @@ const getContractBadgeVariant = (
   switch (contractType) {
     case "PLANTA_PERMANENTE":
       return "default";
-
     case "MONOTRIBUTISTA":
       return "secondary";
-
     case "CONTRATO_CON_APORTES":
       return "outline";
-
     default:
       return "outline";
   }
@@ -101,6 +96,7 @@ const getContractBadgeVariant = (
 export function PersonnelTable({
   personnel,
   updatingId,
+  isReadOnly = false,
   onEdit,
   onDeactivate,
   onReactivate,
@@ -346,15 +342,12 @@ export function PersonnelTable({
               <SelectItem value="all">
                 Todos los contratos
               </SelectItem>
-
               <SelectItem value="PLANTA_PERMANENTE">
                 Planta permanente
               </SelectItem>
-
               <SelectItem value="MONOTRIBUTISTA">
                 Monotributistas
               </SelectItem>
-
               <SelectItem value="CONTRATO_CON_APORTES">
                 Contratos con aportes
               </SelectItem>
@@ -401,11 +394,9 @@ export function PersonnelTable({
               <SelectItem value="active">
                 Activos
               </SelectItem>
-
               <SelectItem value="inactive">
                 Dados de baja
               </SelectItem>
-
               <SelectItem value="all">
                 Todos
               </SelectItem>
@@ -423,7 +414,6 @@ export function PersonnelTable({
             </Button>
           )}
         </div>
-
 
         {/* VISTA MOBILE: CARDS, SIN SCROLL HORIZONTAL */}
         <div className="space-y-3 md:hidden">
@@ -471,11 +461,9 @@ export function PersonnelTable({
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Dirección
                         </p>
-
                         <p className="mt-1 break-words font-medium">
                           {person.direccion || "-"}
                         </p>
-
                         {person.codigo_direccion && (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Código: {person.codigo_direccion}
@@ -487,7 +475,6 @@ export function PersonnelTable({
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Área RR. HH.
                         </p>
-
                         <p className="mt-1 break-words font-medium">
                           {person.area_rrhh || "-"}
                         </p>
@@ -539,70 +526,71 @@ export function PersonnelTable({
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Tarea que realiza
                         </p>
-
                         <p className="mt-1 whitespace-pre-wrap break-words font-medium">
                           {person.tarea || "-"}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onEdit(person)}
-                        disabled={isUpdating}
-                        className="h-9"
-                      >
-                        <Pencil className="mr-2 size-4" />
-                        Editar
-                      </Button>
-
-                      {person.activo ? (
+                    {!isReadOnly && (
+                      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => onDeactivate(person)}
+                          onClick={() => onEdit(person)}
                           disabled={isUpdating}
-                          className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="h-9"
                         >
-                          <UserX className="mr-2 size-4" />
-                          Dar de baja
+                          <Pencil className="mr-2 size-4" />
+                          Editar
                         </Button>
-                      ) : (
-                        <>
-                          {onReactivate && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onReactivate(person)}
-                              disabled={isUpdating}
-                              className="h-9"
-                            >
-                              <UserCheck className="mr-2 size-4" />
-                              Reactivar
-                            </Button>
-                          )}
 
-                          {onDelete && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onDelete(person)}
-                              disabled={isUpdating}
-                              className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <Trash2 className="mr-2 size-4" />
-                              Eliminar
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                        {person.activo ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onDeactivate(person)}
+                            disabled={isUpdating}
+                            className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <UserX className="mr-2 size-4" />
+                            Dar de baja
+                          </Button>
+                        ) : (
+                          <>
+                            {onReactivate && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onReactivate(person)}
+                                disabled={isUpdating}
+                                className="h-9"
+                              >
+                                <UserCheck className="mr-2 size-4" />
+                                Reactivar
+                              </Button>
+                            )}
+
+                            {onDelete && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onDelete(person)}
+                                disabled={isUpdating}
+                                className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                Eliminar
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -618,159 +606,150 @@ export function PersonnelTable({
                   <TableHead className="w-[78px] min-w-[78px] px-2">
                     Legajo
                   </TableHead>
-
                   <TableHead className="min-w-[170px] px-2">
                     Nombre completo
                   </TableHead>
-
                   <TableHead className="w-[72px] min-w-[72px] px-2">
                     Código
                   </TableHead>
-
                   <TableHead className="min-w-[140px] px-2">
                     Dirección
                   </TableHead>
-
                   <TableHead className="min-w-[155px] px-2">
                     Área RR. HH.
                   </TableHead>
-
                   <TableHead className="min-w-[175px] px-2">
                     Contratación / detalle
                   </TableHead>
-
                   <TableHead className="min-w-[170px] px-2">
                     Tarea que realiza
                   </TableHead>
-
                   <TableHead className="w-[76px] min-w-[76px] px-2">
                     Estado
                   </TableHead>
 
-                  <TableHead className="w-[110px] min-w-[110px] px-2 text-right">
-                    Acciones
-                  </TableHead>
+                  {!isReadOnly && (
+                    <TableHead className="w-[110px] min-w-[110px] px-2 text-right">
+                      Acciones
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {paginatedPersonnel.length ===
-                0 ? (
+                {paginatedPersonnel.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={isReadOnly ? 8 : 9}
                       className="h-32 text-center text-muted-foreground"
                     >
-                      No se encontraron registros de
-                      personal.
+                      No se encontraron registros de personal.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedPersonnel.map(
-                    (person) => {
-                      const isUpdating =
-                        updatingId === person.id;
+                  paginatedPersonnel.map((person) => {
+                    const isUpdating =
+                      updatingId === person.id;
 
-                      return (
-                        <TableRow
-                          key={person.id}
-                          className="align-top"
-                        >
-                          <TableCell className="px-2 py-2 font-medium">
-                            {person.legajo}
-                          </TableCell>
+                    return (
+                      <TableRow
+                        key={person.id}
+                        className="align-top"
+                      >
+                        <TableCell className="px-2 py-2 font-medium">
+                          {person.legajo}
+                        </TableCell>
 
-                          <TableCell className="px-2 py-2 font-medium">
-                            <p className="max-w-[180px] whitespace-normal leading-4">
-                              {person.nombre_completo}
-                            </p>
-                          </TableCell>
+                        <TableCell className="px-2 py-2 font-medium">
+                          <p className="max-w-[180px] whitespace-normal leading-4">
+                            {person.nombre_completo}
+                          </p>
+                        </TableCell>
 
-                          <TableCell className="px-2 py-2 font-medium">
-                            {person.codigo_direccion || "-"}
-                          </TableCell>
+                        <TableCell className="px-2 py-2 font-medium">
+                          {person.codigo_direccion || "-"}
+                        </TableCell>
 
-                          <TableCell className="px-2 py-2">
-                            <p className="max-w-[165px] whitespace-normal leading-4">
-                              {person.direccion || "-"}
-                            </p>
-                          </TableCell>
+                        <TableCell className="px-2 py-2">
+                          <p className="max-w-[165px] whitespace-normal leading-4">
+                            {person.direccion || "-"}
+                          </p>
+                        </TableCell>
 
-                          <TableCell className="px-2 py-2">
-                            <p className="max-w-[185px] whitespace-normal leading-4">
-                              {person.area_rrhh || "-"}
-                            </p>
-                          </TableCell>
+                        <TableCell className="px-2 py-2">
+                          <p className="max-w-[185px] whitespace-normal leading-4">
+                            {person.area_rrhh || "-"}
+                          </p>
+                        </TableCell>
 
-                          <TableCell className="px-2 py-2">
-                            <div className="space-y-1">
-                              <Badge
-                                variant={getContractBadgeVariant(
-                                  person.tipo_contrato,
-                                )}
-                              >
-                                {formatContractType(
-                                  person.tipo_contrato,
-                                )}
-                              </Badge>
-
-                              {person.tipo_contrato ===
-                                "PLANTA_PERMANENTE" && (
-                                <p className="text-xs text-muted-foreground">
-                                  {person.numero_resolucion
-                                    ? `Resolución: ${person.numero_resolucion}`
-                                    : "Sin resolución"}
-                                </p>
+                        <TableCell className="px-2 py-2">
+                          <div className="space-y-1">
+                            <Badge
+                              variant={getContractBadgeVariant(
+                                person.tipo_contrato,
                               )}
-
-                              {person.tipo_contrato ===
-                                "MONOTRIBUTISTA" && (
-                                <div className="space-y-1 text-xs text-muted-foreground">
-                                  <p>
-                                    {person.convenio
-                                      ? "Con convenio"
-                                      : "Sin convenio"}
-                                  </p>
-
-                                  {person.convenio && (
-                                    <p>
-                                      {person.numero_resolucion
-                                        ? `Resolución: ${person.numero_resolucion}`
-                                        : "Resolución no informada"}
-                                    </p>
-                                  )}
-                                </div>
+                            >
+                              {formatContractType(
+                                person.tipo_contrato,
                               )}
-                            </div>
-                          </TableCell>
+                            </Badge>
 
-                          <TableCell className="px-2 py-2">
-                            <p className="max-w-[210px] whitespace-normal leading-4">
-                              {person.tarea || "-"}
-                            </p>
-                          </TableCell>
-
-                          <TableCell className="px-2 py-2">
-                            {person.activo ? (
-                              <Badge variant="default">
-                                Activo
-                              </Badge>
-                            ) : (
-                              <Badge variant="destructive">
-                                Baja
-                              </Badge>
+                            {person.tipo_contrato ===
+                              "PLANTA_PERMANENTE" && (
+                              <p className="text-xs text-muted-foreground">
+                                {person.numero_resolucion
+                                  ? `Resolución: ${person.numero_resolucion}`
+                                  : "Sin resolución"}
+                              </p>
                             )}
-                          </TableCell>
 
+                            {person.tipo_contrato ===
+                              "MONOTRIBUTISTA" && (
+                              <div className="space-y-1 text-xs text-muted-foreground">
+                                <p>
+                                  {person.convenio
+                                    ? "Con convenio"
+                                    : "Sin convenio"}
+                                </p>
+
+                                {person.convenio && (
+                                  <p>
+                                    {person.numero_resolucion
+                                      ? `Resolución: ${person.numero_resolucion}`
+                                      : "Resolución no informada"}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="px-2 py-2">
+                          <p className="max-w-[210px] whitespace-normal leading-4">
+                            {person.tarea || "-"}
+                          </p>
+                        </TableCell>
+
+                        <TableCell className="px-2 py-2">
+                          {person.activo ? (
+                            <Badge variant="default">
+                              Activo
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive">
+                              Baja
+                            </Badge>
+                          )}
+                        </TableCell>
+
+                        {!isReadOnly && (
                           <TableCell className="px-2 py-2 text-right">
                             <div className="flex items-center justify-end gap-0.5">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                onClick={() =>
-                                  onEdit(person)
-                                }
+                                onClick={() => onEdit(person)}
                                 disabled={isUpdating}
                                 className="size-7"
                                 title="Editar personal"
@@ -800,9 +779,7 @@ export function PersonnelTable({
                                       variant="ghost"
                                       size="icon"
                                       onClick={() =>
-                                        onReactivate(
-                                          person,
-                                        )
+                                        onReactivate(person)
                                       }
                                       disabled={isUpdating}
                                       title="Reactivar personal"
@@ -831,10 +808,10 @@ export function PersonnelTable({
                               )}
                             </div>
                           </TableCell>
-                        </TableRow>
-                      );
-                    },
-                  )
+                        )}
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
