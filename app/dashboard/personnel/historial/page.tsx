@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PersonnelClient } from "./PersonnelClient";
+import { PersonnelHistoryClient } from "./PersonnelHistoryClient";
 
-export default async function PersonnelPage() {
+export default async function PersonnelHistoryPage() {
   const supabase = await createClient();
 
   const {
@@ -16,7 +16,7 @@ export default async function PersonnelPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, modules, is_readonly")
+    .select("role")
     .eq("id", authUser.id)
     .single();
 
@@ -28,27 +28,13 @@ export default async function PersonnelPage() {
     .trim()
     .toLowerCase();
 
-  const canAccessPersonnel =
-    normalizedRole === "admin" ||
-    normalizedRole === "adminlectura" ||
-    normalizedRole === "secretariaprivada";
-
-  if (!canAccessPersonnel) {
-    redirect("/dashboard");
-  }
-
-  const isReadOnly =
-    normalizedRole === "adminlectura" ||
-    profile.is_readonly === true;
-
   const canViewHistory =
     normalizedRole === "admin" ||
     normalizedRole === "adminlectura";
 
-  return (
-    <PersonnelClient
-      isReadOnly={isReadOnly}
-      canViewHistory={canViewHistory}
-    />
-  );
+  if (!canViewHistory) {
+    redirect("/dashboard/personnel");
+  }
+
+  return <PersonnelHistoryClient />;
 }
