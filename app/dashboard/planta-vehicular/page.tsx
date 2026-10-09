@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlantaVehicularClient } from "./planta-vehicular-client";
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -16,15 +18,16 @@ export default async function PlantaVehicularPage() {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, is_readonly")
+    .select("role, email, is_readonly")
     .eq("id", user.id)
     .single();
 
@@ -33,19 +36,25 @@ export default async function PlantaVehicularPage() {
   }
 
   const userRole = normalizeText(profile.role);
+  const userEmail = normalizeText(profile.email || user.email);
+
+  const isLucasBelliardo =
+    userEmail === normalizeText(LUCAS_BELLIARDO_EMAIL);
 
   const canAccess =
     userRole === "admin" ||
     userRole === "adminlectura" ||
-    userRole === "taller";
+    userRole === "taller" ||
+    isLucasBelliardo;
 
   if (!canAccess) {
     redirect("/dashboard/accesos");
   }
 
   const isReadonly =
-    profile.role === "AdminLectura" ||
-    profile.is_readonly === true;
+    userRole === "adminlectura" ||
+    profile.is_readonly === true ||
+    isLucasBelliardo;
 
   return (
     <PlantaVehicularClient

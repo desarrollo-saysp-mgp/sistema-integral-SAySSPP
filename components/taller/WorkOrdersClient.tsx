@@ -255,7 +255,13 @@ const setParamIfValid = (
   params.set(key, cleanValue);
 };
 
-export function WorkOrdersClient() {
+type WorkOrdersClientProps = {
+  isReadonly?: boolean;
+};
+
+export function WorkOrdersClient({
+  isReadonly = false,
+}: WorkOrdersClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -885,6 +891,11 @@ export function WorkOrdersClient() {
   };
 
   const handleBulkStatusUpdate = async () => {
+    if (isReadonly) {
+      toast.error("Esta cuenta tiene acceso de solo lectura");
+      return;
+    }
+
     if (selectedOrderIds.length === 0) {
       toast.error("Seleccioná al menos una OT para actualizar");
       return;
@@ -1147,6 +1158,12 @@ export function WorkOrdersClient() {
           <p className="text-sm text-muted-foreground">
             Consultá y seguí las órdenes de trabajo cargadas.
           </p>
+
+          {isReadonly && (
+            <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+              Modo solo lectura: podés consultar y exportar información, pero no modificar órdenes de trabajo.
+            </p>
+          )}
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -1172,12 +1189,14 @@ export function WorkOrdersClient() {
             </Link>
           </Button>
 
-          <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">
-            <Link href="/dashboard/taller/ordenes-trabajo/nueva">
-              <PlusCircle className="h-4 w-4" />
-              Cargar nueva OT
-            </Link>
-          </Button>
+          {!isReadonly && (
+            <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">
+              <Link href="/dashboard/taller/ordenes-trabajo/nueva">
+                <PlusCircle className="h-4 w-4" />
+                Cargar nueva OT
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1415,38 +1434,40 @@ export function WorkOrdersClient() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="min-w-[220px]">
-                  <Select value={bulkStatus} onValueChange={setBulkStatus}>
-                    <SelectTrigger className="h-9 rounded-xl bg-background">
-                      <SelectValue placeholder="Cambiar estado a" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {!isReadonly && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="min-w-[220px]">
+                    <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                      <SelectTrigger className="h-9 rounded-xl bg-background">
+                        <SelectValue placeholder="Cambiar estado a" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <Button
-                  type="button"
-                  onClick={handleBulkStatusUpdate}
-                  disabled={bulkUpdating || selectedOrderIds.length === 0}
-                  className="h-9 rounded-xl"
-                >
-                  {bulkUpdating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    "Aplicar estado"
-                  )}
-                </Button>
-              </div>
+                  <Button
+                    type="button"
+                    onClick={handleBulkStatusUpdate}
+                    disabled={bulkUpdating || selectedOrderIds.length === 0}
+                    className="h-9 rounded-xl"
+                  >
+                    {bulkUpdating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Actualizando...
+                      </>
+                    ) : (
+                      "Aplicar estado"
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardHeader>
@@ -1601,19 +1622,19 @@ export function WorkOrdersClient() {
                             </Link>
                           </Button>
 
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                          >
-                            <Link
-                              href={getOrderHref(order, "edit")}
+                          {!isReadonly && (
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
                             >
-                              <Pencil className="h-4 w-4" />
-                              Editar
-                            </Link>
-                          </Button>
+                              <Link href={getOrderHref(order, "edit")}>
+                                <Pencil className="h-4 w-4" />
+                                Editar
+                              </Link>
+                            </Button>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
