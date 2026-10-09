@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 
 import { FichaVehiculoClient } from "./ficha-vehiculo-client";
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 const normalizeText = (value: unknown) =>
   String(value || "")
     .trim()
@@ -81,7 +83,7 @@ export default async function FichaVehiculoPage({
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, is_readonly")
+    .select("role, email, is_readonly")
     .eq("id", user.id)
     .single();
 
@@ -90,19 +92,29 @@ export default async function FichaVehiculoPage({
   }
 
   const userRole = normalizeText(profile.role);
+  const userEmail = normalizeText(profile.email || user.email);
+
+  const isLucasBelliardo =
+    userEmail === normalizeText(LUCAS_BELLIARDO_EMAIL);
 
   const canAccess =
     userRole === "admin" ||
     userRole === "adminlectura" ||
-    userRole === "taller";
+    userRole === "taller" ||
+    isLucasBelliardo;
 
   if (!canAccess) {
     redirect("/dashboard/accesos");
   }
 
+  /*
+   * Lucas puede abrir y consultar la ficha completa,
+   * pero nunca administrar el vehículo.
+   */
   const isReadonly =
-    profile.role === "AdminLectura" ||
-    profile.is_readonly === true;
+    userRole === "adminlectura" ||
+    profile.is_readonly === true ||
+    isLucasBelliardo;
 
   const canManage =
     !isReadonly &&

@@ -4,6 +4,8 @@ import type { WorkOrderInsert } from "@/types";
 
 const PAGE_SIZE = 1000;
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 type SupplyNeeded = {
   code: string;
   units: string;
@@ -17,7 +19,39 @@ const normalizeText = (value: unknown) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const canAccessWorkOrders = (profile: {
+/*
+ * Permiso de lectura de órdenes de trabajo.
+ *
+ * Lucas Belliardo puede consultar las OT desde Planta Vehicular,
+ * pero no puede crearlas ni modificarlas.
+ */
+const canReadWorkOrders = (profile: {
+  role: string;
+  modules: string[] | null;
+  email: string | null;
+}) => {
+  const role = normalizeText(profile.role);
+  const email = normalizeText(profile.email);
+
+  const isLucasBelliardo =
+    email === normalizeText(LUCAS_BELLIARDO_EMAIL);
+
+  return (
+    role === "admin" ||
+    role === "adminlectura" ||
+    role === "taller" ||
+    profile.modules?.includes("work_orders") ||
+    isLucasBelliardo
+  );
+};
+
+/*
+ * Permiso de administración de órdenes de trabajo.
+ *
+ * IMPORTANTE:
+ * Lucas NO está incluido acá.
+ */
+const canManageWorkOrders = (profile: {
   role: string;
   modules: string[] | null;
 }) => {
@@ -25,7 +59,6 @@ const canAccessWorkOrders = (profile: {
 
   return (
     role === "admin" ||
-    role === "adminlectura" ||
     role === "taller" ||
     profile.modules?.includes("work_orders")
   );
@@ -75,14 +108,14 @@ export async function GET(request: NextRequest) {
     const { data: profile, error: profileError } =
       await supabase
         .from("users")
-        .select("role, modules")
+        .select("role, modules, email")
         .eq("id", user.id)
         .single();
 
     if (
       profileError ||
       !profile ||
-      !canAccessWorkOrders(profile)
+      !canReadWorkOrders(profile)
     ) {
       return NextResponse.json(
         {
@@ -230,10 +263,14 @@ export async function POST(request: NextRequest) {
         .eq("id", user.id)
         .single();
 
+    /*
+     * POST mantiene permisos de administración.
+     * Lucas no entra acá, por lo tanto no puede crear OT.
+     */
     if (
       profileError ||
       !profile ||
-      !canAccessWorkOrders(profile)
+      !canManageWorkOrders(profile)
     ) {
       return NextResponse.json(
         {

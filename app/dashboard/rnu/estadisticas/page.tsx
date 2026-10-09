@@ -28,6 +28,8 @@ type RnuEstadisticasPageProps = {
   }>;
 };
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 function normalizeRole(value: unknown) {
   return String(value || "")
     .trim()
@@ -72,7 +74,7 @@ export default async function RnuEstadisticasPage({
   const { data: profile, error: profileError } =
     await supabase
       .from("users")
-      .select("role")
+      .select("role, email")
       .eq("id", user.id)
       .single();
 
@@ -82,13 +84,24 @@ export default async function RnuEstadisticasPage({
 
   const userRole = normalizeRole(profile.role);
 
+  const userEmail = String(profile.email || user.email || "")
+    .trim()
+    .toLowerCase();
+
+  const isLucasBelliardo =
+    userEmail === LUCAS_BELLIARDO_EMAIL;
+
   const allowedRoles = [
     "admin",
     "adminlectura",
     "rnu",
   ];
 
-  if (!allowedRoles.includes(userRole)) {
+  const canAccess =
+    allowedRoles.includes(userRole) ||
+    isLucasBelliardo;
+
+  if (!canAccess) {
     redirect("/dashboard/accesos");
   }
 

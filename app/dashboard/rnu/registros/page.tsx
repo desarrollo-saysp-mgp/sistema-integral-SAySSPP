@@ -49,13 +49,14 @@ type TodayEntry = {
 const ITEMS_PER_PAGE = 20;
 const SEARCH_CHUNK_SIZE = 1000;
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 const REASON_LABELS: Record<string, string> = {
   PESCA: "Pesca",
   RECREACION: "Recreación",
   PAMPA_WAKE: "Pampa Wake",
   ACTIVIDAD_PROGRAMADA: "Actividad programada",
-  FOTOGRAFIA_AVISTAJE:
-    "Fotografía / avistaje de aves",
+  FOTOGRAFIA_AVISTAJE: "Fotografía / avistaje de aves",
   KAYAK: "Kayak",
   ACAMPE: "Acampe",
 };
@@ -169,7 +170,7 @@ export default async function RnuRegistrosPage({
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role")
+    .select("role, email")
     .eq("id", user.id)
     .single();
 
@@ -178,10 +179,20 @@ export default async function RnuRegistrosPage({
   }
 
   const userRole = normalizeRole(profile.role);
+  const userEmail = String(profile.email || user.email || "")
+    .trim()
+    .toLowerCase();
+
+  const isLucasBelliardo =
+    userEmail === LUCAS_BELLIARDO_EMAIL;
 
   const allowedRoles = ["admin", "adminlectura", "rnu"];
 
-  if (!allowedRoles.includes(userRole)) {
+  const canAccess =
+    allowedRoles.includes(userRole) ||
+    isLucasBelliardo;
+
+  if (!canAccess) {
     redirect("/dashboard/accesos");
   }
 
@@ -214,8 +225,8 @@ export default async function RnuRegistrosPage({
   const dateFrom = isValidDate(rawFrom) ? rawFrom : "";
   const dateTo = isValidDate(rawTo) ? rawTo : "";
 
-  // Tarjetas de hoy: consulta chica, solo dos columnas.
   const today = getTodayArgentina();
+
   const { data: todayData, error: todayError } = await supabase
     .from("rnu_entries")
     .select("entry_type, visitor_count")
@@ -244,7 +255,6 @@ export default async function RnuRegistrosPage({
   let totalEntries = 0;
   let currentPage = requestedPage;
 
-  // Sin texto de búsqueda: paginación real en Supabase, 20 filas.
   if (!search) {
     let query = supabase
       .from("rnu_entries")
@@ -300,8 +310,6 @@ export default async function RnuRegistrosPage({
       }
     }
   } else {
-    // Con búsqueda conservamos exactamente el comportamiento previo.
-    // Solo en este caso recorremos los registros que cumplen tipo/fechas.
     const matchingEntries: RnuEntry[] = [];
     let offset = 0;
 
