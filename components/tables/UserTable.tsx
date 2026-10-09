@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Pencil, Trash2, Search } from "lucide-react";
 
+const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
 interface UserTableProps {
   users: User[];
   onEdit: (user: User) => void;
@@ -40,6 +42,18 @@ export function UserTable({
   loading = false,
 }: UserTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
+
+  const getDisplayRole = (user: User) => {
+    const email = String(user.email || "")
+      .trim()
+      .toLowerCase();
+
+    if (email === LUCAS_BELLIARDO_EMAIL) {
+      return "DirectorArbolado";
+    }
+
+    return user.role;
+  };
 
   const availableRoles = useMemo(() => {
     return Array.from(
@@ -107,6 +121,7 @@ export function UserTable({
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {loading ? (
               <TableRow>
@@ -129,41 +144,52 @@ export function UserTable({
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">
-                    {user.full_name}
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={getRoleBadgeVariant(user.role)}>
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{formatDate(user.created_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onEdit(user)}
-                        title="Editar usuario"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onDelete(user)}
-                        title="Eliminar usuario"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              users.map((user) => {
+                const displayRole = getDisplayRole(user);
+
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">
+                      {user.full_name}
+                    </TableCell>
+
+                    <TableCell>{user.email}</TableCell>
+
+                    <TableCell>
+                      <Badge variant={getRoleBadgeVariant(user.role)}>
+                        {displayRole}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell>
+                      {formatDate(user.created_at)}
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEdit(user)}
+                          title="Editar usuario"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDelete(user)}
+                          title="Eliminar usuario"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -171,7 +197,8 @@ export function UserTable({
 
       {!loading && users.length > 0 && (
         <div className="text-sm text-muted-foreground">
-          Mostrando {users.length} {users.length === 1 ? "usuario" : "usuarios"}
+          Mostrando {users.length}{" "}
+          {users.length === 1 ? "usuario" : "usuarios"}
         </div>
       )}
     </div>
