@@ -38,6 +38,7 @@ import {
 
 } from "@/components/ui/select";
 
+const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
 const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
 
@@ -93,17 +94,22 @@ export function UserForm({
 
   const isEditing = !!user;
 
+  const isDirectorGirsu =
+    normalizeEmail(user?.email) === DIRECTOR_GIRSU_EMAIL;
+
   const isLucasBelliardo =
     normalizeEmail(user?.email) === LUCAS_BELLIARDO_EMAIL;
 
   const isDirectorServiciosPublicos =
     normalizeEmail(user?.email) === DIRECTOR_SERVICIOS_PUBLICOS_EMAIL;
 
-  const specialDisplayRole = isLucasBelliardo
-    ? "DirectorArbolado"
-    : isDirectorServiciosPublicos
-      ? "DirectorServiciosPublicos"
-      : null;
+  const specialDisplayRole = isDirectorGirsu
+    ? "DirectorGIRSU"
+    : isLucasBelliardo
+      ? "DirectorArbolado"
+      : isDirectorServiciosPublicos
+        ? "DirectorServiciosPublicos"
+        : null;
 
   const [formData, setFormData] = useState<FormState>({
 
@@ -428,12 +434,19 @@ export function UserForm({
             <Label htmlFor="role">Rol *</Label>
 
             {specialDisplayRole ? (
+
               <div
+
                 id="role"
+
                 className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 py-2 text-sm"
+
               >
+
                 {specialDisplayRole}
+
               </div>
+
             ) : (
 
               <Select

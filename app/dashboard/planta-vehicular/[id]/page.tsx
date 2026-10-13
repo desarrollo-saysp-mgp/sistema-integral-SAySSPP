@@ -5,6 +5,7 @@ import { FichaVehiculoClient } from "./ficha-vehiculo-client";
 const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
+  "direcciongirsupico@gmail.com",
 ];
 
 const normalizeText = (value: unknown) =>
@@ -97,8 +98,8 @@ export default async function FichaVehiculoPage({
   }
 
   /*
-   * Lucas y Walter pueden abrir y consultar la ficha completa,
-   * pero nunca administrar el vehículo.
+   * Lucas, Walter y Adrián pueden abrir y consultar
+   * la ficha completa, pero nunca administrar el vehículo.
    */
   const isReadonly =
     userRole === "adminlectura" ||

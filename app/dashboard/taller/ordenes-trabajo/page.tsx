@@ -5,6 +5,7 @@ import { WorkOrdersClient } from "@/components/taller/WorkOrdersClient";
 const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
+  "direcciongirsupico@gmail.com",
 ];
 
 const normalizeText = (value: unknown) =>
@@ -59,5 +60,10 @@ export default async function WorkOrdersPage() {
     profile.is_readonly === true ||
     isDirectorReadonly;
 
-  return <WorkOrdersClient isReadonly={isReadonly} />;
+  return (
+    <WorkOrdersClient
+      isReadonly={isReadonly}
+      isDirectorReadonly={isDirectorReadonly}
+    />
+  );
 }

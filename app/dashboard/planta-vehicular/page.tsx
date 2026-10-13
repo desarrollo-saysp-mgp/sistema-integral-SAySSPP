@@ -5,6 +5,7 @@ import { PlantaVehicularClient } from "./planta-vehicular-client";
 const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
+  "direcciongirsupico@gmail.com",
 ];
 
 const normalizeText = (value: unknown) =>

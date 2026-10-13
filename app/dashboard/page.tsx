@@ -6,6 +6,8 @@ const GIRSU_EMAILS = [
   "direccióngirsupico@gmail.com",
 ];
 
+const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
+
 const ARBOLADO_EMAILS = [
   "arqbelliardolucas@gmail.com",
 ];
@@ -98,6 +100,9 @@ export default async function DashboardRouter() {
       .map(normalizeText)
       .includes(userEmail);
 
+  const isDirectorGirsu =
+    userEmail === normalizeText(DIRECTOR_GIRSU_EMAIL);
+
   const isArboladoUser =
     ARBOLADO_EMAILS
       .map(normalizeText)
@@ -113,8 +118,13 @@ export default async function DashboardRouter() {
    * deben entrar siempre a /dashboard/accesos.
    *
    * GIRSU:
-   * - Reclamos
+   * - Reclamos GIRSU
    * - Tablero GIRSU
+   *
+   * Director GIRSU:
+   * - Reclamos GIRSU
+   * - Tablero GIRSU
+   * - Planta Vehicular
    *
    * Director Arbolado:
    * - Reclamos Arbolado
@@ -128,6 +138,7 @@ export default async function DashboardRouter() {
    */
   if (
     isGirsuUser ||
+    isDirectorGirsu ||
     isArboladoUser ||
     isDirectorServiciosPublicos
   ) {
@@ -199,10 +210,8 @@ export default async function DashboardRouter() {
   /*
    * Fallback temporal según rol.
    *
-   * IMPORTANTE:
-   * waldaquin84@gmail.com nunca debería
-   * llegar hasta acá porque ya fue tratado
-   * arriba como Director Servicios Públicos.
+   * Los directores especiales nunca deberían
+   * llegar hasta acá porque ya fueron tratados arriba.
    */
   if (
     profile.role === "Reclamos" ||
