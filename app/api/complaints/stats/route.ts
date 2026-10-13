@@ -1,647 +1,1296 @@
 import { createClient } from "@/lib/supabase/server";
+
 import { NextRequest, NextResponse } from "next/server";
 
+
+
 type RelatedItem = {
+
   id: number;
+
   name: string;
+
 };
 
+
+
 type ComplaintRow = {
+
   id: number;
+
   complaint_number: number | null;
+
   address: string | null;
+
   street_number: string | number | null;
+
   zone: string | null;
+
   status: string;
+
   complaint_date: string;
+
   contact_method: string | null;
+
   form_variant: string | null;
+
   service_id?: number | null;
+
   service: RelatedItem | RelatedItem[] | null;
+
   cause: RelatedItem | RelatedItem[] | null;
+
 };
+
+
 
 const PAGE_SIZE = 1000;
 
-const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
+
+const SERVICIOS_PUBLICOS_EMAILS = [
+  "adm.serviciospublicos.mgp@gmail.com",
+  "waldaquin84@gmail.com",
+];
+
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
+
+
 const normalizeText = (value?: string | null) =>
+
   String(value ?? "")
+
     .normalize("NFD")
+
     .replace(/[\u0300-\u036f]/g, "")
+
     .toLowerCase()
+
     .trim();
 
+
+
 const normalizeValue = (value?: string | null) => {
+
   const clean = value?.trim();
+
   return clean ? clean : "Sin dato";
+
 };
 
+
+
 const getDelayDays = (complaintDate?: string | null) => {
+
   if (!complaintDate) return 0;
 
+
+
   const start = new Date(`${complaintDate}T00:00:00`);
+
   const today = new Date();
+
   today.setHours(0, 0, 0, 0);
+
+
 
   if (Number.isNaN(start.getTime())) return 0;
 
+
+
   return Math.max(
+
     0,
+
     Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+
   );
+
 };
+
+
 
 const getRelatedName = (
+
   value: RelatedItem | RelatedItem[] | null,
+
 ): string | null => {
+
   if (Array.isArray(value)) return value[0]?.name ?? null;
+
   return value?.name ?? null;
+
 };
+
+
 
 const isServiciosPublicosService = (serviceName?: string | null) => {
+
   const name = normalizeText(serviceName);
 
+
+
   return (
+
     name.includes("barrido") ||
+
     name.includes("riego") ||
+
     name.includes("motonivelacion") ||
+
     name.includes("canales y desagues") ||
+
     name.includes("jornadas integrales")
+
   );
+
 };
+
+
 
 const isGirsuService = (serviceName?: string | null) => {
+
   const name = normalizeText(serviceName);
+
+
 
   return (
+
     name.includes("rec. domiciliaria") ||
+
     name.includes("rec domiciliaria") ||
+
     name.includes("rec. especial") ||
+
     name.includes("rec especial") ||
+
     name.includes("inspeccion") ||
+
     name.includes("rec. contenedores") ||
+
     name.includes("rec contenedores") ||
+
     name.includes("rec. escuelas y jardines") ||
+
     name.includes("rec escuelas y jardines")
+
   );
+
 };
+
+
 
 const isArboladoService = (serviceName?: string | null) => {
+
   const name = normalizeText(serviceName);
+
   return name.includes("arbol");
+
 };
+
+
 
 const isZyvService = (serviceName?: string | null) => {
+
   const name = normalizeText(serviceName);
+
   return name.includes("zoonosis") || name.includes("vectores");
+
 };
+
+
 
 const getServiceDirectionName = (serviceName?: string | null) => {
+
   if (isServiciosPublicosService(serviceName)) return "Servicios Públicos";
+
   if (isGirsuService(serviceName)) return "GIRSU";
+
   if (isArboladoService(serviceName)) return "Arbolado y Parques Urbanos";
+
   if (isZyvService(serviceName)) return "Zoonosis y Vectores";
+
   return "Sin dirección";
+
 };
+
+
 
 const getComplaintDirection = (complaint: ComplaintRow) => {
+
   const formVariant = normalizeText(complaint.form_variant);
 
+
+
   if (formVariant === "arbolado") {
+
     return "Arbolado y Parques Urbanos";
+
   }
+
+
 
   if (formVariant === "zyv") {
+
     return "Zoonosis y Vectores";
+
   }
+
+
 
   return getServiceDirectionName(getRelatedName(complaint.service));
+
 };
+
+
 
 const getGroupKey = (complaint: ComplaintRow, groupByParam: string) => {
+
   switch (groupByParam) {
+
     case "street":
+
       return normalizeValue(complaint.address);
 
+
+
     case "service":
+
       return normalizeValue(getRelatedName(complaint.service));
 
+
+
     case "direction":
+
       return getComplaintDirection(complaint);
 
+
+
     case "cause":
+
       return normalizeValue(getRelatedName(complaint.cause));
 
+
+
     case "zone":
+
       return normalizeValue(complaint.zone);
 
+
+
     case "status":
+
       return normalizeValue(complaint.status);
 
+
+
     case "contact_method":
+
       return normalizeValue(complaint.contact_method);
 
+
+
     default:
+
       return normalizeValue(complaint.address);
+
   }
+
 };
+
+
 
 const groupBy = (
+
   complaints: ComplaintRow[],
+
   getKey: (complaint: ComplaintRow) => string,
+
 ) => {
+
   const map = new Map<string, number>();
 
+
+
   complaints.forEach((complaint) => {
+
     const key = getKey(complaint);
+
     map.set(key, (map.get(key) || 0) + 1);
+
   });
 
+
+
   return Array.from(map.entries())
+
     .map(([name, count]) => ({ name, count }))
+
     .sort((a, b) => b.count - a.count);
+
 };
+
+
 
 const getGroupedStats = (
+
   complaints: ComplaintRow[],
+
   groupByParam: string,
+
 ) => {
+
   switch (groupByParam) {
+
     case "street":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "street"),
+
       ).slice(0, 15);
+
+
 
     case "service":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "service"),
+
       ).slice(0, 15);
+
+
 
     case "direction":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "direction"),
+
       );
+
+
 
     case "cause":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "cause"),
+
       ).slice(0, 15);
+
+
 
     case "zone":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "zone"),
+
       ).slice(0, 16);
 
+
+
     case "status":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "status"),
+
       );
+
+
 
     case "contact_method":
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "contact_method"),
+
       );
+
+
 
     default:
+
       return groupBy(complaints, (item) =>
+
         getGroupKey(item, "street"),
+
       ).slice(0, 15);
+
   }
+
 };
 
+
+
 export async function GET(request: NextRequest) {
+
   try {
+
     const supabase = await createClient();
 
+
+
     const {
+
       data: { user: authUser },
+
       error: authError,
+
     } = await supabase.auth.getUser();
 
+
+
     if (authError || !authUser) {
+
       return NextResponse.json(
+
         { error: "No autenticado" },
+
         { status: 401 },
+
       );
+
     }
+
+
 
     const { data: currentUser, error: userError } = await supabase
+
       .from("users")
+
       .select("role, email")
+
       .eq("id", authUser.id)
+
       .single();
 
+
+
     if (userError || !currentUser) {
+
       return NextResponse.json(
+
         { error: "No se pudo validar el usuario" },
+
         { status: 500 },
+
       );
+
     }
+
+
 
     const currentUserEmail = normalizeText(currentUser.email);
 
+
+
     const isServiciosPublicosAccount =
-      currentUserEmail === normalizeText(SERVICIOS_PUBLICOS_EMAIL);
+
+      SERVICIOS_PUBLICOS_EMAILS.map(normalizeText).includes(currentUserEmail);
+
+
 
     const isGirsuAccount =
+
       currentUserEmail === normalizeText(GIRSU_EMAIL);
+
+
 
     const { searchParams } = new URL(request.url);
 
+
+
     const dateFrom = searchParams.get("date_from");
+
     const dateTo = searchParams.get("date_to");
+
     const status = searchParams.get("status");
+
     const serviceId = searchParams.get("service_id");
+
     const serviceIdsParam = searchParams.get("service_ids");
+
     const zone = searchParams.get("zone");
+
     const groupByParam = searchParams.get("group_by") || "street";
+
     const direction = searchParams.get("direction");
 
+
+
     const detailGroup = searchParams.get("detail_group");
+
     const detailValue = searchParams.get("detail_value");
 
+
+
     const serviceIds = serviceIdsParam
+
       ? serviceIdsParam
+
           .split(",")
+
           .map((id) => Number(id.trim()))
+
           .filter((id) => Number.isFinite(id))
+
       : [];
 
+
+
     let zyvServiceIds: number[] = [];
+
     let arboladoServiceIds: number[] = [];
+
     let serviciosPublicosServiceIds: number[] = [];
+
     let girsuServiceIds: number[] = [];
 
+
+
     if (
+
       currentUser.role === "ReclamosZyV" ||
+
       currentUser.role === "ReclamosArbolado" ||
+
       isServiciosPublicosAccount ||
+
       isGirsuAccount
+
     ) {
+
       const { data: roleServices, error: roleServicesError } =
+
         await supabase
+
           .from("services")
+
           .select("id, name");
 
+
+
       if (roleServicesError) {
+
         console.error(
+
           "Error fetching role services:",
+
           roleServicesError,
+
         );
+
+
 
         return NextResponse.json(
+
           { error: "Error al cargar servicios" },
+
           { status: 500 },
+
         );
+
       }
+
+
 
       zyvServiceIds =
+
         roleServices
+
           ?.filter((service) => isZyvService(service.name))
+
           .map((service) => service.id) ?? [];
+
+
 
       arboladoServiceIds =
+
         roleServices
+
           ?.filter((service) => isArboladoService(service.name))
+
           .map((service) => service.id) ?? [];
+
+
 
       serviciosPublicosServiceIds =
+
         roleServices
+
           ?.filter((service) =>
+
             isServiciosPublicosService(service.name),
+
           )
+
           .map((service) => service.id) ?? [];
+
+
 
       girsuServiceIds =
+
         roleServices
+
           ?.filter((service) => isGirsuService(service.name))
+
           .map((service) => service.id) ?? [];
+
     }
 
+
+
     const allComplaints: ComplaintRow[] = [];
+
     let from = 0;
+
     let hasMore = true;
 
+
+
     while (hasMore) {
+
       let query = supabase
+
         .from("complaints")
+
         .select(
+
           `
+
           id,
+
           complaint_number,
+
           address,
+
           street_number,
+
           zone,
+
           status,
+
           complaint_date,
+
           contact_method,
+
           form_variant,
+
           service_id,
+
           service:services(id, name),
+
           cause:causes(id, name)
+
         `,
+
         )
+
         .order("id", { ascending: true })
+
         .range(from, from + PAGE_SIZE - 1);
 
+
+
       if (isServiciosPublicosAccount) {
+
         if (serviciosPublicosServiceIds.length > 0) {
+
           query = query.in(
+
             "service_id",
+
             serviciosPublicosServiceIds,
+
           );
+
         } else {
+
           query = query.eq("service_id", -999999);
+
         }
+
       } else if (isGirsuAccount) {
+
         if (girsuServiceIds.length > 0) {
+
           query = query.in("service_id", girsuServiceIds);
+
         } else {
+
           query = query.eq("service_id", -999999);
+
         }
+
       } else if (currentUser.role === "ReclamosArbolado") {
+
         if (arboladoServiceIds.length > 0) {
+
           query = query.or(
+
             `form_variant.eq.arbolado,service_id.in.(${arboladoServiceIds.join(
+
               ",",
+
             )})`,
+
           );
+
         } else {
+
           query = query.eq("form_variant", "arbolado");
+
         }
+
       } else if (currentUser.role === "ReclamosZyV") {
+
         if (zyvServiceIds.length > 0) {
+
           query = query.or(
+
             `form_variant.eq.zyv,service_id.in.(${zyvServiceIds.join(
+
               ",",
+
             )})`,
+
           );
+
         } else {
+
           query = query.eq("form_variant", "zyv");
+
         }
+
       } else if (currentUser.role === "Reclamos") {
+
         query = query.in("form_variant", [
+
           "general",
+
           "import_excel",
+
         ]);
+
       }
+
+
 
       if (dateFrom) {
+
         query = query.gte("complaint_date", dateFrom);
+
       }
+
+
 
       if (dateTo) {
+
         query = query.lte("complaint_date", dateTo);
+
       }
+
+
 
       if (status && status !== "all") {
+
         query = query.eq("status", status);
+
       }
+
+
 
       if (serviceId && serviceId !== "all") {
+
         query = query.eq("service_id", Number(serviceId));
+
       } else if (serviceIds.length > 0) {
+
         query = query.in("service_id", serviceIds);
+
       }
 
+
+
       if (zone && zone !== "all") {
+
         query = query.eq("zone", zone);
+
       }
+
+
 
       const { data, error } = await query;
 
+
+
       if (error) {
+
         console.error("Error fetching complaint stats:", error);
 
+
+
         return NextResponse.json(
+
           { error: "Error al cargar estadísticas" },
+
           { status: 500 },
+
         );
+
       }
 
+
+
       const page =
+
         (data || []) as unknown as ComplaintRow[];
+
+
 
       allComplaints.push(...page);
 
+
+
       if (page.length < PAGE_SIZE) {
+
         hasMore = false;
+
       } else {
+
         from += PAGE_SIZE;
+
       }
+
     }
 
+
+
     const filteredComplaints =
+
       direction && direction !== "all"
+
         ? allComplaints.filter(
+
             (complaint) =>
+
               getComplaintDirection(complaint) ===
+
               normalizeValue(direction),
+
           )
+
         : allComplaints;
 
+
+
     const resolvedCount = filteredComplaints.filter(
+
       (complaint) =>
+
         normalizeText(complaint.status) === "resuelto",
+
     ).length;
+
+
 
     const openCount = allComplaints.filter(
+
       (complaint) =>
+
         normalizeText(complaint.status) === "en proceso",
+
     ).length;
 
+
+
     const resolvedPercentage =
+
       filteredComplaints.length > 0
+
         ? Number(
+
             (
+
               (resolvedCount / filteredComplaints.length) *
+
               100
+
             ).toFixed(1),
+
           )
+
         : 0;
 
+
+
     const byDirection = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "direction"),
+
     );
+
+
 
     const byStreet = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "street"),
+
     ).slice(0, 15);
+
+
 
     const byService = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "service"),
+
     ).slice(0, 15);
+
+
 
     const byCause = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "cause"),
+
     ).slice(0, 15);
 
+
+
     const byStatus = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "status"),
+
     );
+
+
 
     const byZone = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "zone"),
+
     ).slice(0, 16);
 
+
+
     const byContactMethod = groupBy(
+
       filteredComplaints,
+
       (item) => getGroupKey(item, "contact_method"),
+
     );
+
+
 
     const grouped = getGroupedStats(
+
       filteredComplaints,
+
       groupByParam,
+
     );
+
+
 
     const oldestInProgress = filteredComplaints
+
       .filter(
+
         (complaint) =>
+
           normalizeText(complaint.status) === "en proceso",
+
       )
+
       .map((complaint) => ({
+
         id: complaint.id,
+
         complaint_number: complaint.complaint_number,
+
         complaint_date: complaint.complaint_date,
+
         address: normalizeValue(complaint.address),
+
         street_number: complaint.street_number ?? null,
+
         zone: normalizeValue(complaint.zone),
+
         status: normalizeValue(complaint.status),
+
         service: normalizeValue(
+
           getRelatedName(complaint.service),
+
         ),
+
         cause: normalizeValue(
+
           getRelatedName(complaint.cause),
+
         ),
+
         delay_days: getDelayDays(
+
           complaint.complaint_date,
+
         ),
+
       }))
+
       .sort((a, b) => {
+
         if (a.delay_days !== b.delay_days) {
+
           return b.delay_days - a.delay_days;
+
         }
+
+
 
         const dateA =
+
           new Date(a.complaint_date).getTime();
+
         const dateB =
+
           new Date(b.complaint_date).getTime();
 
+
+
         if (dateA !== dateB) {
+
           return dateA - dateB;
+
         }
 
+
+
         return (
+
           (a.complaint_number ?? a.id) -
+
           (b.complaint_number ?? b.id)
+
         );
+
       })
+
       .slice(0, 20);
 
+
+
     const detailRows =
+
       detailGroup && detailValue
+
         ? filteredComplaints
+
             .filter(
+
               (complaint) =>
+
                 getGroupKey(
+
                   complaint,
+
                   detailGroup,
+
                 ) ===
+
                 normalizeValue(detailValue),
+
             )
+
             .sort((a, b) => {
+
               const dateA =
+
                 new Date(
+
                   a.complaint_date,
+
                 ).getTime();
+
+
 
               const dateB =
+
                 new Date(
+
                   b.complaint_date,
+
                 ).getTime();
 
+
+
               if (dateA !== dateB) {
+
                 return dateB - dateA;
+
               }
 
+
+
               const numberA =
+
                 a.complaint_number ?? a.id;
 
+
+
               const numberB =
+
                 b.complaint_number ?? b.id;
 
+
+
               return numberB - numberA;
+
             })
+
         : [];
 
+
+
     const detailItems = detailRows.map(
+
       (complaint) => ({
+
         id: complaint.id,
+
         complaint_number:
+
           complaint.complaint_number,
+
         complaint_date:
+
           complaint.complaint_date,
+
         address: normalizeValue(
+
           complaint.address,
+
         ),
+
         street_number:
+
           complaint.street_number ?? null,
+
         zone: normalizeValue(
+
           complaint.zone,
+
         ),
+
         status: normalizeValue(
+
           complaint.status,
+
         ),
+
         service: normalizeValue(
+
           getRelatedName(complaint.service),
+
         ),
+
         cause: normalizeValue(
+
           getRelatedName(complaint.cause),
+
         ),
+
       }),
+
     );
+
+
 
     return NextResponse.json({
+
       data: {
+
         total: filteredComplaints.length,
+
         resolvedCount,
+
         openCount,
+
         resolvedPercentage,
+
         groupBy: groupByParam,
+
         grouped,
+
         byDirection,
+
         byStreet,
+
         byService,
+
         byCause,
+
         byStatus,
+
         byZone,
+
         byContactMethod,
+
         oldestInProgress,
+
         detail: {
+
           group: detailGroup,
+
           value: detailValue,
+
           total: detailRows.length,
+
           items: detailItems,
+
         },
+
       },
+
     });
+
   } catch (error) {
+
     console.error(
+
       "Unexpected error in GET /api/complaints/stats:",
+
       error,
+
     );
 
+
+
     return NextResponse.json(
+
       { error: "Error interno del servidor" },
+
       { status: 500 },
+
     );
+
   }
+
 }

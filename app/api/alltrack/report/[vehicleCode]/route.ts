@@ -34,7 +34,10 @@ const normalizePlate = (
 
     .replace(/[\s-]/g, "");
 
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const canAccess = (profile: {
 
@@ -50,9 +53,10 @@ const canAccess = (profile: {
 
   const email = normalizeText(profile.email);
 
-  const isLucasBelliardo =
-
-    email === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly =
+    DIRECTORES_READONLY_EMAILS
+      .map(normalizeText)
+      .includes(email);
 
   return (
 
@@ -64,7 +68,7 @@ const canAccess = (profile: {
 
     profile.modules?.includes("work_orders") ||
 
-    isLucasBelliardo
+    isDirectorReadonly
 
   );
 
@@ -356,13 +360,7 @@ const getAlltrackConfig = () => {
 
     password,
 
-    baseUrl: baseUrl.replace(
-
-      /\/+$/,
-
-      "",
-
-    ),
+    baseUrl: baseUrl.replace(/\/+$/, ""),
 
   };
 
@@ -2362,11 +2360,10 @@ export async function GET(
 
     }
 
-    const isLucasBelliardo =
-
-      normalizeText(profile.email) ===
-
-      normalizeText(LUCAS_BELLIARDO_EMAIL);
+    const isDirectorReadonly =
+      DIRECTORES_READONLY_EMAILS
+        .map(normalizeText)
+        .includes(normalizeText(profile.email));
 
     /*
 
@@ -2493,8 +2490,7 @@ export async function GET(
           vehicle,
 
           persistResolvedId:
-
-            !isLucasBelliardo,
+            !isDirectorReadonly,
 
         },
 

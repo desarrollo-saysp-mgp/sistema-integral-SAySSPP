@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const SERVICIOS_PUBLICOS_EMAILS = [
+  "adm.serviciospublicos.mgp@gmail.com",
+  "waldaquin84@gmail.com",
+];
+
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 const normalizeName = (value?: string | null) =>
@@ -70,10 +74,14 @@ export async function GET(request: NextRequest) {
     const userEmail = normalizeName(currentUser.email || user.email || "");
 
     const isServiciosPublicosUser =
-      userEmail === normalizeName(SERVICIOS_PUBLICOS_EMAIL) ||
+      SERVICIOS_PUBLICOS_EMAILS
+        .map(normalizeName)
+        .includes(userEmail) ||
       scope === "servicios-publicos";
 
-    const isGirsuUser = userEmail === normalizeName(GIRSU_EMAIL) || scope === "girsu";
+    const isGirsuUser =
+      userEmail === normalizeName(GIRSU_EMAIL) ||
+      scope === "girsu";
 
     const { data: serviceRoles } = await supabase
       .from("services")

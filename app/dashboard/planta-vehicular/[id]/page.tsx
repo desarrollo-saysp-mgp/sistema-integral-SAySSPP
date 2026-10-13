@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-
 import { createClient } from "@/lib/supabase/server";
-
 import { FichaVehiculoClient } from "./ficha-vehiculo-client";
 
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -16,45 +17,32 @@ const normalizeText = (value: unknown) =>
 
 type Vehicle = {
   id: string;
-
   code: string;
   vehicle: string;
   license_plate: string | null;
-
   vehicle_type: string | null;
   year: number | null;
   department: string | null;
-
   operational_status: string | null;
-
   repair_reason: string | null;
   out_of_service_reason: string | null;
   observations: string | null;
-
   rfid_tag: string | null;
-
   has_alltrack: boolean;
   has_ibutton_reader: boolean;
   has_camera: boolean;
-
   utilization: string | null;
   schedule: string | null;
-
   primary_driver_1: string | null;
   primary_driver_2: string | null;
   backup_driver: string | null;
-
   image_path: string | null;
   image_thumb_path: string | null;
-
   active: boolean;
-
   deactivation_date: string | null;
   deactivation_reason: string | null;
-
   created_at: string;
   updated_at: string;
-
   created_by: string | null;
   updated_by: string | null;
 };
@@ -94,27 +82,28 @@ export default async function FichaVehiculoPage({
   const userRole = normalizeText(profile.role);
   const userEmail = normalizeText(profile.email || user.email);
 
-  const isLucasBelliardo =
-    userEmail === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly = DIRECTORES_READONLY_EMAILS
+    .map(normalizeText)
+    .includes(userEmail);
 
   const canAccess =
     userRole === "admin" ||
     userRole === "adminlectura" ||
     userRole === "taller" ||
-    isLucasBelliardo;
+    isDirectorReadonly;
 
   if (!canAccess) {
     redirect("/dashboard/accesos");
   }
 
   /*
-   * Lucas puede abrir y consultar la ficha completa,
+   * Lucas y Walter pueden abrir y consultar la ficha completa,
    * pero nunca administrar el vehículo.
    */
   const isReadonly =
     userRole === "adminlectura" ||
     profile.is_readonly === true ||
-    isLucasBelliardo;
+    isDirectorReadonly;
 
   const canManage =
     !isReadonly &&

@@ -46,7 +46,10 @@ import autoTable, { type CellHookData } from "jspdf-autotable";
 import { useUser } from "@/hooks/useUser";
 
 const ITEMS_PER_PAGE = 20;
-const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const SERVICIOS_PUBLICOS_EMAILS = [
+  "adm.serviciospublicos.mgp@gmail.com",
+  "waldaquin84@gmail.com",
+];
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
 const normalizeServiceName = (value: unknown) =>
@@ -319,9 +322,11 @@ export function ComplaintsTable({
   const isArboladoUser = profile?.role === "ReclamosArbolado";
   const isZyVUser = profile?.role === "ReclamosZyV";
   const isServiciosPublicosUser =
-    String(profile?.email || "")
-      .trim()
-      .toLowerCase() === SERVICIOS_PUBLICOS_EMAIL;
+    SERVICIOS_PUBLICOS_EMAILS.includes(
+      String(profile?.email || "")
+        .trim()
+        .toLowerCase(),
+    );
 
   const canEditComplaint =
     !isReadOnly && !isServiciosPublicosUser && !isGirsuUser;

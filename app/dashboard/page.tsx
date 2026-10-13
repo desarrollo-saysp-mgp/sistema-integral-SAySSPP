@@ -6,7 +6,13 @@ const GIRSU_EMAILS = [
   "direccióngirsupico@gmail.com",
 ];
 
-const ARBOLADO_EMAILS = ["arqbelliardolucas@gmail.com"];
+const ARBOLADO_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+];
+
+const DIRECTOR_SERVICIOS_PUBLICOS_EMAILS = [
+  "waldaquin84@gmail.com",
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -83,21 +89,54 @@ export default async function DashboardRouter() {
       ? profile.default_module
       : null;
 
-  const userEmail = normalizeText(profile.email || user.email);
+  const userEmail = normalizeText(
+    profile.email || user.email,
+  );
 
-  const isGirsuUser = GIRSU_EMAILS.map(normalizeText).includes(userEmail);
-  const isArboladoUser = ARBOLADO_EMAILS.map(normalizeText).includes(userEmail);
+  const isGirsuUser =
+    GIRSU_EMAILS
+      .map(normalizeText)
+      .includes(userEmail);
+
+  const isArboladoUser =
+    ARBOLADO_EMAILS
+      .map(normalizeText)
+      .includes(userEmail);
+
+  const isDirectorServiciosPublicos =
+    DIRECTOR_SERVICIOS_PUBLICOS_EMAILS
+      .map(normalizeText)
+      .includes(userEmail);
 
   /*
-   * GIRSU y Arbolado deben entrar a Accesos porque tienen:
-   * Reclamos propio + Tablero propio.
+   * Perfiles especiales que tienen más de un acceso
+   * deben entrar siempre a /dashboard/accesos.
+   *
+   * GIRSU:
+   * - Reclamos
+   * - Tablero GIRSU
+   *
+   * Director Arbolado:
+   * - Reclamos Arbolado
+   * - Tablero Arbolado
+   * - Planta Vehicular
+   * - RNU
+   *
+   * Director Servicios Públicos:
+   * - Reclamos Servicios Públicos
+   * - Planta Vehicular
    */
-  if (isGirsuUser || isArboladoUser) {
+  if (
+    isGirsuUser ||
+    isArboladoUser ||
+    isDirectorServiciosPublicos
+  ) {
     redirect("/dashboard/accesos");
   }
 
   /*
-   * Los administradores siempre entran a la pantalla de accesos.
+   * Los administradores siempre entran
+   * a la pantalla de accesos.
    */
   if (
     profile.role === "Admin" ||
@@ -107,67 +146,84 @@ export default async function DashboardRouter() {
   }
 
   /*
-   * Taller ahora tiene dos módulos:
+   * Taller tiene:
    *
    * - Órdenes de Trabajo
    * - Planta Vehicular
    *
-   * Por eso debe entrar siempre a Accesos
-   * y elegir el módulo.
+   * Por eso entra siempre a Accesos.
    */
   if (profile.role === "Taller") {
     redirect("/dashboard/accesos");
   }
 
   /*
-   * Secretaría Privada entra directamente al módulo Personal.
+   * Secretaría Privada entra directamente
+   * al módulo Personal.
    */
   if (profile.role === "SecretariaPrivada") {
     redirect("/dashboard/personnel");
   }
 
   /*
-   * Si tiene un módulo predeterminado, entra directamente.
+   * Si tiene un módulo predeterminado,
+   * entra directamente.
    *
-   * Taller ya fue tratado arriba, por lo que su antiguo
-   * default_module = work_orders no lo enviará directamente
-   * a Órdenes de Trabajo.
+   * Los perfiles especiales ya fueron
+   * tratados arriba.
    */
   if (defaultModule) {
-    redirect(getModuleRoute(defaultModule));
+    redirect(
+      getModuleRoute(defaultModule),
+    );
   }
 
   /*
-   * Si tiene un solo módulo, entra directamente.
+   * Si tiene un solo módulo,
+   * entra directamente.
    */
   if (modules.length === 1) {
-    redirect(getModuleRoute(modules[0]));
+    redirect(
+      getModuleRoute(modules[0]),
+    );
   }
 
   /*
-   * Si tiene varios módulos, entra a la pantalla de accesos.
+   * Si tiene varios módulos,
+   * entra a Accesos.
    */
   if (modules.length > 1) {
     redirect("/dashboard/accesos");
   }
 
   /*
-   * Fallback temporal según el rol.
+   * Fallback temporal según rol.
+   *
+   * IMPORTANTE:
+   * waldaquin84@gmail.com nunca debería
+   * llegar hasta acá porque ya fue tratado
+   * arriba como Director Servicios Públicos.
    */
   if (
     profile.role === "Reclamos" ||
     profile.role === "ReclamosArbolado" ||
     profile.role === "ReclamosZyV"
   ) {
-    redirect("/dashboard/complaints/home");
+    redirect(
+      "/dashboard/complaints/home",
+    );
   }
 
   if (profile.role === "Suministros") {
-    redirect("/dashboard/suministros");
+    redirect(
+      "/dashboard/suministros",
+    );
   }
 
   if (profile.role === "RNU") {
-    redirect("/dashboard/rnu");
+    redirect(
+      "/dashboard/rnu",
+    );
   }
 
   /*

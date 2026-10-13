@@ -23,6 +23,7 @@ import {
 import { Pencil, Trash2, Search } from "lucide-react";
 
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
 
 interface UserTableProps {
   users: User[];
@@ -50,6 +51,10 @@ export function UserTable({
 
     if (email === LUCAS_BELLIARDO_EMAIL) {
       return "DirectorArbolado";
+    }
+
+    if (email === DIRECTOR_SERVICIOS_PUBLICOS_EMAIL) {
+      return "DirectorServiciosPublicos";
     }
 
     return user.role;
@@ -95,12 +100,17 @@ export function UserTable({
           />
         </div>
 
-        <Select onValueChange={handleRoleFilterChange} defaultValue="all">
+        <Select
+          onValueChange={handleRoleFilterChange}
+          defaultValue="all"
+        >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por rol" />
           </SelectTrigger>
+
           <SelectContent>
             <SelectItem value="all">Todos los roles</SelectItem>
+
             {availableRoles.map((role) => (
               <SelectItem key={role} value={role}>
                 {role}
@@ -118,7 +128,9 @@ export function UserTable({
               <TableHead>Email</TableHead>
               <TableHead>Rol</TableHead>
               <TableHead>Fecha de creación</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <TableHead className="text-right">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
 
@@ -128,6 +140,7 @@ export function UserTable({
                 <TableCell colSpan={5} className="h-24 text-center">
                   <div className="flex items-center justify-center">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+
                     <span className="ml-2 text-muted-foreground">
                       Cargando usuarios...
                     </span>
@@ -156,7 +169,9 @@ export function UserTable({
                     <TableCell>{user.email}</TableCell>
 
                     <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.role)}>
+                      <Badge
+                        variant={getRoleBadgeVariant(user.role)}
+                      >
                         {displayRole}
                       </Badge>
                     </TableCell>

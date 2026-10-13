@@ -94,7 +94,10 @@ type DetailGroup =
   | "direction"
   | "delay";
 
-const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+const SERVICIOS_PUBLICOS_EMAILS = [
+  "adm.serviciospublicos.mgp@gmail.com",
+  "waldaquin84@gmail.com",
+];
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 const DETAIL_PAGE_SIZE = 20;
 const STATS_RETURN_STATE_KEY = "stats-detail-return-state";
@@ -480,7 +483,9 @@ export default function StatsPage() {
   const isServiciosPublicosAccount = useMemo(() => {
     const email = normalizeText(profile?.email || currentUser?.email);
 
-    return email === SERVICIOS_PUBLICOS_EMAIL;
+    return SERVICIOS_PUBLICOS_EMAILS
+      .map(normalizeText)
+      .includes(email);
   }, [profile?.email, currentUser?.email]);
 
   const isGirsuAccount = useMemo(() => {
