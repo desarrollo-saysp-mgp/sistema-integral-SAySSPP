@@ -7,6 +7,7 @@ const PAGE_SIZE = 1000;
 const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
+  "direcciongirsupico@gmail.com",
 ];
 
 type SupplyNeeded = {
@@ -25,8 +26,9 @@ const normalizeText = (value: unknown) =>
 /*
  * Permiso de lectura de órdenes de trabajo.
  *
- * Lucas Belliardo y Walter Quintín pueden consultar las OT
- * desde Planta Vehicular, pero no pueden crearlas ni modificarlas.
+ * Lucas Belliardo, Walter Quintín y Adrián Acosta
+ * pueden consultar las OT desde Planta Vehicular,
+ * pero no pueden crearlas ni modificarlas.
  */
 const canReadWorkOrders = (profile: {
   role: string;
@@ -53,7 +55,7 @@ const canReadWorkOrders = (profile: {
  * Permiso de administración de órdenes de trabajo.
  *
  * IMPORTANTE:
- * Lucas y Walter NO están incluidos acá.
+ * Lucas, Walter y Adrián NO están incluidos acá.
  */
 const canManageWorkOrders = (profile: {
   role: string;
@@ -269,7 +271,8 @@ export async function POST(request: NextRequest) {
 
     /*
      * POST mantiene permisos de administración.
-     * Lucas y Walter no entran acá, por lo tanto no pueden crear OT.
+     * Lucas, Walter y Adrián no entran acá,
+     * por lo tanto no pueden crear OT.
      */
     if (
       profileError ||

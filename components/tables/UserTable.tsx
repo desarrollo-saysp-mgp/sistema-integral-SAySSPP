@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Pencil, Trash2, Search } from "lucide-react";
 
+const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
 const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
 
@@ -48,6 +49,10 @@ export function UserTable({
     const email = String(user.email || "")
       .trim()
       .toLowerCase();
+
+    if (email === DIRECTOR_GIRSU_EMAIL) {
+      return "DirectorGIRSU";
+    }
 
     if (email === LUCAS_BELLIARDO_EMAIL) {
       return "DirectorArbolado";
@@ -92,6 +97,7 @@ export function UserTable({
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
           <Input
             placeholder="Buscar por nombre o email..."
             value={searchTerm}
@@ -109,7 +115,9 @@ export function UserTable({
           </SelectTrigger>
 
           <SelectContent>
-            <SelectItem value="all">Todos los roles</SelectItem>
+            <SelectItem value="all">
+              Todos los roles
+            </SelectItem>
 
             {availableRoles.map((role) => (
               <SelectItem key={role} value={role}>
@@ -137,7 +145,10 @@ export function UserTable({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell
+                  colSpan={5}
+                  className="h-24 text-center"
+                >
                   <div className="flex items-center justify-center">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
 
@@ -166,7 +177,9 @@ export function UserTable({
                       {user.full_name}
                     </TableCell>
 
-                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      {user.email}
+                    </TableCell>
 
                     <TableCell>
                       <Badge

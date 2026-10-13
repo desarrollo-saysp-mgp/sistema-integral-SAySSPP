@@ -257,10 +257,12 @@ const setParamIfValid = (
 
 type WorkOrdersClientProps = {
   isReadonly?: boolean;
+  isDirectorReadonly?: boolean;
 };
 
 export function WorkOrdersClient({
   isReadonly = false,
+  isDirectorReadonly = false,
 }: WorkOrdersClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1167,27 +1169,31 @@ export function WorkOrdersClient({
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Button
-            asChild
-            variant="outline"
-            className="h-9 w-full gap-2 rounded-xl sm:w-auto"
-          >
-            <Link href="/dashboard/taller/ordenes-trabajo/estadisticas">
-              <BarChart3 className="h-4 w-4" />
-              Estadísticas
-            </Link>
-          </Button>
+          {!isDirectorReadonly && (
+            <>
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 w-full gap-2 rounded-xl sm:w-auto"
+              >
+                <Link href="/dashboard/taller/ordenes-trabajo/estadisticas">
+                  <BarChart3 className="h-4 w-4" />
+                  Estadísticas
+                </Link>
+              </Button>
 
-          <Button
-            asChild
-            variant="outline"
-            className="h-9 w-full gap-2 rounded-xl sm:w-auto"
-          >
-            <Link href="/dashboard/taller/ordenes-trabajo/criticidad">
-              <Gauge className="h-4 w-4" />
-              Criticidad
-            </Link>
-          </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 w-full gap-2 rounded-xl sm:w-auto"
+              >
+                <Link href="/dashboard/taller/ordenes-trabajo/criticidad">
+                  <Gauge className="h-4 w-4" />
+                  Criticidad
+                </Link>
+              </Button>
+            </>
+          )}
 
           {!isReadonly && (
             <Button asChild className="h-9 w-full gap-2 rounded-xl sm:w-auto">

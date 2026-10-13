@@ -37,6 +37,7 @@ const normalizePlate = (
 const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
+  "direcciongirsupico@gmail.com",
 ];
 
 const canAccess = (profile: {
@@ -1461,6 +1462,8 @@ export async function GET(
 
       if (
 
+        !isDirectorReadonly &&
+
         !storedAlltrackVehicleId
 
       ) {
@@ -1674,6 +1677,8 @@ export async function GET(
      */
 
     if (
+
+      !isDirectorReadonly &&
 
       !storedAlltrackVehicleId &&
 
