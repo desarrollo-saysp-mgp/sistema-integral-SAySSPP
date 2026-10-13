@@ -8,8 +8,6 @@ import {
 
 } from "next/server";
 
-
-
 const normalizeText = (value: unknown) =>
 
   String(value || "")
@@ -21,8 +19,6 @@ const normalizeText = (value: unknown) =>
     .normalize("NFD")
 
     .replace(/[\u0300-\u036f]/g, "");
-
-
 
 const normalizePlate = (
 
@@ -38,33 +34,45 @@ const normalizePlate = (
 
     .replace(/[\s-]/g, "");
 
-
-
-
-
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const canAccess = (profile: {
+
   role: string;
+
   modules: string[] | null;
+
   email: string | null;
+
 }) => {
+
   const role = normalizeText(profile.role);
+
   const email = normalizeText(profile.email);
 
-  const isLucasBelliardo =
-    email === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly =
+    DIRECTORES_READONLY_EMAILS
+      .map(normalizeText)
+      .includes(email);
 
   return (
+
     role === "admin" ||
+
     role === "adminlectura" ||
+
     role === "taller" ||
+
     profile.modules?.includes("work_orders") ||
-    isLucasBelliardo
+
+    isDirectorReadonly
+
   );
+
 };
-
-
 
 type AlltrackResponse<T> = {
 
@@ -80,15 +88,11 @@ type AlltrackResponse<T> = {
 
 };
 
-
-
 class AlltrackApiError extends Error {
 
   errorCode?: string;
 
   httpStatus?: number;
-
-
 
   constructor(
 
@@ -120,8 +124,6 @@ class AlltrackApiError extends Error {
 
 }
 
-
-
 type AlltrackTokenCache = {
 
   token: string | null;
@@ -136,13 +138,9 @@ type AlltrackTokenCache = {
 
 };
 
-
-
 const ALLTRACK_TOKEN_TTL_MS =
 
   55 * 60 * 1000;
-
-
 
 const alltrackTokenCache: AlltrackTokenCache = {
 
@@ -153,8 +151,6 @@ const alltrackTokenCache: AlltrackTokenCache = {
   loginPromise: null,
 
 };
-
-
 
 const clearAlltrackTokenCache = () => {
 
@@ -168,8 +164,6 @@ const clearAlltrackTokenCache = () => {
 
 };
 
-
-
 const saveAlltrackToken = (
 
   token: string,
@@ -180,8 +174,6 @@ const saveAlltrackToken = (
 
     token;
 
-
-
   alltrackTokenCache.expiresAt =
 
     Date.now() +
@@ -189,8 +181,6 @@ const saveAlltrackToken = (
     ALLTRACK_TOKEN_TTL_MS;
 
 };
-
-
 
 const hasValidCachedToken = () =>
 
@@ -203,8 +193,6 @@ const hasValidCachedToken = () =>
         alltrackTokenCache.expiresAt,
 
   );
-
-
 
 const isSessionExpiredError = (
 
@@ -230,65 +218,39 @@ const isSessionExpiredError = (
 
   );
 
-
-
-
-
 type AlltrackPosition = {
 
   hora?: string | null;
 
   fecha?: string | null;
 
-
-
   vehiculo_id?: string | number | null;
-
-
 
   patente?: string | null;
 
-
-
   conductor?: string | null;
-
-
 
   lat?: number | null;
 
   lon?: number | null;
 
-
-
   estado?: string | null;
 
   velocidad?: number | null;
-
-
 
   odometro?: string | number | null;
 
   horometro?: string | number | null;
 
-
-
   sentido?: number | null;
-
-
 
   direccion?: string | null;
 
-
-
   timeout?: number | null;
-
-
 
   viaje?: unknown;
 
 };
-
-
 
 type AlltrackFleetVehicle = {
 
@@ -306,8 +268,6 @@ type AlltrackFleetVehicle = {
 
 };
 
-
-
 type AlltrackFleet = {
 
   nivel?: string | null;
@@ -319,8 +279,6 @@ type AlltrackFleet = {
   children?: AlltrackFleetVehicle[];
 
 };
-
-
 
 const normalizeVehicleCode = (
 
@@ -340,29 +298,21 @@ const normalizeVehicleCode = (
 
     .replace(/[\s._-]/g, "");
 
-
-
 const getAlltrackConfig = () => {
 
   const username =
 
     process.env.ALLTRACK_USERNAME;
 
-
-
   const password =
 
     process.env.ALLTRACK_PASSWORD;
-
-
 
   const baseUrl =
 
     process.env.ALLTRACK_BASE_URL ||
 
     "https://sistema1.alltrack.com.ar/apiV3";
-
-
 
   if (!username || !password) {
 
@@ -374,27 +324,17 @@ const getAlltrackConfig = () => {
 
   }
 
-
-
   return {
 
     username,
 
     password,
 
-    baseUrl: baseUrl.replace(
-
-      /\/+$/,
-
-      "",
-
-    ),
+    baseUrl: baseUrl.replace(/\/+$/, ""),
 
   };
 
 };
-
-
 
 const alltrackPost = async <T>({
 
@@ -436,8 +376,6 @@ const alltrackPost = async <T>({
 
     formData ?? new FormData();
 
-
-
   if (token) {
 
     payload.set(
@@ -450,8 +388,6 @@ const alltrackPost = async <T>({
 
   }
 
-
-
   const response = await fetch(url, {
 
     method: "POST",
@@ -462,17 +398,11 @@ const alltrackPost = async <T>({
 
   });
 
-
-
   const rawText =
 
     await response.text();
 
-
-
   let result: AlltrackResponse<T>;
-
-
 
   try {
 
@@ -502,8 +432,6 @@ const alltrackPost = async <T>({
 
     );
 
-
-
     throw new Error(
 
       `Alltrack respondió HTTP ${response.status}: ${
@@ -523,8 +451,6 @@ const alltrackPost = async <T>({
     );
 
   }
-
-
 
   if (
 
@@ -550,8 +476,6 @@ const alltrackPost = async <T>({
 
     );
 
-
-
     throw new AlltrackApiError(
 
       result.error ||
@@ -574,13 +498,9 @@ const alltrackPost = async <T>({
 
   }
 
-
-
   return result;
 
 };
-
-
 
 const loginAlltrack = async () => {
 
@@ -594,13 +514,9 @@ const loginAlltrack = async () => {
 
   } = getAlltrackConfig();
 
-
-
   const formData =
 
     new FormData();
-
-
 
   formData.append(
 
@@ -610,8 +526,6 @@ const loginAlltrack = async () => {
 
   );
 
-
-
   formData.append(
 
     "password",
@@ -620,8 +534,6 @@ const loginAlltrack = async () => {
 
   );
 
-
-
   formData.append(
 
     "sessionTime",
@@ -629,8 +541,6 @@ const loginAlltrack = async () => {
     "3600",
 
   );
-
-
 
   const result =
 
@@ -642,8 +552,6 @@ const loginAlltrack = async () => {
 
     });
 
-
-
   if (!result.token) {
 
     throw new Error(
@@ -654,15 +562,11 @@ const loginAlltrack = async () => {
 
   }
 
-
-
   saveAlltrackToken(
 
     result.token,
 
   );
-
-
 
   console.log(
 
@@ -684,8 +588,6 @@ const loginAlltrack = async () => {
 
   );
 
-
-
   return {
 
     token: result.token,
@@ -696,8 +598,6 @@ const loginAlltrack = async () => {
 
 };
 
-
-
 const getAlltrackToken = async (
 
   forceRefresh = false,
@@ -707,8 +607,6 @@ const getAlltrackToken = async (
   const { baseUrl } =
 
     getAlltrackConfig();
-
-
 
   if (
 
@@ -732,8 +630,6 @@ const getAlltrackToken = async (
 
   }
 
-
-
   if (
 
     !forceRefresh &&
@@ -745,8 +641,6 @@ const getAlltrackToken = async (
     const token =
 
       await alltrackTokenCache.loginPromise;
-
-
 
     return {
 
@@ -760,11 +654,7 @@ const getAlltrackToken = async (
 
   }
 
-
-
   clearAlltrackTokenCache();
-
-
 
   const loginPromise =
 
@@ -776,21 +666,15 @@ const getAlltrackToken = async (
 
     );
 
-
-
   alltrackTokenCache.loginPromise =
 
     loginPromise;
-
-
 
   try {
 
     const token =
 
       await loginPromise;
-
-
 
     return {
 
@@ -811,8 +695,6 @@ const getAlltrackToken = async (
   }
 
 };
-
-
 
 const authenticatedAlltrackPost =
 
@@ -858,8 +740,6 @@ const authenticatedAlltrackPost =
 
           );
 
-
-
         const result =
 
           await alltrackPost<T>({
@@ -880,8 +760,6 @@ const authenticatedAlltrackPost =
 
           });
 
-
-
         if (
 
           result.token
@@ -896,8 +774,6 @@ const authenticatedAlltrackPost =
 
         }
 
-
-
         return {
 
           result,
@@ -911,8 +787,6 @@ const authenticatedAlltrackPost =
         };
 
       };
-
-
 
     try {
 
@@ -934,29 +808,19 @@ const authenticatedAlltrackPost =
 
       }
 
-
-
       console.warn(
 
         "Token Alltrack vencido. Renovando sesión y reintentando una vez.",
 
       );
 
-
-
       clearAlltrackTokenCache();
-
-
 
       return execute(true);
 
     }
 
   };
-
-
-
-
 
 export async function GET(
 
@@ -986,8 +850,6 @@ export async function GET(
 
     } = await params;
 
-
-
     const decodedVehicleCode =
 
       decodeURIComponent(
@@ -996,13 +858,9 @@ export async function GET(
 
       ).trim();
 
-
-
     const supabase =
 
       await createClient();
-
-
 
     /*
 
@@ -1014,8 +872,6 @@ export async function GET(
 
      */
 
-
-
     const {
 
       data: { user },
@@ -1025,8 +881,6 @@ export async function GET(
     } =
 
       await supabase.auth.getUser();
-
-
 
     if (authError || !user) {
 
@@ -1050,8 +904,6 @@ export async function GET(
 
     }
 
-
-
     const {
 
       data: profile,
@@ -1073,8 +925,6 @@ export async function GET(
       )
 
       .single();
-
-
 
     if (
 
@@ -1106,12 +956,10 @@ export async function GET(
 
     }
 
-    const isLucasBelliardo =
-      normalizeText(profile.email) ===
-      normalizeText(LUCAS_BELLIARDO_EMAIL);
-
-
-
+    const isDirectorReadonly =
+      DIRECTORES_READONLY_EMAILS
+        .map(normalizeText)
+        .includes(normalizeText(profile.email));
 
     /*
 
@@ -1122,8 +970,6 @@ export async function GET(
      * =========================================
 
      */
-
-
 
     const {
 
@@ -1167,8 +1013,6 @@ export async function GET(
 
       .single();
 
-
-
     if (
 
       vehicleError ||
@@ -1197,8 +1041,6 @@ export async function GET(
 
     }
 
-
-
     if (
 
       !vehicle.has_alltrack
@@ -1225,8 +1067,6 @@ export async function GET(
 
     }
 
-
-
     const vehiclePlate =
 
       vehicle.license_plate
@@ -1239,8 +1079,6 @@ export async function GET(
 
         : "";
 
-
-
     const normalizedVehicleCode =
 
       normalizeVehicleCode(
@@ -1248,8 +1086,6 @@ export async function GET(
         vehicle.code,
 
       );
-
-
 
     /*
 
@@ -1261,15 +1097,11 @@ export async function GET(
 
      */
 
-
-
     let {
 
       token,
 
     } = await getAlltrackToken();
-
-
 
     /*
 
@@ -1282,8 +1114,6 @@ export async function GET(
      * automáticamente y reintenta una vez.
 
      */
-
-
 
     /*
 
@@ -1335,8 +1165,6 @@ export async function GET(
 
      */
 
-
-
     const {
 
       result:
@@ -1361,13 +1189,9 @@ export async function GET(
 
       });
 
-
-
     token =
 
       refreshedPositionToken;
-
-
 
     const positions =
 
@@ -1381,8 +1205,6 @@ export async function GET(
 
         : [];
 
-
-
     const storedAlltrackVehicleId =
 
       vehicle.alltrack_vehicle_id
@@ -1394,8 +1216,6 @@ export async function GET(
           )
 
         : null;
-
-
 
     /*
 
@@ -1424,8 +1244,6 @@ export async function GET(
           ) ?? null
 
         : null;
-
-
 
     /*
 
@@ -1461,8 +1279,6 @@ export async function GET(
 
     }
 
-
-
     /*
 
      * 3) Si todavía no resolvimos el vehículo (caso sin patente,
@@ -1484,8 +1300,6 @@ export async function GET(
       AlltrackFleetVehicle | null =
 
       null;
-
-
 
     let resolvedAlltrackVehicleId =
 
@@ -1510,8 +1324,6 @@ export async function GET(
           )
 
         : storedAlltrackVehicleId;
-
-
 
     if (
 
@@ -1541,8 +1353,6 @@ export async function GET(
 
         });
 
-
-
       const fleets =
 
         Array.isArray(
@@ -1554,8 +1364,6 @@ export async function GET(
           ? fleetsResult.data
 
           : [];
-
-
 
       const fleetVehicles =
 
@@ -1575,8 +1383,6 @@ export async function GET(
 
         );
 
-
-
       fallbackVehicle =
 
         fleetVehicles.find(
@@ -1592,8 +1398,6 @@ export async function GET(
             normalizedVehicleCode,
 
         ) ?? null;
-
-
 
       if (
 
@@ -1614,8 +1418,6 @@ export async function GET(
             fallbackVehicle.id,
 
           );
-
-
 
         position =
 
@@ -1638,8 +1440,6 @@ export async function GET(
       }
 
     }
-
-
 
     /*
 
@@ -1691,8 +1491,6 @@ export async function GET(
 
           );
 
-
-
         if (
 
           updateAlltrackIdError
@@ -1724,8 +1522,6 @@ export async function GET(
         }
 
       }
-
-
 
       return NextResponse.json(
 
@@ -1771,8 +1567,6 @@ export async function GET(
 
     }
 
-
-
     if (!position) {
 
       console.warn(
@@ -1800,8 +1594,6 @@ export async function GET(
         },
 
       );
-
-
 
       return NextResponse.json(
 
@@ -1843,8 +1635,6 @@ export async function GET(
 
     }
 
-
-
     resolvedAlltrackVehicleId =
 
       position.vehiculo_id !==
@@ -1868,8 +1658,6 @@ export async function GET(
           )
 
         : resolvedAlltrackVehicleId;
-
-
 
     /*
 
@@ -1918,8 +1706,6 @@ export async function GET(
           vehicle.id,
 
         );
-
-
 
       if (
 
@@ -1981,8 +1767,6 @@ export async function GET(
 
     }
 
-
-
     /*
 
      * =========================================
@@ -1993,8 +1777,6 @@ export async function GET(
 
      */
 
-
-
     return NextResponse.json({
 
       meta: {
@@ -2004,8 +1786,6 @@ export async function GET(
           hasValidCachedToken(),
 
       },
-
-
 
       data: {
 
@@ -2025,13 +1805,9 @@ export async function GET(
 
             vehicle.license_plate,
 
-
-
           alltrack_vehicle_id:
 
             resolvedAlltrackVehicleId,
-
-
 
           alltrack: {
 
@@ -2081,8 +1857,6 @@ export async function GET(
 
         },
 
-
-
         position: {
 
           latitude:
@@ -2091,15 +1865,11 @@ export async function GET(
 
             null,
 
-
-
           longitude:
 
             position.lon ??
 
             null,
-
-
 
           status:
 
@@ -2107,15 +1877,11 @@ export async function GET(
 
             null,
 
-
-
           speed:
 
             position.velocidad ??
 
             null,
-
-
 
           driver:
 
@@ -2123,15 +1889,11 @@ export async function GET(
 
             null,
 
-
-
           date:
 
             position.fecha ??
 
             null,
-
-
 
           time:
 
@@ -2139,15 +1901,11 @@ export async function GET(
 
             null,
 
-
-
           address:
 
             position.direccion ??
 
             null,
-
-
 
           odometer:
 
@@ -2155,23 +1913,17 @@ export async function GET(
 
             null,
 
-
-
           hourmeter:
 
             position.horometro ??
 
             null,
 
-
-
           heading:
 
             position.sentido ??
 
             null,
-
-
 
           timeout:
 
@@ -2194,8 +1946,6 @@ export async function GET(
       error,
 
     );
-
-
 
     return NextResponse.json(
 

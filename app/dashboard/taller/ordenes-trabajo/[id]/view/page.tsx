@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { WorkOrderDetailClient } from "@/components/taller/WorkOrderDetailClient";
 
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -19,15 +22,16 @@ const canAccessWorkOrders = (profile: {
   const role = normalizeText(profile.role);
   const email = normalizeText(profile.email);
 
-  const isLucasBelliardo =
-    email === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly = DIRECTORES_READONLY_EMAILS
+    .map(normalizeText)
+    .includes(email);
 
   return (
     role === "admin" ||
     role === "adminlectura" ||
     role === "taller" ||
     profile.modules?.includes("work_orders") ||
-    isLucasBelliardo
+    isDirectorReadonly
   );
 };
 

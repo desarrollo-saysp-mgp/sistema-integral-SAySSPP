@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
-
 import { createClient } from "@/lib/supabase/server";
 import { PlantaVehicularClient } from "./planta-vehicular-client";
 
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -38,14 +40,15 @@ export default async function PlantaVehicularPage() {
   const userRole = normalizeText(profile.role);
   const userEmail = normalizeText(profile.email || user.email);
 
-  const isLucasBelliardo =
-    userEmail === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly = DIRECTORES_READONLY_EMAILS
+    .map(normalizeText)
+    .includes(userEmail);
 
   const canAccess =
     userRole === "admin" ||
     userRole === "adminlectura" ||
     userRole === "taller" ||
-    isLucasBelliardo;
+    isDirectorReadonly;
 
   if (!canAccess) {
     redirect("/dashboard/accesos");
@@ -54,7 +57,7 @@ export default async function PlantaVehicularPage() {
   const isReadonly =
     userRole === "adminlectura" ||
     profile.is_readonly === true ||
-    isLucasBelliardo;
+    isDirectorReadonly;
 
   return (
     <PlantaVehicularClient

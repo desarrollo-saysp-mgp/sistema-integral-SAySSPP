@@ -6,7 +6,43 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { useUser } from "@/hooks/useUser";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -14,7 +50,31 @@ import { usePathname, useRouter } from "next/navigation";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import Link from "next/link";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -22,7 +82,31 @@ import Image from "next/image";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import { Button } from "@/components/ui/button";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -30,7 +114,31 @@ import { PageLoader } from "@/components/ui/page-loader";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import {
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -38,7 +146,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   DropdownMenuContent,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -46,7 +178,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   DropdownMenuLabel,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -54,7 +210,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   DropdownMenuTrigger,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -62,7 +242,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import {
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -70,7 +274,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   FileText,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -78,7 +306,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   Users,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -86,7 +338,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   LogOut,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -94,7 +370,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   Menu,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -102,7 +402,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   LayoutGrid,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -110,7 +434,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   PhoneForwarded,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -118,7 +466,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   Sun,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -126,7 +498,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import { createClient } from "@/lib/supabase/client";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -134,7 +530,31 @@ import { useEffect, useState } from "react";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import { cn } from "@/lib/utils";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -142,7 +562,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   MODULES,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -150,7 +594,31 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   getNavbarContext,
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -158,11 +626,47 @@ import {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   isAdminPage,
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 } from "@/lib/navigation";
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -174,13 +678,85 @@ import AlertsBell from "@/components/alerts-bell";
 
 
 
-const SERVICIOS_PUBLICOS_EMAIL = "adm.serviciospublicos.mgp@gmail.com";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const SERVICIOS_PUBLICOS_EMAILS = [
+
+  "adm.serviciospublicos.mgp@gmail.com",
+
+  "waldaquin84@gmail.com",
+
+];
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 const GIRSU_EMAIL = "direccióngirsupico@gmail.com";
 
+
+
+
+
+
+
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -192,7 +768,31 @@ const normalizeEmail = (value?: string | null) =>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   String(value || "")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -200,11 +800,47 @@ const normalizeEmail = (value?: string | null) =>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     .toLowerCase()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     .normalize("NFD")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -216,7 +852,43 @@ const normalizeEmail = (value?: string | null) =>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function Navbar() {
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -224,7 +896,31 @@ export function Navbar() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   const pathname = usePathname();
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -236,7 +932,43 @@ export function Navbar() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -244,7 +976,43 @@ export function Navbar() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   const [loadingStats, setLoadingStats] = useState(false);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -260,11 +1028,61 @@ export function Navbar() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const isServiciosPublicosUser =
 
+    SERVICIOS_PUBLICOS_EMAILS
+
+      .map(normalizeEmail)
+
+      .includes(normalizedProfileEmail);
 
 
-    normalizedProfileEmail === normalizeEmail(SERVICIOS_PUBLICOS_EMAIL);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -276,7 +1094,25 @@ export function Navbar() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   const isLucasBelliardo =
+
+
+
+
+
+
 
     normalizedProfileEmail === normalizeEmail(LUCAS_BELLIARDO_EMAIL);
 
@@ -286,13 +1122,72 @@ export function Navbar() {
 
 
 
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const displayRole =
     isLucasBelliardo
       ? "DirectorArbolado"
-      : profile?.role || "";
+      : isServiciosPublicosUser
+        ? "DirectorServiciosPublicos"
+        : profile?.role || "";
 
-const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
+
+
+
+
+
+
+  const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -304,7 +1199,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     const savedTheme = localStorage.getItem("theme");
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -312,11 +1231,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
       "(prefers-color-scheme: dark)",
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     ).matches;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -332,11 +1299,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     setDarkMode(shouldUseDark);
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     document.documentElement.classList.toggle("dark", shouldUseDark);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -348,11 +1363,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   useEffect(() => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     setLoadingStats(false);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -364,11 +1427,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const toggleDarkMode = () => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     setDarkMode((current) => {
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -380,7 +1491,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       document.documentElement.classList.toggle("dark", next);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -392,7 +1539,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       return next;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -400,7 +1583,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -412,7 +1631,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     const supabase = createClient();
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -420,7 +1663,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     router.push("/login");
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -428,7 +1695,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -440,7 +1743,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     if (pathname === "/dashboard/complaints/stats") return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -452,7 +1791,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     setMobileMenuOpen(false);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -460,7 +1823,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -472,11 +1871,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     if (href === "/dashboard") return pathname === href;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     return pathname?.startsWith(href);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -488,7 +1923,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const isAdmin =
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -500,7 +1971,55 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
-  const isAccessProfile = isAdmin || isGirsuUser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const isAccessProfile = isAdmin || isGirsuUser || isServiciosPublicosUser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -512,6 +2031,18 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   const hasMultipleModules = modules.length > 1;
 
 
@@ -520,15 +2051,60 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const showAccesses =
-
     isAdmin ||
-
     hasMultipleModules ||
-
     isGirsuUser ||
-
+    isServiciosPublicosUser ||
     isLucasBelliardo;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -540,7 +2116,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   const navbarContext = getNavbarContext(pathname);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -552,7 +2164,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     !!currentModule &&
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -560,11 +2196,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     !isAccessesPage(pathname) &&
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     !isAdminPage(pathname);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -580,7 +2264,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const inicioHref =
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -588,11 +2308,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
       ? "/dashboard/complaints/home"
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
       : "/dashboard";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -602,11 +2370,53 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
   const logoHref =
 
+
+
+
+
+
+
     isAccessProfile || isLucasBelliardo
+
+
+
+
+
+
 
       ? "/dashboard/accesos"
 
+
+
+
+
+
+
       : "/dashboard";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -618,7 +2428,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     <>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -630,7 +2464,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       <nav className="sticky top-0 z-50 w-full border-b border-[#D8E3DE] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:border-slate-700 dark:bg-slate-950/95 dark:supports-[backdrop-filter]:bg-slate-950/90">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -638,7 +2508,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
           <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -646,7 +2540,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             className="flex items-center gap-2 transition-opacity hover:opacity-90"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -654,7 +2572,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             <div className="relative h-11 w-[110px] shrink-0 sm:w-[125px]">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -662,7 +2604,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 src="/logo-general-pico-horizontal.png"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -670,7 +2636,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 fill
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -678,7 +2668,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 className="object-contain object-left"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -686,7 +2700,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -698,7 +2748,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               <span className="text-sm font-semibold leading-tight text-[#373737] dark:text-slate-100">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -706,7 +2780,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               </span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -714,7 +2812,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 {navbarContext.subtitle}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -722,7 +2844,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -734,7 +2880,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           <div className="hidden items-center gap-2 md:flex">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -742,7 +2924,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               <Link href={inicioHref}>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -750,7 +2956,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   variant="ghost"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -758,7 +2988,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -766,7 +3020,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -774,7 +3052,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -782,7 +3084,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   Inicio
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -790,11 +3116,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               </Link>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -806,7 +3180,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               <Link href="/dashboard/accesos">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -814,7 +3212,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   variant="ghost"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -822,7 +3244,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "rounded-xl px-4 text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -830,7 +3276,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "bg-[#00A27F]/12 font-semibold text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -838,7 +3308,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -846,7 +3340,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   Accesos
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -854,7 +3372,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               </Link>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -866,7 +3408,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             {showCurrentModuleNav &&
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -874,7 +3452,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 <DropdownMenu modal={false}>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -882,7 +3484,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <Button
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -890,7 +3516,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className={cn(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -898,7 +3548,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         pathname?.includes(currentModuleConfig.basePath) &&
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -906,7 +3580,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -914,7 +3612,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <FileText className="mr-2 h-4 w-4" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -922,7 +3644,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </Button>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -934,7 +3680,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                   <DropdownMenuContent
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -942,7 +3724,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     side="bottom"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -950,7 +3756,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -958,7 +3788,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -966,7 +3820,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -974,7 +3852,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -982,7 +3884,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             <Home className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -990,7 +3916,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -998,7 +3948,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             Panel principal del módulo de reclamos
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1006,11 +3980,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </div>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </Link>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1022,7 +4032,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     {canCreateComplaints && (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1030,7 +4076,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1038,7 +4108,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1046,7 +4140,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1054,7 +4172,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                               <PlusCircle className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1062,7 +4204,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1070,7 +4236,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                               Crear un nuevo reclamo ciudadano
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1078,7 +4268,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1086,11 +4300,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </DropdownMenuItem>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1102,7 +4364,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <DropdownMenuItem asChild>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1110,7 +4396,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           href="/dashboard/calls/new"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1118,7 +4428,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1126,7 +4460,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             <div className="flex items-center gap-2">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1134,7 +4492,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                               <span className="font-medium">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1142,7 +4524,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                               </span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1150,7 +4556,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             <p className="ml-6 text-xs text-muted-foreground">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1158,7 +4588,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             </p>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1166,7 +4620,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </Link>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1174,7 +4652,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1186,7 +4700,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1194,7 +4732,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1202,7 +4764,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1210,7 +4796,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             <FileText className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1218,7 +4828,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1226,7 +4860,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             Lista completa de reclamos
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1234,7 +4892,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1242,7 +4924,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </DropdownMenuItem>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1254,7 +4972,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       onSelect={(event) => {
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1262,7 +5004,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         goToStats();
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1270,7 +5036,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1278,7 +5068,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1286,7 +5100,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           <BarChart3 className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1294,7 +5132,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1302,7 +5164,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           Análisis y gráficos de reclamos
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1310,7 +5196,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1318,7 +5228,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </DropdownMenuContent>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1326,7 +5260,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1338,7 +5308,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               <DropdownMenu modal={false}>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1346,7 +5340,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <Button
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1354,7 +5372,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     className={cn(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1362,7 +5404,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       pathname?.includes("admin") &&
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1370,7 +5436,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1378,7 +5468,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <FolderKanban className="mr-2 h-4 w-4" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1386,7 +5500,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </Button>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1398,7 +5536,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 <DropdownMenuContent
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1406,7 +5580,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   side="bottom"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1414,7 +5612,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1422,7 +5644,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1430,7 +5676,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1438,7 +5708,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1446,7 +5740,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           <Users className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1454,7 +5772,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1462,7 +5804,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           Gestionar usuarios del sistema
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1470,7 +5836,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1478,7 +5868,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </DropdownMenuItem>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1490,7 +5916,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1498,7 +5948,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className="cursor-pointer rounded-xl"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1506,7 +5980,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <div className="flex flex-col gap-1 py-1">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1514,7 +6012,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           <FolderKanban className="h-4 w-4 text-[#00A27F]" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1522,7 +6044,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1530,7 +6076,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           Configurar servicios y causas
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1538,7 +6108,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1546,7 +6140,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </DropdownMenuItem>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1554,11 +6172,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               </DropdownMenu>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1570,11 +6224,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           <div className="flex items-center gap-2">
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             {showCurrentModuleNav &&
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1586,7 +6288,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             <Button
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1594,7 +6332,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               variant="ghost"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1602,7 +6364,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               onClick={toggleDarkMode}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1610,7 +6396,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1618,7 +6428,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D8E3DE] bg-white text-[#373737] shadow-sm transition hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1626,7 +6460,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               {darkMode ? (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1634,7 +6492,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               ) : (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1642,11 +6524,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               )}
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             </Button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1658,7 +6588,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               variant="ghost"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1666,7 +6620,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               className="text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA] md:hidden"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1674,7 +6652,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1682,7 +6684,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 <X className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1690,7 +6716,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 <Menu className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1698,7 +6748,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             </Button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1710,7 +6796,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               <DropdownMenu>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1718,7 +6828,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <Button
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1726,7 +6860,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     className="flex items-center gap-2 rounded-xl text-[#373737] hover:bg-[#00A27F]/10 hover:text-[#00A27F] dark:text-slate-200 dark:hover:bg-[#00A27F]/20 dark:hover:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1734,7 +6892,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00A27F]/12 dark:bg-[#00A27F]/20">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1742,7 +6924,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1754,7 +6972,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <span className="text-sm font-medium">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1762,7 +7004,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1770,7 +7036,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         {displayRole}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1778,11 +7068,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </div>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </Button>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1794,7 +7120,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 <DropdownMenuContent
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1802,7 +7164,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   className="w-56 rounded-2xl border-[#D8E3DE] dark:border-slate-700 dark:bg-slate-900"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1810,7 +7196,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <DropdownMenuLabel>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1818,7 +7228,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <p className="text-sm font-medium">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1826,11 +7260,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </p>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <p className="text-xs text-muted-foreground">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1838,7 +7308,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </p>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1846,11 +7340,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         {displayRole}
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </p>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1858,7 +7388,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         {profile.is_readonly
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1866,7 +7420,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           : "Modo: edición habilitada"}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1874,11 +7452,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </div>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </DropdownMenuLabel>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1894,7 +7520,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                   <DropdownMenuItem
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1902,7 +7564,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     className="cursor-pointer text-[#D85C76] focus:text-[#D85C76]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1910,7 +7596,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <LogOut className="mr-2 h-4 w-4" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1918,7 +7628,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </DropdownMenuItem>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1926,7 +7660,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               </DropdownMenu>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1934,7 +7692,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
           </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1946,7 +7728,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         {mobileMenuOpen && (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1954,7 +7772,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             <div className="space-y-2 px-4 py-4">
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1962,7 +7804,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1970,7 +7836,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1978,7 +7868,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1986,7 +7900,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1994,7 +7932,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2002,7 +7964,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <Home className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2010,11 +7996,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 </Link>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2026,7 +8060,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2034,7 +8092,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2042,7 +8124,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2050,7 +8156,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2058,7 +8188,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2066,7 +8220,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <LayoutGrid className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2074,11 +8252,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 </Link>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
               )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2090,7 +8316,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 currentModuleConfig?.key === "complaints" && (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2098,11 +8348,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280] dark:text-slate-400">
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       {currentModuleConfig.label}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2114,7 +8400,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2122,7 +8444,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2130,7 +8476,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2138,7 +8508,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2146,7 +8540,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2154,11 +8572,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <Home className="h-5 w-5" />
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <span>Inicio</span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2170,11 +8624,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     {canCreateComplaints && (
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2182,7 +8684,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2190,7 +8716,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2198,7 +8748,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2206,7 +8780,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2214,7 +8812,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         <PlusCircle className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2222,11 +8844,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </Link>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2238,7 +8908,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2246,7 +8940,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2254,7 +8972,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2262,7 +9004,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                             ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2270,7 +9036,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2278,7 +9068,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         <PhoneForwarded className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2286,11 +9100,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       </Link>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2302,7 +9164,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       href="/dashboard/complaints"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2310,7 +9196,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className={cn(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2318,7 +9228,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         pathname === "/dashboard/complaints"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2326,7 +9260,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2334,7 +9292,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2342,11 +9324,59 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <span>Ver Todos</span>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     </Link>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2358,7 +9388,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       type="button"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2366,7 +9420,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       className={cn(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2374,7 +9452,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         pathname === "/dashboard/complaints/stats"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2382,7 +9484,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                           : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2390,7 +9516,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2398,7 +9548,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       <span>Estadísticas</span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2406,7 +9580,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2418,7 +9616,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
               {isAdmin && (
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2426,11 +9660,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   <div className="px-4 py-2 text-xs font-semibold uppercase text-[#6B7280] dark:text-slate-400">
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     Administración
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2442,7 +9712,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                   <Link
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2450,7 +9756,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     onClick={() => setMobileMenuOpen(false)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2458,7 +9788,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       "flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2466,7 +9820,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         ? "bg-[#00A27F]/12 text-[#00A27F] dark:bg-[#00A27F]/20 dark:text-[#00D6AA]"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2474,7 +9852,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2482,7 +9884,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <Users className="h-5 w-5" />
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2490,7 +9916,43 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   </Link>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2502,7 +9964,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     href="/admin/services"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2510,7 +9996,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     className={cn(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2518,7 +10028,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                       isActive("/admin/services")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2526,7 +10060,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                         : "text-[#373737] hover:bg-[#00A27F]/8 dark:text-slate-200 dark:hover:bg-[#00A27F]/20",
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2534,7 +10092,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                   >
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2542,7 +10124,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                     <span>Servicios</span>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2550,7 +10156,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
                 </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2558,7 +10188,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
             </div>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2566,7 +10220,31 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
         )}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2574,11 +10252,47 @@ const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     </>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   );
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

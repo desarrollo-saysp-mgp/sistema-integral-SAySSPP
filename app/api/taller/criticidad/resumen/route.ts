@@ -2,8 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 
 import { NextRequest, NextResponse } from "next/server";
 
-
-
 type WorkOrder = {
 
   vehicle_code?: string | null;
@@ -19,8 +17,6 @@ type WorkOrder = {
   repair_type?: string | null;
 
 };
-
-
 
 type VehicleCriticalitySetting = {
 
@@ -46,8 +42,6 @@ type VehicleCriticalitySetting = {
 
 };
 
-
-
 type VehicleSecurityInspection = {
 
   id: string;
@@ -59,8 +53,6 @@ type VehicleSecurityInspection = {
   created_at: string | null;
 
 };
-
-
 
 type VehicleMaster = {
 
@@ -82,8 +74,6 @@ type VehicleMaster = {
 
 };
 
-
-
 type VehicleCriticalityStatus =
 
   | "BUENO"
@@ -100,8 +90,6 @@ type VehicleCriticalityStatus =
 
   | "DADO DE BAJA";
 
-
-
 type VehicleCriticalitySummaryRow = {
 
   vehicle_id: string;
@@ -112,13 +100,9 @@ type VehicleCriticalitySummaryRow = {
 
   license_plate: string;
 
-
-
   operational_status: string | null;
 
   is_out_of_service: boolean;
-
-
 
   active: boolean;
 
@@ -127,8 +111,6 @@ type VehicleCriticalitySummaryRow = {
   deactivation_date: string | null;
 
   deactivation_reason: string | null;
-
-
 
   work_orders_count: number;
 
@@ -140,25 +122,17 @@ type VehicleCriticalitySummaryRow = {
 
   security_score: number;
 
-
-
   has_checklist: boolean;
 
   total_criticality: number | null;
 
-
-
   notes: string;
-
-
 
   status_label: VehicleCriticalityStatus;
 
   status_display: string;
 
 };
-
-
 
 const normalizeText = (value: unknown) =>
 
@@ -172,37 +146,49 @@ const normalizeText = (value: unknown) =>
 
     .replace(/[\u0300-\u036f]/g, "");
 
-
-
-const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const DIRECTORES_READONLY_EMAILS = [
+  "arqbelliardolucas@gmail.com",
+  "waldaquin84@gmail.com",
+];
 
 const canAccessTaller = (profile: {
+
   role: string;
+
   modules: string[] | null;
+
   email: string | null;
+
 }) => {
+
   const role = normalizeText(profile.role);
+
   const email = normalizeText(profile.email);
 
-  const isLucasBelliardo =
-    email === normalizeText(LUCAS_BELLIARDO_EMAIL);
+  const isDirectorReadonly =
+    DIRECTORES_READONLY_EMAILS
+      .map(normalizeText)
+      .includes(email);
 
   return (
+
     role === "admin" ||
+
     role === "adminlectura" ||
+
     role === "taller" ||
+
     profile.modules?.includes("work_orders") ||
-    isLucasBelliardo
+
+    isDirectorReadonly
+
   );
+
 };
-
-
 
 const normalizeVehicleCode = (value: unknown) =>
 
-  normalizeText(value).replace(/[\s.\-]/g, "");
-
-
+  normalizeText(value).replace(/[\s.-]/g, "");
 
 const NON_VEHICLE_CODES = new Set(
 
@@ -214,8 +200,6 @@ const NON_VEHICLE_CODES = new Set(
 
 );
 
-
-
 const isNonVehicleCode = (vehicleCode: unknown) =>
 
   NON_VEHICLE_CODES.has(
@@ -223,8 +207,6 @@ const isNonVehicleCode = (vehicleCode: unknown) =>
     normalizeVehicleCode(vehicleCode),
 
   );
-
-
 
 const isOutOfServiceStatus = (
 
@@ -238,13 +220,9 @@ const isOutOfServiceStatus = (
 
   );
 
-
-
 const toNumber = (value: unknown) => {
 
   const numberValue = Number(value);
-
-
 
   if (!Number.isFinite(numberValue)) {
 
@@ -252,31 +230,21 @@ const toNumber = (value: unknown) => {
 
   }
 
-
-
   return numberValue;
 
 };
-
-
 
 const getSixMonthsAgo = () => {
 
   const date = new Date();
 
-
-
   date.setMonth(date.getMonth() - 6);
 
   date.setHours(0, 0, 0, 0);
 
-
-
   return date;
 
 };
-
-
 
 const getDateValue = (
 
@@ -290,23 +258,17 @@ const getDateValue = (
 
   }
 
-
-
   const [year, month, day] = dateString
 
     .split("-")
 
     .map(Number);
 
-
-
   if (!year || !month || !day) {
 
     return null;
 
   }
-
-
 
   const date = new Date(
 
@@ -318,21 +280,15 @@ const getDateValue = (
 
   );
 
-
-
   if (Number.isNaN(date.getTime())) {
 
     return null;
 
   }
 
-
-
   return date;
 
 };
-
-
 
 const getMechanicalReliabilityScore = (
 
@@ -350,13 +306,9 @@ const getMechanicalReliabilityScore = (
 
   if (count <= 12) return 4;
 
-
-
   return 5;
 
 };
-
-
 
 const getCriticalityStatus = (
 
@@ -374,15 +326,11 @@ const getCriticalityStatus = (
 
   }
 
-
-
   if (!hasChecklist) {
 
     return "SIN CHECKLIST";
 
   }
-
-
 
   if (criticality === null) {
 
@@ -390,15 +338,11 @@ const getCriticalityStatus = (
 
   }
 
-
-
   if (criticality >= 13) {
 
     return "MALO";
 
   }
-
-
 
   if (criticality >= 10) {
 
@@ -406,13 +350,9 @@ const getCriticalityStatus = (
 
   }
 
-
-
   return "BUENO";
 
 };
-
-
 
 const getStatusDisplay = (
 
@@ -426,37 +366,25 @@ const getStatusDisplay = (
 
       return "CRÍTICO";
 
-
-
     case "BUENO":
 
       return "BUENO";
-
-
 
     case "REGULAR":
 
       return "REGULAR";
 
-
-
     case "SIN CHECKLIST":
 
       return "SIN CHECKLIST";
-
-
 
     case "FUERA DE SERVICIO":
 
       return "FUERA DE SERVICIO";
 
-
-
     case "DADO DE BAJA":
 
       return "DADO DE BAJA";
-
-
 
     case "SIN DATOS":
 
@@ -468,8 +396,6 @@ const getStatusDisplay = (
 
 };
 
-
-
 export async function GET(
 
   request: NextRequest,
@@ -480,49 +406,47 @@ export async function GET(
 
     /*
 
-     * =========================================================
+     \* =========================================================
 
-     * FUENTES
+     \* FUENTES
 
-     * =========================================================
+     \* =========================================================
 
-     *
+     \*
 
-     * Taller sigue aportando:
+     \* Taller sigue aportando:
 
-     * - Órdenes de trabajo
+     \* - Órdenes de trabajo
 
-     * - Configuración de criticidad
+     \* - Configuración de criticidad
 
-     * - Checklists
+     \* - Checklists
 
-     *
+     \*
 
-     * Planta Vehicular pasa a ser la fuente de verdad para:
+     \* Planta Vehicular pasa a ser la fuente de verdad para:
 
-     * - existencia del vehículo
+     \* - existencia del vehículo
 
-     * - nombre / dominio actuales
+     \* - nombre / dominio actuales
 
-     * - estado operativo
+     \* - estado operativo
 
-     * - baja / reactivación administrativa
+     \* - baja / reactivación administrativa
 
      */
 
     const supabase = await createClient();
 
-
-
     /*
 
-     * Autenticación y autorización directa.
+     \* Autenticación y autorización directa.
 
-     * Antes esto quedaba validado indirectamente porque resumen
+     \* Antes esto quedaba validado indirectamente porque resumen
 
-     * llamaba a otros endpoints internos. Como ahora consultamos
+     \* llamaba a otros endpoints internos. Como ahora consultamos
 
-     * Supabase directamente, lo validamos acá.
+     \* Supabase directamente, lo validamos acá.
 
      */
 
@@ -533,8 +457,6 @@ export async function GET(
       error: authError,
 
     } = await supabase.auth.getUser();
-
-
 
     if (authError || !user) {
 
@@ -548,8 +470,6 @@ export async function GET(
 
     }
 
-
-
     const { data: profile, error: profileError } = await supabase
 
       .from("users")
@@ -559,8 +479,6 @@ export async function GET(
       .eq("id", user.id)
 
       .single();
-
-
 
     if (
 
@@ -582,17 +500,13 @@ export async function GET(
 
     }
 
-
-
     const { searchParams } = new URL(request.url);
-
-
 
     /*
 
-     * Si llega ?code=A.6 calculamos solamente esa unidad.
+     \* Si llega ?code=A.6 calculamos solamente esa unidad.
 
-     * Sin ?code se mantiene el comportamiento del panel general.
+     \* Sin ?code se mantiene el comportamiento del panel general.
 
      */
 
@@ -600,21 +514,19 @@ export async function GET(
 
       searchParams.get("code")?.trim() || "";
 
-
-
     /*
 
-     * IMPORTANTE:
+     \* IMPORTANTE:
 
-     * No hacemos fetch() hacia /api/work-orders, /api/taller/criticidad
+     \* No hacemos fetch() hacia /api/work-orders, /api/taller/criticidad
 
-     * ni /api/taller/estado-general. Esas llamadas server -> server
+     \* ni /api/taller/estado-general. Esas llamadas server -> server
 
-     * eran las que podían fallar detrás del dominio personalizado.
+     \* eran las que podían fallar detrás del dominio personalizado.
 
-     *
+     \*
 
-     * Las cuatro fuentes se consultan directamente en Supabase.
+     \* Las cuatro fuentes se consultan directamente en Supabase.
 
      */
 
@@ -627,8 +539,6 @@ export async function GET(
         "vehicle_code, vehicle, license_plate, entry_date, failure_type, repair_type",
 
       );
-
-
 
     let vehiclesQuery = supabase
 
@@ -658,8 +568,6 @@ export async function GET(
 
       );
 
-
-
     if (requestedVehicleCode) {
 
       workOrdersQuery = workOrdersQuery.eq(
@@ -670,8 +578,6 @@ export async function GET(
 
       );
 
-
-
       vehiclesQuery = vehiclesQuery.eq(
 
         "code",
@@ -681,8 +587,6 @@ export async function GET(
       );
 
     }
-
-
 
     const [
 
@@ -726,8 +630,6 @@ export async function GET(
 
     ]);
 
-
-
     if (workOrdersResult.error) {
 
       console.error(
@@ -738,8 +640,6 @@ export async function GET(
 
       );
 
-
-
       throw new Error(
 
         "No se pudieron cargar las órdenes de trabajo para calcular la criticidad",
@@ -747,8 +647,6 @@ export async function GET(
       );
 
     }
-
-
 
     if (settingsResult.error) {
 
@@ -760,8 +658,6 @@ export async function GET(
 
       );
 
-
-
       throw new Error(
 
         "No se pudo cargar la configuración de criticidad",
@@ -769,8 +665,6 @@ export async function GET(
       );
 
     }
-
-
 
     if (inspectionsResult.error) {
 
@@ -782,8 +676,6 @@ export async function GET(
 
       );
 
-
-
       throw new Error(
 
         "No se pudieron cargar los checklist vehiculares",
@@ -791,8 +683,6 @@ export async function GET(
       );
 
     }
-
-
 
     if (vehiclesResult.error) {
 
@@ -804,8 +694,6 @@ export async function GET(
 
       );
 
-
-
       throw new Error(
 
         "No se pudo cargar Planta Vehicular para calcular la criticidad",
@@ -814,45 +702,35 @@ export async function GET(
 
     }
 
-
-
     const workOrders =
 
       (workOrdersResult.data || []) as WorkOrder[];
-
-
 
     const settings =
 
       (settingsResult.data || []) as VehicleCriticalitySetting[];
 
-
-
     const inspections =
 
       (inspectionsResult.data || []) as VehicleSecurityInspection[];
-
-
 
     const vehicles =
 
       (vehiclesResult.data || []) as VehicleMaster[];
 
-
-
     /*
 
-     * =========================================================
+     \* =========================================================
 
-     * ÍNDICES NORMALIZADOS
+     \* ÍNDICES NORMALIZADOS
 
-     * =========================================================
+     \* =========================================================
 
-     *
+     \*
 
-     * Usamos código normalizado para evitar diferencias como:
+     \* Usamos código normalizado para evitar diferencias como:
 
-     * A.6 / A 6 / A-6
+     \* A.6 / A 6 / A-6
 
      */
 
@@ -866,8 +744,6 @@ export async function GET(
 
       >();
 
-
-
     settings.forEach((setting) => {
 
       const key =
@@ -878,15 +754,11 @@ export async function GET(
 
         );
 
-
-
       if (!key) {
 
         return;
 
       }
-
-
 
       settingsByVehicle.set(
 
@@ -898,13 +770,9 @@ export async function GET(
 
     });
 
-
-
     const workOrdersByVehicle =
 
       new Map<string, WorkOrder[]>();
-
-
 
     workOrders.forEach((order) => {
 
@@ -915,8 +783,6 @@ export async function GET(
           order.vehicle_code || "",
 
         ).trim();
-
-
 
       if (
 
@@ -930,8 +796,6 @@ export async function GET(
 
       }
 
-
-
       const key =
 
         normalizeVehicleCode(
@@ -940,15 +804,11 @@ export async function GET(
 
         );
 
-
-
       if (!key) {
 
         return;
 
       }
-
-
 
       const currentOrders =
 
@@ -956,11 +816,7 @@ export async function GET(
 
         [];
 
-
-
       currentOrders.push(order);
-
-
 
       workOrdersByVehicle.set(
 
@@ -972,13 +828,9 @@ export async function GET(
 
     });
 
-
-
     const vehiclesWithChecklist =
 
       new Set<string>();
-
-
 
     inspections.forEach((inspection) => {
 
@@ -990,47 +842,39 @@ export async function GET(
 
         );
 
-
-
       if (!key) {
 
         return;
 
       }
 
-
-
       vehiclesWithChecklist.add(key);
 
     });
 
-
-
     /*
 
-     * =========================================================
+     \* =========================================================
 
-     * CÁLCULO
+     \* CÁLCULO
 
-     * =========================================================
+     \* =========================================================
 
-     *
+     \*
 
-     * A partir de ahora NO existe una lista manual
+     \* A partir de ahora NO existe una lista manual
 
-     * RETIRED_VEHICLES.
+     \* RETIRED_VEHICLES.
 
-     *
+     \*
 
-     * Cada fila nace desde public.vehicles.
+     \* Cada fila nace desde public.vehicles.
 
      */
 
     const sixMonthsAgo =
 
       getSixMonthsAgo();
-
-
 
     const data:
 
@@ -1066,13 +910,9 @@ export async function GET(
 
             );
 
-
-
           const setting =
 
             settingsByVehicle.get(key);
-
-
 
           const orders =
 
@@ -1080,13 +920,11 @@ export async function GET(
 
             [];
 
-
-
           /*
 
-           * Sólo cuentan OT de los últimos 6 meses
+           \* Sólo cuentan OT de los últimos 6 meses
 
-           * y se excluyen las cargadas como mantenimiento.
+           \* y se excluyen las cargadas como mantenimiento.
 
            */
 
@@ -1102,8 +940,6 @@ export async function GET(
 
                 );
 
-
-
               if (
 
                 !date ||
@@ -1116,8 +952,6 @@ export async function GET(
 
               }
 
-
-
               const failureType =
 
                 normalizeText(
@@ -1126,8 +960,6 @@ export async function GET(
 
                 );
 
-
-
               const repairType =
 
                 normalizeText(
@@ -1135,8 +967,6 @@ export async function GET(
                   order.repair_type,
 
                 );
-
-
 
               return (
 
@@ -1156,13 +986,9 @@ export async function GET(
 
             }).length;
 
-
-
           const isRetired =
 
             !vehicle.active;
-
-
 
           const isOutOfService =
 
@@ -1172,17 +998,15 @@ export async function GET(
 
             );
 
-
-
           /*
 
-           * Si está dado de baja:
+           \* Si está dado de baja:
 
-           * - queda visible para control
+           \* - queda visible para control
 
-           * - se excluye del cálculo activo
+           \* - se excluye del cálculo activo
 
-           * - no arrastra valores viejos como si siguiera operativo
+           \* - no arrastra valores viejos como si siguiera operativo
 
            */
 
@@ -1200,27 +1024,19 @@ export async function GET(
 
               );
 
-
-
             return {
 
               vehicle_id:
 
                 vehicle.id,
 
-
-
               vehicle_code:
 
                 vehicle.code,
 
-
-
               vehicle:
 
                 vehicle.vehicle,
-
-
 
               license_plate:
 
@@ -1228,69 +1044,41 @@ export async function GET(
 
                 "-",
 
-
-
               operational_status:
 
                 vehicle.operational_status,
-
-
 
               is_out_of_service:
 
                 isOutOfService,
 
-
-
               active: false,
 
-
-
               is_retired: true,
-
-
 
               deactivation_date:
 
                 vehicle.deactivation_date,
 
-
-
               deactivation_reason:
 
                 vehicle.deactivation_reason,
 
-
-
               work_orders_count: 0,
-
-
 
               mechanical_reliability_score:
 
                 0,
 
-
-
               service_criticality: 0,
-
-
 
               replacement_score: 0,
 
-
-
               security_score: 0,
-
-
 
               has_checklist: false,
 
-
-
               total_criticality: null,
-
-
 
               notes:
 
@@ -1300,13 +1088,9 @@ export async function GET(
 
                   : "Vehículo dado de baja. Excluido del cálculo de criticidad.",
 
-
-
               status_label:
 
                 status,
-
-
 
               status_display:
 
@@ -1320,27 +1104,25 @@ export async function GET(
 
           }
 
-
-
           /*
 
-           * Fuera de servicio NO significa dado de baja,
+           \* Fuera de servicio NO significa dado de baja,
 
-           * pero SÍ queda excluido del cálculo de criticidad.
+           \* pero SÍ queda excluido del cálculo de criticidad.
 
-           *
+           \*
 
-           * Esto evita que:
+           \* Esto evita que:
 
-           * - sume dentro de "Vehículos analizados";
+           \* - sume dentro de "Vehículos analizados";
 
-           * - afecte la cantidad de "Sin checklist";
+           \* - afecte la cantidad de "Sin checklist";
 
-           * - aparezca como BUENO / REGULAR / CRÍTICO mientras no está operativo.
+           \* - aparezca como BUENO / REGULAR / CRÍTICO mientras no está operativo.
 
-           *
+           \*
 
-           * Sigue visible para control con estado FUERA DE SERVICIO.
+           \* Sigue visible para control con estado FUERA DE SERVICIO.
 
            */
 
@@ -1352,19 +1134,13 @@ export async function GET(
 
                 vehicle.id,
 
-
-
               vehicle_code:
 
                 vehicle.code,
 
-
-
               vehicle:
 
                 vehicle.vehicle,
-
-
 
               license_plate:
 
@@ -1372,93 +1148,61 @@ export async function GET(
 
                 "-",
 
-
-
               operational_status:
 
                 vehicle.operational_status,
-
-
 
               is_out_of_service:
 
                 true,
 
-
-
               active: true,
 
-
-
               is_retired: false,
-
-
 
               deactivation_date:
 
                 null,
 
-
-
               deactivation_reason:
 
                 null,
-
-
 
               work_orders_count:
 
                 0,
 
-
-
               mechanical_reliability_score:
 
                 0,
-
-
 
               service_criticality:
 
                 0,
 
-
-
               replacement_score:
 
                 0,
-
-
 
               security_score:
 
                 0,
 
-
-
               has_checklist:
 
                 false,
-
-
 
               total_criticality:
 
                 null,
 
-
-
               notes:
 
                 "Vehículo fuera de servicio. Excluido temporalmente del cálculo de criticidad.",
 
-
-
               status_label:
 
                 "FUERA DE SERVICIO",
-
-
 
               status_display:
 
@@ -1468,8 +1212,6 @@ export async function GET(
 
           }
 
-
-
           const mechanicalScore =
 
             getMechanicalReliabilityScore(
@@ -1477,8 +1219,6 @@ export async function GET(
               validOtCount,
 
             );
-
-
 
           const serviceCriticality =
 
@@ -1488,8 +1228,6 @@ export async function GET(
 
             );
 
-
-
           const replacementScore =
 
             toNumber(
@@ -1497,8 +1235,6 @@ export async function GET(
               setting?.replacement_score,
 
             );
-
-
 
           const securityScore =
 
@@ -1508,8 +1244,6 @@ export async function GET(
 
             );
 
-
-
           const hasChecklist =
 
             vehiclesWithChecklist.has(
@@ -1517,8 +1251,6 @@ export async function GET(
               key,
 
             );
-
-
 
           const totalCriticality =
 
@@ -1534,8 +1266,6 @@ export async function GET(
 
               : null;
 
-
-
           const status =
 
             getCriticalityStatus(
@@ -1548,27 +1278,21 @@ export async function GET(
 
             );
 
-
-
           return {
 
             vehicle_id:
 
               vehicle.id,
 
-
-
             vehicle_code:
 
               vehicle.code,
 
-
-
             /*
 
-             * Nombre y dominio salen de Planta Vehicular.
+             \* Nombre y dominio salen de Planta Vehicular.
 
-             * Así, si se corrigen allí, Taller recibe el dato actual.
+             \* Así, si se corrigen allí, Taller recibe el dato actual.
 
              */
 
@@ -1576,101 +1300,67 @@ export async function GET(
 
               vehicle.vehicle,
 
-
-
             license_plate:
 
               vehicle.license_plate ||
 
               "-",
 
-
-
             operational_status:
 
               vehicle.operational_status,
-
-
 
             is_out_of_service:
 
               isOutOfService,
 
-
-
             active: true,
 
-
-
             is_retired: false,
-
-
 
             deactivation_date:
 
               null,
 
-
-
             deactivation_reason:
 
               null,
-
-
 
             work_orders_count:
 
               validOtCount,
 
-
-
             mechanical_reliability_score:
 
               mechanicalScore,
-
-
 
             service_criticality:
 
               serviceCriticality,
 
-
-
             replacement_score:
 
               replacementScore,
-
-
 
             security_score:
 
               securityScore,
 
-
-
             has_checklist:
 
               hasChecklist,
-
-
 
             total_criticality:
 
               totalCriticality,
 
-
-
             notes:
 
               setting?.notes || "",
 
-
-
             status_label:
 
               status,
-
-
 
             status_display:
 
@@ -1690,9 +1380,9 @@ export async function GET(
 
           /*
 
-           * Activos primero.
+           \* Activos primero.
 
-           * Dados de baja al final.
+           \* Dados de baja al final.
 
            */
 
@@ -1708,8 +1398,6 @@ export async function GET(
 
           }
 
-
-
           if (
 
             !a.is_retired &&
@@ -1722,13 +1410,11 @@ export async function GET(
 
           }
 
-
-
           /*
 
-           * Entre activos:
+           \* Entre activos:
 
-           * criticidad más alta primero.
+           \* criticidad más alta primero.
 
            */
 
@@ -1748,8 +1434,6 @@ export async function GET(
 
           }
 
-
-
           if (
 
             a.total_criticality !==
@@ -1765,8 +1449,6 @@ export async function GET(
             return -1;
 
           }
-
-
 
           if (
 
@@ -1794,8 +1476,6 @@ export async function GET(
 
           }
 
-
-
           return a.vehicle_code.localeCompare(
 
             b.vehicle_code,
@@ -1811,8 +1491,6 @@ export async function GET(
           );
 
         });
-
-
 
     return NextResponse.json({
 
@@ -1833,8 +1511,6 @@ export async function GET(
       error,
 
     );
-
-
 
     return NextResponse.json(
 
