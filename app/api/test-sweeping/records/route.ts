@@ -1,823 +1,1385 @@
 import { NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
 
 type GeoJsonLineString = {
+
   type: "LineString";
+
   coordinates: number[][];
+
 };
 
 type CreateSweepingRecordBody = {
+
   main_street?: string;
+
   from_street?: string;
+
   to_street?: string;
 
   geometry?: GeoJsonLineString;
 
   work_date?: string | null;
+
   zone?: string | null;
+
   observations?: string | null;
+
   status?: string | null;
+
 };
 
-type UpdateSweepingRecordBody = {
+type UpdateSweepingRecordBody = CreateSweepingRecordBody & {
+
   id?: string;
 
-  main_street?: string;
-  from_street?: string;
-  to_street?: string;
-
-  geometry?: GeoJsonLineString;
-
-  work_date?: string | null;
-  zone?: string | null;
-  observations?: string | null;
-  status?: string | null;
 };
 
-/*
- * ============================================================
+/* ============================================================
+
  * HELPERS
- * ============================================================
- */
+
+ * ============================================================ */
 
 function parseDate(value: string | null) {
+
   if (!value) {
+
     return null;
+
   }
 
   const date = new Date(`${value}T00:00:00`);
 
   if (Number.isNaN(date.getTime())) {
+
     return null;
+
   }
 
   return date;
+
 }
 
-function daysBetween(
-  from: Date,
-  to: Date
-) {
-  const milliseconds =
-    to.getTime() -
-    from.getTime();
+function daysBetween(from: Date, to: Date) {
+
+  const milliseconds = to.getTime() - from.getTime();
 
   return Math.floor(
-    milliseconds /
-      (
-        1000 *
-        60 *
-        60 *
-        24
-      )
+
+    milliseconds / (1000 * 60 * 60 * 24)
+
+  );
+
+}
+
+function isValidGeometry(
+
+  geometry?: GeoJsonLineString | null
+
+) {
+
+  return Boolean(
+
+    geometry &&
+
+      geometry.type === "LineString" &&
+
+      Array.isArray(geometry.coordinates) &&
+
+      geometry.coordinates.length >= 2
+
+  );
+
+}
+
+function normalizeStatus(
+
+  value?: string | null
+
+) {
+
+  const status = (value || "COMPLETADO")
+
+    .trim()
+
+    .toUpperCase();
+
+  if (
+
+    status !== "PLANIFICADO" &&
+
+    status !== "COMPLETADO"
+
+  ) {
+
+    return null;
+
+  }
+
+  return status;
+
+}
+
+/* ============================================================
+
+ * GET
+
+ * Traer barridos guardados por rango.
+
+ * Máximo permitido: 31 días.
+
+ * ============================================================ */
+
+const SWEEPING_EDITOR_EMAILS = [
+  "waldaquin84@gmail.com",
+  "adm.serviciospublicos.mgp@gmail.com",
+];
+
+function normalizeAccessValue(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "");
+}
+
+async function getSweepingAccess() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      supabase,
+      authenticated: false,
+      canView: false,
+      canEdit: false,
+    };
+  }
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("email, role, is_readonly")
+    .eq("id", user.id)
+    .single();
+
+  const userRole = normalizeAccessValue(
+    profile?.role
+  );
+
+  const userEmail = normalizeAccessValue(
+    profile?.email || user.email
+  );
+
+  const isAdmin =
+    userRole === "admin";
+
+  const isAdminLectura =
+    userRole === "adminlectura";
+
+  const isServiciosPublicos =
+    SWEEPING_EDITOR_EMAILS
+      .map(normalizeAccessValue)
+      .includes(userEmail);
+
+  const canView =
+    isAdmin ||
+    isAdminLectura ||
+    isServiciosPublicos;
+
+  const canEdit =
+    (isAdmin || isServiciosPublicos) &&
+    profile?.is_readonly !== true;
+
+  return {
+    supabase,
+    authenticated: true,
+    canView,
+    canEdit,
+  };
+}
+
+function unauthorizedResponse() {
+  return NextResponse.json(
+    {
+      error:
+        "No tenés permisos para acceder al Mapa de Barrido.",
+    },
+    {
+      status: 403,
+    }
   );
 }
 
-/*
- * ============================================================
- * GET
- *
- * Traer barridos guardados por rango.
- *
- * Máximo permitido: 31 días.
- *
- * Ejemplo:
- *
- * /api/test-sweeping/records?from=2026-09-01&to=2026-09-30
- * ============================================================
- */
+function readOnlyResponse() {
+  return NextResponse.json(
+    {
+      error:
+        "Tu cuenta tiene acceso de solo lectura al Mapa de Barrido.",
+    },
+    {
+      status: 403,
+    }
+  );
+}
 
-export async function GET(
-  request: Request
-) {
+export async function GET(request: Request) {
+
   try {
-    const supabase =
-      await createClient();
 
-    const url =
-      new URL(
-        request.url
+    const access = await getSweepingAccess();
+
+    if (!access.authenticated) {
+      return NextResponse.json(
+        { error: "No autenticado." },
+        { status: 401 }
       );
+    }
 
-    const fromParam =
-      url.searchParams.get(
-        "from"
-      );
+    if (!access.canView) {
+      return unauthorizedResponse();
+    }
 
-    const toParam =
-      url.searchParams.get(
-        "to"
-      );
+    const supabase = access.supabase;
+    const url = new URL(request.url);
 
-    /*
-     * Si no mandamos fechas,
-     * usamos HOY.
-     */
+    const today = new Date()
 
-    const today =
-      new Date()
-        .toISOString()
-        .slice(
-          0,
-          10
-        );
+      .toISOString()
+
+      .slice(0, 10);
 
     const fromString =
-      fromParam ||
-      today;
+
+      url.searchParams.get("from") || today;
 
     const toString =
-      toParam ||
-      today;
 
-    const fromDate =
-      parseDate(
-        fromString
-      );
+      url.searchParams.get("to") || today;
 
-    const toDate =
-      parseDate(
-        toString
-      );
+    const fromDate = parseDate(fromString);
 
-    if (
-      !fromDate ||
-      !toDate
-    ) {
+    const toDate = parseDate(toString);
+
+    if (!fromDate || !toDate) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "El rango de fechas no es válido.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (
+
       toDate.getTime() <
+
       fromDate.getTime()
+
     ) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "La fecha hasta no puede ser anterior a la fecha desde.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
-
-    const difference =
-      daysBetween(
-        fromDate,
-        toDate
-      );
-
-    /*
-     * 01 → 31 = diferencia 30.
-     *
-     * Por eso:
-     * difference > 30
-     * significa más de 31 días inclusivos.
-     */
 
     if (
-      difference >
-      30
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "El rango máximo permitido es de 31 días.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
 
-    /*
-     * ======================================================
-     * LEER MEDIANTE RPC
-     *
-     * Evitamos SELECT directo sobre la tabla
-     * para no depender de RLS.
-     * ======================================================
-     */
+      daysBetween(
+
+        fromDate,
+
+        toDate
+
+      ) > 30
+
+    ) {
+
+      return NextResponse.json(
+
+        {
+
+          error:
+
+            "El rango máximo permitido es de 31 días.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
+      );
+
+    }
 
     const {
+
       data,
+
       error,
+
     } = await supabase.rpc(
+
       "test_get_sweeping_records_filtered",
+
       {
+
         p_from_date:
+
           fromString,
 
         p_to_date:
+
           toString,
+
       }
+
     );
 
     if (error) {
+
       console.error(
+
         "Error obteniendo barridos guardados:",
+
         error
+
       );
 
       return NextResponse.json(
+
         {
+
           error:
+
             error.message,
+
         },
+
         {
+
           status: 500,
+
         }
+
       );
+
     }
 
     return NextResponse.json(
-      data ??
-        []
+
+      data ?? []
+
     );
+
   } catch (error) {
+
     console.error(
+
       "Error interno obteniendo barridos:",
+
       error
+
     );
 
     return NextResponse.json(
+
       {
+
         error:
+
           "Error interno obteniendo barridos.",
+
       },
+
       {
+
         status: 500,
+
       }
+
     );
+
   }
+
 }
 
-/*
- * ============================================================
+/* ============================================================
+
  * POST
- *
- * Guardar un nuevo tramo
- * ============================================================
- */
+
+ * Guardar un nuevo tramo.
+
+ * Se mantiene la lógica que ya estaba funcionando.
+
+ * ============================================================ */
 
 export async function POST(
+
   request: Request
+
 ) {
+
   try {
+
+    const access =
+      await getSweepingAccess();
+
+    if (!access.authenticated) {
+      return NextResponse.json(
+        { error: "No autenticado." },
+        { status: 401 }
+      );
+    }
+
+    if (!access.canView) {
+      return unauthorizedResponse();
+    }
+
+    if (!access.canEdit) {
+      return readOnlyResponse();
+    }
+
     const supabase =
-      await createClient();
+      access.supabase;
 
     const body =
-      (
-        await request.json()
-      ) as CreateSweepingRecordBody;
+
+      (await request.json()) as CreateSweepingRecordBody;
 
     const mainStreet =
-      body.main_street?.trim() ??
-      "";
+
+      body.main_street?.trim() ?? "";
 
     const fromStreet =
-      body.from_street?.trim() ??
-      "";
+
+      body.from_street?.trim() ?? "";
 
     const toStreet =
-      body.to_street?.trim() ??
-      "";
+
+      body.to_street?.trim() ?? "";
 
     const geometry =
+
       body.geometry;
 
-    /*
-     * --------------------------------------------------------
-     * VALIDACIONES
-     * --------------------------------------------------------
-     */
+    const status =
+
+      normalizeStatus(
+
+        body.status
+
+      );
 
     if (!mainStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle principal.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (!fromStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle de inicio.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (!toStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle final.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (
-      !geometry ||
-      geometry.type !==
-        "LineString" ||
-      !Array.isArray(
-        geometry.coordinates
-      ) ||
-      geometry.coordinates.length <
-        2
+
+      !isValidGeometry(
+
+        geometry
+
+      )
+
     ) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "La geometría del tramo no es válida.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
-    /*
-     * --------------------------------------------------------
-     * GEOJSON A STRING
-     * --------------------------------------------------------
-     */
+    if (!status) {
 
-    const geoJsonString =
-      JSON.stringify(
-        geometry
+      return NextResponse.json(
+
+        {
+
+          error:
+
+            "El estado debe ser PLANIFICADO o COMPLETADO.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
       );
 
-    /*
-     * --------------------------------------------------------
-     * GUARDAR MEDIANTE RPC
-     * --------------------------------------------------------
-     */
+    }
+
+    if (
+
+      body.work_date &&
+
+      !parseDate(
+
+        body.work_date
+
+      )
+
+    ) {
+
+      return NextResponse.json(
+
+        {
+
+          error:
+
+            "La fecha de trabajo no es válida.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
+      );
+
+    }
 
     const {
+
       data,
+
       error,
+
     } = await supabase.rpc(
+
       "test_create_sweeping_record",
+
       {
+
         p_main_street:
+
           mainStreet,
 
         p_from_street:
+
           fromStreet,
 
         p_to_street:
+
           toStreet,
 
         p_geometry_geojson:
-          geoJsonString,
+
+          JSON.stringify(
+
+            geometry
+
+          ),
 
         p_work_date:
+
           body.work_date ??
+
           null,
 
         p_zone:
+
           body.zone?.trim() ||
+
           null,
 
         p_observations:
+
           body.observations?.trim() ||
+
           null,
 
         p_status:
-          body.status?.trim() ||
-          "COMPLETADO",
+
+          status,
+
       }
+
     );
 
     if (error) {
+
       console.error(
+
         "Error guardando barrido:",
+
         error
+
       );
 
       return NextResponse.json(
+
         {
+
           error:
+
             error.message,
+
         },
+
         {
+
           status: 500,
+
         }
+
       );
+
     }
 
     return NextResponse.json(
+
       {
+
         success: true,
-        record:
-          data,
+
+        record: data,
+
       },
+
       {
+
         status: 201,
+
       }
+
     );
+
   } catch (error) {
+
     console.error(
+
       "Error interno guardando barrido:",
+
       error
+
     );
 
     return NextResponse.json(
+
       {
+
         error:
+
           "Error interno guardando barrido.",
+
       },
+
       {
+
         status: 500,
+
       }
+
     );
+
   }
+
 }
 
-/*
- * ============================================================
- * PUT
- *
- * Editar tramo completo
- *
- * IMPORTANTE:
- *
- * Si cambian calle principal,
- * desde o hasta,
- * el frontend debe recalcular geometry
- * antes de llamar a este endpoint.
- * ============================================================
- */
+/* ============================================================
 
-export async function PUT(
+ * PATCH
+
+ * Editar un tramo existente.
+
+ *
+
+ * El frontend enviará el registro completo cuando se edite.
+
+ * La actualización se hace por RPC para mantener el mismo
+
+ * criterio que GET/POST y no depender de RLS directo.
+
+ * ============================================================ */
+
+export async function PATCH(
+
   request: Request
+
 ) {
+
   try {
+
+    const access =
+      await getSweepingAccess();
+
+    if (!access.authenticated) {
+      return NextResponse.json(
+        { error: "No autenticado." },
+        { status: 401 }
+      );
+    }
+
+    if (!access.canView) {
+      return unauthorizedResponse();
+    }
+
+    if (!access.canEdit) {
+      return readOnlyResponse();
+    }
+
     const supabase =
-      await createClient();
+      access.supabase;
 
     const body =
-      (
-        await request.json()
-      ) as UpdateSweepingRecordBody;
+
+      (await request.json()) as UpdateSweepingRecordBody;
 
     const id =
-      body.id?.trim() ??
-      "";
+
+      body.id?.trim() ?? "";
 
     const mainStreet =
-      body.main_street?.trim() ??
-      "";
+
+      body.main_street?.trim() ?? "";
 
     const fromStreet =
-      body.from_street?.trim() ??
-      "";
+
+      body.from_street?.trim() ?? "";
 
     const toStreet =
-      body.to_street?.trim() ??
-      "";
 
-    const geometry =
-      body.geometry;
+      body.to_street?.trim() ?? "";
 
-    /*
-     * --------------------------------------------------------
-     * VALIDACIONES
-     * --------------------------------------------------------
-     */
+    const status =
+
+      normalizeStatus(
+
+        body.status
+
+      );
 
     if (!id) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta el ID del tramo.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (!mainStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle principal.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (!fromStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle de inicio.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
     if (!toStreet) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta la calle final.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
-    if (
-      !geometry ||
-      geometry.type !==
-        "LineString" ||
-      !Array.isArray(
-        geometry.coordinates
-      ) ||
-      geometry.coordinates.length <
-        2
-    ) {
+    if (!status) {
+
       return NextResponse.json(
-        {
-          error:
-            "La geometría del tramo no es válida.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
 
-    /*
-     * --------------------------------------------------------
-     * FECHA
-     * --------------------------------------------------------
-     */
+        {
+
+          error:
+
+            "El estado debe ser PLANIFICADO o COMPLETADO.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
+      );
+
+    }
 
     if (
-      body.work_date
+
+      body.geometry !==
+
+        undefined &&
+
+      !isValidGeometry(
+
+        body.geometry
+
+      )
+
     ) {
-      const workDate =
-        parseDate(
-          body.work_date
-        );
 
-      if (!workDate) {
-        return NextResponse.json(
-          {
-            error:
-              "La fecha de trabajo no es válida.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-    }
+      return NextResponse.json(
 
-    /*
-     * --------------------------------------------------------
-     * GEOJSON A STRING
-     * --------------------------------------------------------
-     */
+        {
 
-    const geoJsonString =
-      JSON.stringify(
-        geometry
+          error:
+
+            "La geometría del tramo no es válida.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
       );
 
-    /*
-     * --------------------------------------------------------
-     * ACTUALIZAR MEDIANTE RPC
-     * --------------------------------------------------------
-     */
+    }
+
+    if (
+
+      body.work_date &&
+
+      !parseDate(
+
+        body.work_date
+
+      )
+
+    ) {
+
+      return NextResponse.json(
+
+        {
+
+          error:
+
+            "La fecha de trabajo no es válida.",
+
+        },
+
+        {
+
+          status: 400,
+
+        }
+
+      );
+
+    }
 
     const {
+
       data,
+
       error,
+
     } = await supabase.rpc(
+
       "test_update_sweeping_record",
+
       {
+
         p_id:
+
           id,
 
         p_main_street:
+
           mainStreet,
 
         p_from_street:
+
           fromStreet,
 
         p_to_street:
+
           toStreet,
 
         p_geometry_geojson:
-          geoJsonString,
+
+          body.geometry
+
+            ? JSON.stringify(
+
+                body.geometry
+
+              )
+
+            : null,
 
         p_work_date:
+
           body.work_date ??
+
+          null,
+
+        p_zone:
+
+          body.zone?.trim() ||
+
           null,
 
         p_observations:
+
           body.observations?.trim() ||
-          "",
+
+          null,
 
         p_status:
-          body.status?.trim() ||
-          "COMPLETADO",
+
+          status,
+
       }
+
     );
 
     if (error) {
+
       console.error(
+
         "Error actualizando tramo:",
+
         error
+
       );
 
       return NextResponse.json(
+
         {
+
           error:
+
             error.message,
+
         },
+
         {
+
           status: 500,
+
         }
+
+      );
+
+    }
+
+    const record =
+
+      Array.isArray(data)
+
+        ? data[0] ?? null
+
+        : data;
+
+    return NextResponse.json({
+
+      success: true,
+
+      record,
+
+    });
+
+  } catch (error) {
+
+    console.error(
+
+      "Error interno actualizando tramo:",
+
+      error
+
+    );
+
+    return NextResponse.json(
+
+      {
+
+        error:
+
+          "Error interno actualizando tramo.",
+
+      },
+
+      {
+
+        status: 500,
+
+      }
+
+    );
+
+  }
+
+}
+
+/* ============================================================
+
+ * DELETE
+
+ * Eliminar un tramo mediante RPC.
+
+ *
+
+ * Ejemplo:
+
+ * /api/test-sweeping/records?id=UUID
+
+ * ============================================================ */
+
+export async function DELETE(
+
+  request: Request
+
+) {
+
+  try {
+
+    const access =
+      await getSweepingAccess();
+
+    if (!access.authenticated) {
+      return NextResponse.json(
+        { error: "No autenticado." },
+        { status: 401 }
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        record:
-          data,
-      }
-    );
-  } catch (error) {
-    console.error(
-      "Error interno actualizando tramo:",
-      error
-    );
+    if (!access.canView) {
+      return unauthorizedResponse();
+    }
 
-    return NextResponse.json(
-      {
-        error:
-          "Error interno actualizando tramo.",
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-}
+    if (!access.canEdit) {
+      return readOnlyResponse();
+    }
 
-/*
- * ============================================================
- * DELETE
- *
- * Eliminar tramo mediante RPC
- *
- * Ejemplo:
- *
- * /api/test-sweeping/records?id=UUID
- * ============================================================
- */
-
-export async function DELETE(
-  request: Request
-) {
-  try {
     const supabase =
-      await createClient();
+      access.supabase;
 
     const url =
+
       new URL(
+
         request.url
+
       );
 
     const id =
-      url.searchParams.get(
-        "id"
-      );
+
+      url.searchParams
+
+        .get("id")
+
+        ?.trim() ?? "";
 
     if (!id) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "Falta el ID del tramo.",
+
         },
+
         {
+
           status: 400,
+
         }
+
       );
+
     }
 
-    /*
-     * --------------------------------------------------------
-     * ELIMINAR MEDIANTE RPC
-     * --------------------------------------------------------
-     */
-
     const {
+
       data,
+
       error,
+
     } = await supabase.rpc(
+
       "test_delete_sweeping_record",
+
       {
+
         p_id:
+
           id,
+
       }
+
     );
 
     if (error) {
+
       console.error(
+
         "Error eliminando tramo:",
+
         error
+
       );
 
       return NextResponse.json(
-        {
-          error:
-            error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
 
-    /*
-     * La RPC devuelve boolean.
-     *
-     * true:
-     * encontró y eliminó.
-     *
-     * false:
-     * no existía ese ID.
-     */
+        {
+
+          error:
+
+            error.message,
+
+        },
+
+        {
+
+          status: 500,
+
+        }
+
+      );
+
+    }
 
     if (
-      data !==
-      true
+
+      data !== true
+
     ) {
+
       return NextResponse.json(
+
         {
+
           error:
+
             "No se encontró el tramo a eliminar.",
+
         },
+
         {
+
           status: 404,
+
         }
+
       );
+
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-      }
-    );
+    return NextResponse.json({
+
+      success: true,
+
+    });
+
   } catch (error) {
+
     console.error(
+
       "Error interno eliminando tramo:",
+
       error
+
     );
 
     return NextResponse.json(
+
       {
+
         error:
+
           "Error interno eliminando tramo.",
+
       },
+
       {
+
         status: 500,
+
       }
+
     );
+
   }
+
 }
