@@ -507,4 +507,6 @@ export const STREETS = [
   "Calle 9",
   "Calle 9 Oeste",
   "Calle 5 bis",
+  "Calle Yancamil",
+  "Calle Calfucura",
 ] as const;
