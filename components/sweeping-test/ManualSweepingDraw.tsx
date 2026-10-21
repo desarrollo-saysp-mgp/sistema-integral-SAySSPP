@@ -13,6 +13,7 @@ type ManualSweepingDrawProps = {
   drawing: boolean;
   clearToken: number;
   finishToken: number;
+  undoToken: number;
 
   onCreated: (
     geometry: GeoJsonLineString
@@ -25,6 +26,7 @@ export default function ManualSweepingDraw({
   drawing,
   clearToken,
   finishToken,
+  undoToken,
   onCreated,
   onDrawingFinished,
 }: ManualSweepingDrawProps) {
@@ -38,6 +40,113 @@ export default function ManualSweepingDraw({
 
   const markersRef =
     useRef<L.CircleMarker[]>([]);
+
+  /*
+   * Guardamos callbacks en refs para que un render del padre
+   * no vuelva a registrar innecesariamente los eventos del mapa.
+   */
+  const onCreatedRef =
+    useRef(onCreated);
+
+  const onDrawingFinishedRef =
+    useRef(onDrawingFinished);
+
+  useEffect(() => {
+    onCreatedRef.current =
+      onCreated;
+  }, [
+    onCreated,
+  ]);
+
+  useEffect(() => {
+    onDrawingFinishedRef.current =
+      onDrawingFinished;
+  }, [
+    onDrawingFinished,
+  ]);
+
+  /*
+   * ==========================================================
+   * ACTUALIZAR LÍNEA
+   * ==========================================================
+   */
+
+  function refreshPolyline() {
+    const points =
+      pointsRef.current;
+
+    /*
+     * Sin puntos:
+     * sacamos la línea temporal.
+     */
+    if (
+      points.length === 0
+    ) {
+      if (
+        polylineRef.current &&
+        map.hasLayer(
+          polylineRef.current
+        )
+      ) {
+        map.removeLayer(
+          polylineRef.current
+        );
+      }
+
+      polylineRef.current =
+        null;
+
+      return;
+    }
+
+    /*
+     * Si todavía no existe,
+     * la creamos.
+     */
+    if (
+      !polylineRef.current
+    ) {
+      polylineRef.current =
+        L.polyline(
+          points,
+          {
+            color:
+              "#10b981",
+
+            weight:
+              6,
+
+            opacity:
+              0.95,
+
+            lineCap:
+              "round",
+
+            lineJoin:
+              "round",
+
+            interactive:
+              false,
+          }
+        ).addTo(map);
+
+      return;
+    }
+
+    /*
+     * Si ya existe,
+     * actualizamos todos sus puntos.
+     */
+    polylineRef.current.setLatLngs(
+      points
+    );
+  }
+
+  /*
+   * ==========================================================
+   * LIMPIAR DIBUJO COMPLETO
+   * ==========================================================
+   */
 
   function clearDrawing() {
     if (
@@ -73,7 +182,59 @@ export default function ManualSweepingDraw({
     pointsRef.current = [];
   }
 
+  /*
+   * ==========================================================
+   * DESHACER ÚLTIMO PUNTO
+   * ==========================================================
+   */
+
+  function undoLastPoint() {
+    if (
+      pointsRef.current.length ===
+      0
+    ) {
+      return;
+    }
+
+    /*
+     * Quitamos el último punto.
+     */
+    pointsRef.current.pop();
+
+    /*
+     * Quitamos también su marcador.
+     */
+    const lastMarker =
+      markersRef.current.pop();
+
+    if (
+      lastMarker &&
+      map.hasLayer(
+        lastMarker
+      )
+    ) {
+      map.removeLayer(
+        lastMarker
+      );
+    }
+
+    /*
+     * Redibujamos la polyline
+     * con los puntos que quedaron.
+     */
+    refreshPolyline();
+  }
+
+  /*
+   * ==========================================================
+   * FINALIZAR DIBUJO
+   * ==========================================================
+   */
+
   function finishDrawing() {
+    /*
+     * Necesitamos mínimo dos puntos.
+     */
     if (
       pointsRef.current.length <
       2
@@ -95,12 +256,21 @@ export default function ManualSweepingDraw({
           ),
       };
 
-    onCreated(
+    onCreatedRef.current(
       geometry
     );
 
-    onDrawingFinished();
+    onDrawingFinishedRef.current();
   }
+
+  /*
+   * ==========================================================
+   * CLEAR TOKEN
+   *
+   * Limpia todo, pero si drawing sigue en true
+   * permite continuar dibujando desde cero.
+   * ==========================================================
+   */
 
   useEffect(() => {
     clearDrawing();
@@ -109,6 +279,33 @@ export default function ManualSweepingDraw({
   }, [
     clearToken,
   ]);
+
+  /*
+   * ==========================================================
+   * UNDO TOKEN
+   *
+   * El padre incrementa este valor cuando se presiona
+   * "Deshacer último punto".
+   * ==========================================================
+   */
+
+  useEffect(() => {
+    if (!drawing) {
+      return;
+    }
+
+    undoLastPoint();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    undoToken,
+  ]);
+
+  /*
+   * ==========================================================
+   * FINISH TOKEN
+   * ==========================================================
+   */
 
   useEffect(() => {
     if (!drawing) {
@@ -121,6 +318,12 @@ export default function ManualSweepingDraw({
   }, [
     finishToken,
   ]);
+
+  /*
+   * ==========================================================
+   * DIBUJO
+   * ==========================================================
+   */
 
   useEffect(() => {
     if (!drawing) {
@@ -137,21 +340,27 @@ export default function ManualSweepingDraw({
         point
       );
 
+      /*
+       * Punto visual.
+       */
       const marker =
         L.circleMarker(
           point,
           {
-            radius: 5,
+            radius:
+              5,
 
             color:
               "#ffffff",
 
-            weight: 2,
+            weight:
+              2,
 
             fillColor:
               "#10b981",
 
-            fillOpacity: 1,
+            fillOpacity:
+              1,
 
             interactive:
               false,
@@ -162,38 +371,7 @@ export default function ManualSweepingDraw({
         marker
       );
 
-      if (
-        !polylineRef.current
-      ) {
-        polylineRef.current =
-          L.polyline(
-            pointsRef.current,
-            {
-              color:
-                "#10b981",
-
-              weight: 6,
-
-              opacity:
-                0.95,
-
-              lineCap:
-                "round",
-
-              lineJoin:
-                "round",
-
-              interactive:
-                false,
-            }
-          ).addTo(map);
-
-        return;
-      }
-
-      polylineRef.current.setLatLngs(
-        pointsRef.current
-      );
+      refreshPolyline();
     }
 
     map.on(
@@ -211,6 +389,12 @@ export default function ManualSweepingDraw({
     map,
     drawing,
   ]);
+
+  /*
+   * ==========================================================
+   * DESMONTAR
+   * ==========================================================
+   */
 
   useEffect(() => {
     return () => {
