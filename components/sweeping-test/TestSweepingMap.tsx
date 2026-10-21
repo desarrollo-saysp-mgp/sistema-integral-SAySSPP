@@ -4,6 +4,10 @@ import {
 
   MapContainer,
 
+  Marker,
+
+  Polygon,
+
   Polyline,
 
   Popup,
@@ -11,6 +15,8 @@ import {
   TileLayer,
 
   useMap,
+
+  useMapEvents,
 
 } from "react-leaflet";
 
@@ -29,6 +35,8 @@ import {
   useEffect,
 
   useMemo,
+
+  useRef,
 
   useState,
 
@@ -110,6 +118,14 @@ type SweepingRecordApi = {
 
   updated_at?: string | null;
 
+  planned_record_id?: string | null;
+
+  realized_record_id?: string | null;
+
+  batch_id?: string | null;
+
+  sweeping_type?: "MANUAL" | "MECANICO" | null;
+
 };
 
 type MapRoute = SweepingRecordApi & {
@@ -126,13 +142,223 @@ type LoadMode =
 
   | "automatic"
 
-  | "manual";
+  | "manual"
+
+  | "area"
+
+  | "mechanical";
+
+type GeoJsonMultiLineString = {
+  type: "MultiLineString";
+  coordinates: number[][][];
+};
+
+type GeoJsonPolygon = {
+  type: "Polygon";
+  coordinates: number[][][];
+};
+
+type AreaStreetGeometry =
+  | GeoJsonLineString
+  | GeoJsonMultiLineString;
+
+type AreaStreet = {
+  corridor_key: string;
+  street_name: string;
+  highway_types: string[];
+  priority: "ALTA" | "MEDIA" | "BAJA";
+  length_meters: number;
+  geometry: AreaStreetGeometry;
+};
+
+type AreaStreetsResponse = {
+  success: boolean;
+  summary: {
+    total: number;
+    high_priority: number;
+    medium_priority: number;
+    low_priority: number;
+    total_length_meters: number;
+    total_length_km: number;
+  };
+  streets: AreaStreet[];
+};
+
+type SweepingAreaBatch = {
+  batch_id: string;
+  work_date: string;
+  observations: string | null;
+  color?: string | null;
+  geometry: GeoJsonPolygon;
+  pending_count?: number;
+  realized_count?: number;
+  created_at?: string | null;
+};
+
+type MechanicalMapPoint = {
+  lat: number;
+  lng: number;
+};
+
+type MechanicalCorridorPreview = {
+  corridor_key: string;
+  street_name: string;
+  from_street: string;
+  to_street: string;
+  start_distance_meters: number;
+  end_distance_meters: number;
+  length_meters: number;
+  streets_used?: string[];
+  geometry: GeoJsonLineString;
+};
 
 type SweepingStatus =
 
   | "PLANIFICADO"
 
   | "COMPLETADO";
+
+type ConfirmDialogConfig = {
+  title: string;
+  message: string;
+  detail?: string;
+  confirmLabel?: string;
+  variant?: "danger" | "success";
+};
+
+type SweepingComplaint = {
+  id: number;
+  complaint_date: string;
+  address: string | null;
+  street_number: string | null;
+  status: string | null;
+  details: string | null;
+  lat: number;
+  lng: number;
+  created_at?: string | null;
+};
+
+type SweepingComplaintsResponse = {
+  data: SweepingComplaint[];
+  total: number;
+  georeferenced: number;
+  without_georeference: number;
+};
+
+type SweepingAlltrackVehicle = {
+  code: string;
+  found_in_database: boolean;
+  has_alltrack: boolean;
+  available_position: boolean;
+  reason: string | null;
+  vehicle: {
+    id: string;
+    name: string | null;
+    license_plate: string | null;
+    department: string | null;
+    operational_status: string | null;
+    utilization: string | null;
+    primary_driver_1: string | null;
+    primary_driver_2: string | null;
+    backup_driver: string | null;
+    alltrack_vehicle_id: string | null;
+  } | null;
+  position: {
+    lat: number;
+    lng: number;
+    status: string | null;
+    speed: number | null;
+    driver: string | null;
+    date: string | null;
+    time: string | null;
+    address: string | null;
+    odometer: string | number | null;
+    hourmeter: string | number | null;
+    heading: number | null;
+    timeout: number | null;
+    alltrack_vehicle_id: string | null;
+    alltrack_plate: string | null;
+  } | null;
+};
+
+type SweepingAlltrackResponse = {
+  updated_at: string;
+  requested_codes: string[];
+  total: number;
+  located: number;
+  without_position: number;
+  data: SweepingAlltrackVehicle[];
+};
+
+type AlltrackHistoryPoint = {
+  lat: number;
+  lon: number;
+  date: string | null;
+  time: string | null;
+  timestamp?: string | null;
+  speed: number | null;
+  odometer: string | number | null;
+  driver: string | null;
+};
+
+type AlltrackHistoryStop = {
+  type: string;
+  lat: number;
+  lng: number;
+  from_date: string | null;
+  from_time: string | null;
+  to_date: string | null;
+  to_time: string | null;
+  minutes: number | null;
+  points_count: number;
+  validation?: "alltrack" | "spatial_b6";
+  max_displacement_meters?: number | null;
+  odometer_delta_km?: number | null;
+};
+
+type SweepingAlltrackHistoryResponse = {
+  meta?: {
+    route_points_count?: number;
+    route_paths_count?: number;
+    stops_count?: number;
+    stops_strategy?: string;
+  };
+  data: {
+    vehicle: {
+      id: string;
+      code: string;
+      name: string | null;
+      license_plate: string | null;
+      department: string | null;
+      primary_driver_1: string | null;
+      primary_driver_2: string | null;
+      backup_driver: string | null;
+      alltrack_vehicle_id: string | null;
+    };
+    period: {
+      from: string;
+      to: string;
+    };
+    summary: {
+      session_seconds: number;
+      session_time: string;
+      idle_seconds: number;
+      idle_time: string;
+      movement_seconds: number;
+      movement_time: string;
+      distance_km: number;
+      distance_meters: number;
+      movement_percent?: number;
+      idle_percent?: number;
+    };
+    stops: AlltrackHistoryStop[];
+    route: {
+      segments: number;
+      points: AlltrackHistoryPoint[];
+      paths: AlltrackHistoryPoint[][];
+    } | null;
+  };
+};
 
 /*
 
@@ -165,6 +391,1972 @@ const WEEK_COLORS = [
   "#14b8a6",
 
 ];
+
+function getRouteWeight(
+  totalRoutes: number
+) {
+  if (totalRoutes < 200) {
+    return 6;
+  }
+
+  if (totalRoutes < 500) {
+    return 5;
+  }
+
+  if (totalRoutes < 1000) {
+    return 4;
+  }
+
+  return 3;
+}
+
+function createComplaintPinIcon(
+  color: string
+) {
+  return L.divIcon({
+    className: "",
+    iconSize: [30, 38],
+    iconAnchor: [15, 36],
+    popupAnchor: [0, -34],
+    html: `
+      <div style="
+        position:relative;
+        width:30px;
+        height:38px;
+      ">
+        <div style="
+          position:absolute;
+          left:4px;
+          top:2px;
+          width:22px;
+          height:22px;
+          background:${color};
+          border:3px solid #ffffff;
+          border-radius:50% 50% 50% 0;
+          transform:rotate(-45deg);
+          box-shadow:0 3px 10px rgba(0,0,0,.38);
+        ">
+          <div style="
+            position:absolute;
+            left:50%;
+            top:50%;
+            width:7px;
+            height:7px;
+            border-radius:9999px;
+            background:#ffffff;
+            transform:translate(-50%,-50%);
+          "></div>
+        </div>
+      </div>
+    `,
+  });
+}
+
+function parseAlltrackPositionDateTime(
+  dateValue?: string | null,
+  timeValue?: string | null
+) {
+  const dateText =
+    String(dateValue ?? "").trim();
+
+  const timeText =
+    String(timeValue ?? "00:00:00").trim() ||
+    "00:00:00";
+
+  let year = "";
+  let month = "";
+  let day = "";
+
+  if (
+    /^\d{2}-\d{2}-\d{4}$/.test(
+      dateText
+    )
+  ) {
+    const parts =
+      dateText.split("-");
+
+    day = parts[0];
+    month = parts[1];
+    year = parts[2];
+  } else if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      dateText
+    )
+  ) {
+    const parts =
+      dateText.split("-");
+
+    year = parts[0];
+    month = parts[1];
+    day = parts[2];
+  } else {
+    return null;
+  }
+
+  const value = new Date(
+    `${year}-${month}-${day}T${timeText}`
+  );
+
+  return Number.isNaN(
+    value.getTime()
+  )
+    ? null
+    : value;
+}
+
+function getAlltrackFreshness(
+  dateValue?: string | null,
+  timeValue?: string | null
+) {
+  const positionDate =
+    parseAlltrackPositionDateTime(
+      dateValue,
+      timeValue
+    );
+
+  if (!positionDate) {
+    return {
+      label: "Sin fecha",
+      color: "#64748b",
+      className:
+        "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300",
+    };
+  }
+
+  const ageMinutes =
+    Math.max(
+      0,
+      (
+        Date.now() -
+        positionDate.getTime()
+      ) /
+        60000
+    );
+
+  if (ageMinutes <= 120) {
+    return {
+      label: "Posición reciente",
+      color: "#16a34a",
+      className:
+        "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300",
+    };
+  }
+
+  if (ageMinutes <= 1440) {
+    return {
+      label: "Última posición de hoy",
+      color: "#f59e0b",
+      className:
+        "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    };
+  }
+
+  return {
+    label: "Posición antigua",
+    color: "#64748b",
+    className:
+      "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300",
+  };
+}
+
+function createAlltrackVehicleIcon(
+  code: string,
+  color: string
+) {
+  const safeCode =
+    String(code || "?")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  return L.divIcon({
+    className: "",
+    iconSize: [58, 42],
+    iconAnchor: [29, 36],
+    popupAnchor: [0, -34],
+    html: `
+      <div style="
+        position:relative;
+        width:58px;
+        height:42px;
+        display:flex;
+        align-items:flex-start;
+        justify-content:center;
+      ">
+        <div style="
+          min-width:42px;
+          height:30px;
+          padding:0 8px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border-radius:10px;
+          background:${color};
+          color:#ffffff;
+          border:3px solid #ffffff;
+          box-shadow:0 4px 12px rgba(0,0,0,.35);
+          font-size:11px;
+          font-weight:800;
+          line-height:1;
+          white-space:nowrap;
+        ">${safeCode}</div>
+        <div style="
+          position:absolute;
+          left:50%;
+          top:27px;
+          width:10px;
+          height:10px;
+          background:${color};
+          border-right:2px solid #ffffff;
+          border-bottom:2px solid #ffffff;
+          transform:translateX(-50%) rotate(45deg);
+        "></div>
+      </div>
+    `,
+  });
+}
+
+function createAlltrackStopIcon(
+  minutes: number | null
+) {
+  const label =
+    minutes !== null
+      ? `${minutes}m`
+      : "P";
+
+  return L.divIcon({
+    className: "",
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -15],
+    html: `
+      <div style="
+        width:34px;
+        height:34px;
+        border-radius:9999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#f97316;
+        color:#ffffff;
+        border:3px solid #ffffff;
+        box-shadow:0 3px 10px rgba(0,0,0,.35);
+        font-size:10px;
+        font-weight:800;
+      " title="Detención">${label}</div>
+    `,
+  });
+}
+
+function createAlltrackEndpointIcon(
+  label: string,
+  color: string
+) {
+  return L.divIcon({
+    className: "",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -14],
+    html: `
+      <div style="
+        width:30px;
+        height:30px;
+        border-radius:9999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:${color};
+        color:#ffffff;
+        border:3px solid #ffffff;
+        box-shadow:0 3px 10px rgba(0,0,0,.35);
+        font-size:11px;
+        font-weight:800;
+      " title="${label}">${label}</div>
+    `,
+  });
+}
+
+function escapeAreaLabelText(
+  value: string
+) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const AREA_COLOR_OPTIONS = [
+  { value: "#f97316", label: "Naranja" },
+  { value: "#dc2626", label: "Rojo" },
+  { value: "#db2777", label: "Rosa" },
+  { value: "#7c3aed", label: "Violeta" },
+  { value: "#0891b2", label: "Celeste" },
+  { value: "#16a34a", label: "Verde" },
+  { value: "#2563eb", label: "Azul" },
+];
+
+function normalizeAreaColor(
+  value?: string | null
+) {
+  const clean =
+    value?.trim().toLowerCase() ||
+    "";
+
+  return AREA_COLOR_OPTIONS.some(
+    (option) =>
+      option.value === clean
+  )
+    ? clean
+    : "#f97316";
+}
+
+function createAreaPlanningLabelIcon(
+  value: string,
+  color = "#f97316"
+) {
+  const clean =
+    value.trim() ||
+    "Zona planificada";
+
+  const short =
+    clean.length > 42
+      ? `${clean.slice(0, 39)}...`
+      : clean;
+
+  const safe =
+    escapeAreaLabelText(short);
+
+  const background =
+    normalizeAreaColor(
+      color
+    );
+
+  return L.divIcon({
+    className: "",
+    iconSize: [150, 34],
+    iconAnchor: [75, 17],
+    html: `
+      <div style="
+        min-width:110px;
+        max-width:150px;
+        padding:7px 10px;
+        border-radius:9999px;
+        background:${background};
+        color:#ffffff;
+        border:2px solid #ffffff;
+        box-shadow:0 3px 10px rgba(15,23,42,.28);
+        font-size:11px;
+        line-height:1.15;
+        font-weight:800;
+        text-align:center;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      ">${safe}</div>
+    `,
+  });
+}
+
+function areaPolygonToLeaflet(
+  geometry?: GeoJsonPolygon | null
+): [number, number][] {
+  if (
+    !geometry ||
+    geometry.type !== "Polygon" ||
+    !Array.isArray(
+      geometry.coordinates
+    ) ||
+    !Array.isArray(
+      geometry.coordinates[0]
+    )
+  ) {
+    return [];
+  }
+
+  return geometry.coordinates[0]
+    .filter(
+      (point) =>
+        Array.isArray(point) &&
+        point.length >= 2 &&
+        Number.isFinite(
+          Number(point[0])
+        ) &&
+        Number.isFinite(
+          Number(point[1])
+        )
+    )
+    .map(
+      ([lng, lat]) =>
+        [
+          Number(lat),
+          Number(lng),
+        ] as [number, number]
+    );
+}
+
+function areaPolygonCenter(
+  geometry?: GeoJsonPolygon | null
+): [number, number] | null {
+  const positions =
+    areaPolygonToLeaflet(
+      geometry
+    );
+
+  if (positions.length < 3) {
+    return null;
+  }
+
+  const bounds =
+    L.latLngBounds(
+      positions
+    );
+
+  const center =
+    bounds.getCenter();
+
+  return [
+    center.lat,
+    center.lng,
+  ];
+}
+
+type RequiredStreetAutocompleteProps = {
+  label: string;
+  value: string;
+  onSelectedChange: (value: string) => void;
+  placeholder?: string;
+};
+
+function RequiredStreetAutocomplete({
+  label,
+  value,
+  onSelectedChange,
+  placeholder,
+}: RequiredStreetAutocompleteProps) {
+  /*
+   * El valor que se escribe vive dentro de este componente.
+   * De esta forma cada tecla NO vuelve a renderizar los dos mapas.
+   *
+   * El valor del componente padre se actualiza únicamente cuando
+   * detectamos una selección del desplegable.
+   */
+  const [draftValue, setDraftValue] =
+    useState(value);
+
+  const [
+    selectionLocked,
+    setSelectionLocked,
+  ] = useState(
+    value.trim() !== ""
+  );
+
+  const rootRef =
+    useRef<HTMLDivElement | null>(
+      null
+    );
+
+  const selectionIntentRef =
+    useRef(false);
+
+  const selectedValueRef =
+    useRef(value);
+
+  const ignoreNextEmptySyncRef =
+    useRef(false);
+
+  useEffect(() => {
+    /*
+     * Cuando nosotros invalidamos una selección porque el usuario
+     * volvió a escribir, el padre pasa temporalmente a "".
+     * No queremos que eso borre lo que está escribiendo.
+     */
+    if (
+      ignoreNextEmptySyncRef.current &&
+      value === ""
+    ) {
+      ignoreNextEmptySyncRef.current =
+        false;
+      selectedValueRef.current = "";
+      return;
+    }
+
+    selectedValueRef.current = value;
+    setDraftValue(value);
+    setSelectionLocked(
+      value.trim() !== ""
+    );
+  }, [value]);
+
+  function handleAutocompleteChange(
+    nextValue: string
+  ) {
+    setDraftValue(nextValue);
+
+    if (selectionIntentRef.current) {
+      selectionIntentRef.current =
+        false;
+
+      selectedValueRef.current =
+        nextValue;
+
+      onSelectedChange(
+        nextValue
+      );
+
+      /*
+       * Al confirmar una opción dejamos el campo "bloqueado" en
+       * modo texto simple. Así el autocomplete se desmonta por
+       * completo y NO puede volver a abrir su lista solo.
+       *
+       * Si el usuario quiere cambiar la calle, alcanza con volver
+       * a hacer click/foco en el campo y se reactiva el autocomplete.
+       */
+      setSelectionLocked(true);
+
+      return;
+    }
+
+    /*
+     * Si había una calle válida seleccionada y el usuario vuelve
+     * a escribir, deja de considerarse válida hasta que elija
+     * nuevamente una opción del desplegable.
+     *
+     * Esto produce como máximo UN render del padre al comenzar
+     * a modificar el campo, no uno por cada tecla.
+     */
+    if (
+      selectedValueRef.current !== ""
+    ) {
+      selectedValueRef.current = "";
+      ignoreNextEmptySyncRef.current =
+        true;
+      setSelectionLocked(false);
+      onSelectedChange("");
+    }
+  }
+
+  function handleMouseDownCapture(
+    event: React.MouseEvent<HTMLDivElement>
+  ) {
+    const target =
+      event.target as HTMLElement | null;
+
+    if (!target) {
+      return;
+    }
+
+    /*
+     * Click dentro del input = escribir/posicionar cursor.
+     * Click fuera del input dentro del autocomplete = opción
+     * del desplegable.
+     */
+    if (
+      target.closest(
+        "input, textarea"
+      )
+    ) {
+      return;
+    }
+
+    selectionIntentRef.current = true;
+
+    /*
+     * Evita que el input pierda foco antes de que la opción
+     * procese el click. Esto elimina el problema de tener que
+     * apretar dos veces una calle del desplegable.
+     */
+    event.preventDefault();
+  }
+
+  function handleKeyDownCapture(
+    event: React.KeyboardEvent<HTMLDivElement>
+  ) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    /*
+     * Permite seleccionar también con Enter.
+     */
+    selectionIntentRef.current = true;
+
+    window.setTimeout(() => {
+      selectionIntentRef.current = false;
+    }, 0);
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      onMouseDownCapture={
+        handleMouseDownCapture
+      }
+      onKeyDownCapture={
+        handleKeyDownCapture
+      }
+    >
+      {selectionLocked ? (
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            {label}
+          </label>
+
+          <input
+            type="text"
+            value={draftValue}
+            readOnly
+            placeholder={placeholder}
+            onFocus={() => {
+              /*
+               * Recién cuando el usuario vuelve a entrar al campo
+               * habilitamos otra vez el autocomplete para cambiar
+               * la selección.
+               */
+              setSelectionLocked(false);
+            }}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      ) : (
+        <StreetAutocomplete
+          label={label}
+          value={draftValue}
+          onChange={
+            handleAutocompleteChange
+          }
+          placeholder={placeholder}
+        />
+      )}
+    </div>
+  );
+}
+
+type LocalObservationInputProps = {
+  value: string;
+  onCommit: (value: string) => void;
+};
+
+function LocalObservationInput({
+  value,
+  onCommit,
+}: LocalObservationInputProps) {
+  /*
+   * La observación se escribe en estado LOCAL para que cada tecla
+   * no vuelva a renderizar los mapas con miles de Polyline.
+   *
+   * Recién sincronizamos con TestSweepingMap cuando el textarea
+   * pierde el foco (por ejemplo al hacer click en "Agregar tramo").
+   */
+  const [
+    draftObservation,
+    setDraftObservation,
+  ] = useState(value);
+
+  useEffect(() => {
+    setDraftObservation(value);
+  }, [value]);
+
+  function commitObservation() {
+    if (
+      draftObservation !==
+      value
+    ) {
+      onCommit(
+        draftObservation
+      );
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <label
+        htmlFor="sweeping-observations"
+        className="mb-1 block text-sm font-medium"
+      >
+        Observación
+        <span className="ml-1 text-xs font-normal text-muted-foreground">
+          (opcional)
+        </span>
+      </label>
+
+      <textarea
+        id="sweeping-observations"
+        value={draftObservation}
+        onChange={(event) =>
+          setDraftObservation(
+            event.target.value
+          )
+        }
+        onBlur={
+          commitObservation
+        }
+        rows={3}
+        maxLength={500}
+        placeholder="Ej: Evitar horario escolar, sector con autos estacionados..."
+        className="w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+      />
+
+      <p className="mt-1 text-right text-xs text-muted-foreground">
+        {draftObservation.length}/500
+      </p>
+    </div>
+  );
+}
+
+type ShownRoutesPanelProps = {
+  kind: "planned" | "completed";
+  routes: MapRoute[];
+  fromDate: string;
+  toDate: string;
+  editingRecordId: string | null;
+  selectedRouteId: string | null;
+  selectedBatchId: string | null;
+  readOnly: boolean;
+  editingSaving: boolean;
+  deletingId: string | null;
+  markingRealizedId: string | null;
+  deletingBatchId: string | null;
+  markingBatchId: string | null;
+  deletingAllPending: boolean;
+  onEdit: (record: MapRoute) => void;
+  onDelete: (record: MapRoute) => void;
+  onSelectRoute: (
+    kind: "planned" | "completed",
+    record: MapRoute
+  ) => void;
+  onSelectBatch?: (
+    kind: "planned" | "completed",
+    batchId: string,
+    records: MapRoute[]
+  ) => void;
+  onMarkCompleted?: (record: MapRoute) => void;
+  onMarkBatchCompleted?: (
+    batchId: string,
+    records: MapRoute[]
+  ) => void;
+  onDeleteBatch?: (
+    batchId: string,
+    records: MapRoute[]
+  ) => void;
+  onDeleteCompletedBatch?: (
+    batchId: string,
+    records: MapRoute[]
+  ) => void;
+  onDeleteAllPending?: () => void;
+};
+
+function ShownRoutesPanel({
+  kind,
+  routes,
+  fromDate,
+  toDate,
+  editingRecordId,
+  selectedRouteId,
+  selectedBatchId,
+  readOnly,
+  editingSaving,
+  deletingId,
+  markingRealizedId,
+  deletingBatchId,
+  markingBatchId,
+  deletingAllPending,
+  onEdit,
+  onDelete,
+  onSelectRoute,
+  onSelectBatch,
+  onMarkCompleted,
+  onMarkBatchCompleted,
+  onDeleteBatch,
+  onDeleteCompletedBatch,
+  onDeleteAllPending,
+}: ShownRoutesPanelProps) {
+  const [searchText, setSearchText] =
+    useState("");
+
+  const [currentPage, setCurrentPage] =
+    useState(1);
+
+  const [
+    expandedBatchIds,
+    setExpandedBatchIds,
+  ] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  const PAGE_SIZE = 8;
+
+  const normalizedSearch =
+    searchText
+      .trim()
+      .toLocaleLowerCase("es");
+
+  const [
+    sweepingTypeFilter,
+    setSweepingTypeFilter,
+  ] = useState<
+    "ALL" | "MANUAL" | "MECANICO"
+  >("ALL");
+
+  const filteredRoutes = useMemo(() => {
+    /*
+     * En "Barridos mostrados" ordenamos por orden de carga:
+     * el registro más recientemente cargado aparece primero.
+     *
+     * Usamos created_at, que representa el momento real en que
+     * se creó el registro en la base. No modificamos el orden
+     * de los mapas ni los datos originales.
+     */
+    const orderedRoutes = [
+      ...routes,
+    ].sort((a, b) => {
+      const aTime =
+        a.created_at
+          ? new Date(
+              a.created_at
+            ).getTime()
+          : 0;
+
+      const bTime =
+        b.created_at
+          ? new Date(
+              b.created_at
+            ).getTime()
+          : 0;
+
+      return bTime - aTime;
+    });
+
+    return orderedRoutes.filter(
+      (record) => {
+        if (
+          sweepingTypeFilter !==
+            "ALL" &&
+          record.sweeping_type !==
+            sweepingTypeFilter
+        ) {
+          return false;
+        }
+
+        if (!normalizedSearch) {
+          return true;
+        }
+
+        const searchableText = [
+          record.main_street,
+          record.from_street,
+          record.to_street,
+          record.observations ?? "",
+          record.sweeping_type === "MECANICO"
+            ? "mecanico mecánico barredora"
+            : record.sweeping_type === "MANUAL"
+              ? "manual cuadrilla"
+              : "",
+        ]
+          .join(" ")
+          .toLocaleLowerCase("es");
+
+        return searchableText.includes(
+          normalizedSearch
+        );
+      }
+    );
+  }, [
+    routes,
+    normalizedSearch,
+    sweepingTypeFilter,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredRoutes.length / PAGE_SIZE
+    )
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    normalizedSearch,
+    sweepingTypeFilter,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage((previous) =>
+      Math.min(previous, totalPages)
+    );
+  }, [totalPages]);
+
+  const pageStart =
+    (currentPage - 1) * PAGE_SIZE;
+
+  const paginatedRoutes =
+    filteredRoutes.slice(
+      pageStart,
+      pageStart + PAGE_SIZE
+    );
+
+  const visibleFrom =
+    filteredRoutes.length === 0
+      ? 0
+      : pageStart + 1;
+
+  const visibleTo = Math.min(
+    pageStart + PAGE_SIZE,
+    filteredRoutes.length
+  );
+
+  const isPlanned =
+    kind === "planned";
+
+  /*
+   * Las cargas hechas con "Seleccionar zona" comparten batch_id.
+   * Las agrupamos solo para mostrar acciones masivas; el listado
+   * individual se conserva debajo sin ningún cambio.
+   */
+  const batchGroups = useMemo(() => {
+    const grouped =
+      new Map<string, MapRoute[]>();
+
+    for (const record of filteredRoutes) {
+      const batchId =
+        record.batch_id?.trim();
+
+      if (!batchId) {
+        continue;
+      }
+
+      const current =
+        grouped.get(batchId) ?? [];
+
+      current.push(record);
+      grouped.set(
+        batchId,
+        current
+      );
+    }
+
+    return Array.from(
+      grouped.entries()
+    )
+      .map(
+        ([batchId, records]) => ({
+          batchId,
+          records,
+        })
+      )
+      .sort((a, b) => {
+        const aTime =
+          Math.max(
+            ...a.records.map(
+              (record) =>
+                record.created_at
+                  ? new Date(
+                      record.created_at
+                    ).getTime()
+                  : 0
+            )
+          );
+
+        const bTime =
+          Math.max(
+            ...b.records.map(
+              (record) =>
+                record.created_at
+                  ? new Date(
+                      record.created_at
+                    ).getTime()
+                  : 0
+            )
+          );
+
+        return bTime - aTime;
+      });
+  }, [
+    filteredRoutes,
+  ]);
+
+  const title =
+    isPlanned
+      ? "Planificados"
+      : "Realizados";
+
+  const panelClasses =
+    isPlanned
+      ? "border-blue-200 bg-blue-50/40 dark:border-blue-900 dark:bg-blue-950/20"
+      : "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/20";
+
+  const titleClasses =
+    isPlanned
+      ? "text-blue-700 dark:text-blue-300"
+      : "text-emerald-700 dark:text-emerald-300";
+
+  const badgeClasses =
+    isPlanned
+      ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300";
+
+  const pendingPlannedCount =
+    isPlanned
+      ? routes.filter(
+          (record) =>
+            !record.realized_record_id
+        ).length
+      : 0;
+
+  const mechanicalCount =
+    routes.filter(
+      (record) =>
+        record.sweeping_type ===
+        "MECANICO"
+    ).length;
+
+  const manualCount =
+    routes.filter(
+      (record) =>
+        record.sweeping_type ===
+        "MANUAL"
+    ).length;
+
+  const unclassifiedCount =
+    Math.max(
+      0,
+      routes.length -
+        mechanicalCount -
+        manualCount
+    );
+
+  const actionsDisabled =
+    readOnly ||
+    editingSaving ||
+    deletingId !== null ||
+    markingRealizedId !== null ||
+    deletingBatchId !== null ||
+    markingBatchId !== null ||
+    deletingAllPending;
+
+  function goToPage(page: number) {
+    setCurrentPage(
+      Math.min(
+        Math.max(page, 1),
+        totalPages
+      )
+    );
+  }
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${panelClasses}`}
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <p
+            className={`text-sm font-semibold ${titleClasses}`}
+          >
+            {title}
+          </p>
+
+          <p className="text-xs text-muted-foreground">
+            Del {formatDateAr(fromDate)} al{" "}
+            {formatDateAr(toDate)}.
+          </p>
+
+          {routes.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setSweepingTypeFilter(
+                    "ALL"
+                  )
+                }
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
+                  sweepingTypeFilter ===
+                  "ALL"
+                    ? "border-slate-700 bg-slate-800 text-white dark:border-slate-300 dark:bg-slate-100 dark:text-slate-900"
+                    : "bg-background text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Todos {routes.length}
+              </button>
+
+              {manualCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSweepingTypeFilter(
+                      sweepingTypeFilter ===
+                        "MANUAL"
+                        ? "ALL"
+                        : "MANUAL"
+                    )
+                  }
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
+                    sweepingTypeFilter ===
+                    "MANUAL"
+                      ? "border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500"
+                      : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300"
+                  }`}
+                >
+                  👥 Manual {manualCount}
+                </button>
+              )}
+
+              {mechanicalCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSweepingTypeFilter(
+                      sweepingTypeFilter ===
+                        "MECANICO"
+                        ? "ALL"
+                        : "MECANICO"
+                    )
+                  }
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
+                    sweepingTypeFilter ===
+                    "MECANICO"
+                      ? "border-orange-500 bg-orange-500 text-white dark:border-orange-400 dark:bg-orange-500"
+                      : "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300"
+                  }`}
+                >
+                  🚛 Mecánico {mechanicalCount}
+                </button>
+              )}
+
+              {unclassifiedCount > 0 && (
+                <span className="rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  Sin clasificar {unclassifiedCount}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {isPlanned &&
+            !readOnly &&
+            pendingPlannedCount > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  onDeleteAllPending?.()
+                }
+                disabled={
+                  actionsDisabled
+                }
+                className="rounded-md border border-red-200 bg-background px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                {deletingAllPending
+                  ? "Eliminando planificación..."
+                  : `Eliminar ${pendingPlannedCount} pendientes del período`}
+              </button>
+            )}
+
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClasses}`}
+          >
+            {normalizedSearch
+              ? `${filteredRoutes.length} de ${routes.length}`
+              : routes.length}
+          </span>
+        </div>
+      </div>
+
+      {routes.length > 0 && (
+        <div className="mb-3">
+          <input
+            type="text"
+            value={searchText}
+            onChange={(event) =>
+              setSearchText(
+                event.target.value
+              )
+            }
+            placeholder="Buscar calle u observación..."
+            className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>
+              {filteredRoutes.length > 0
+                ? `Mostrando ${visibleFrom}-${visibleTo} de ${filteredRoutes.length}${
+                    sweepingTypeFilter ===
+                    "MANUAL"
+                      ? " · Solo manual"
+                      : sweepingTypeFilter ===
+                          "MECANICO"
+                        ? " · Solo mecánico"
+                        : ""
+                  }`
+                : sweepingTypeFilter ===
+                    "MANUAL"
+                  ? "No hay barridos manuales para mostrar"
+                  : sweepingTypeFilter ===
+                      "MECANICO"
+                    ? "No hay barridos mecánicos para mostrar"
+                    : ""}
+            </span>
+
+            {filteredRoutes.length >
+              PAGE_SIZE && (
+              <span>
+                Página {currentPage} de{" "}
+                {totalPages}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {batchGroups.length > 0 && (
+          <div
+            className={`mb-3 space-y-2 rounded-lg border p-3 ${
+              isPlanned
+                ? "border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20"
+                : "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p
+                  className={`text-xs font-semibold ${
+                    isPlanned
+                      ? "text-blue-700 dark:text-blue-300"
+                      : "text-emerald-700 dark:text-emerald-300"
+                  }`}
+                >
+                  {isPlanned
+                    ? "Planificaciones por zona"
+                    : "Barridos realizados por zona"}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {isPlanned
+                    ? "Podés operar el grupo completo o seguir usando cada tramo individual del listado."
+                    : "Podés revisar la zona completa, eliminar un realizado individual o corregir toda la zona si fue marcada por error."}
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                  isPlanned
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                }`}
+              >
+                {batchGroups.length}{" "}
+                {batchGroups.length === 1
+                  ? "grupo"
+                  : "grupos"}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {batchGroups.map(
+                ({
+                  batchId,
+                  records: groupRecords,
+                }) => {
+                  const realizedCount =
+                    isPlanned
+                      ? groupRecords.filter(
+                          (record) =>
+                            Boolean(
+                              record.realized_record_id
+                            )
+                        ).length
+                      : groupRecords.length;
+
+                  const pendingCount =
+                    isPlanned
+                      ? groupRecords.length -
+                        realizedCount
+                      : 0;
+
+                  const firstRecord =
+                    groupRecords[0];
+
+                  const markingThisBatch =
+                    markingBatchId ===
+                    batchId;
+
+                  const deletingThisBatch =
+                    deletingBatchId ===
+                    batchId;
+
+                  const uniqueObservations =
+                    Array.from(
+                      new Set(
+                        groupRecords
+                          .map((record) =>
+                            record.observations?.trim() ?? ""
+                          )
+                          .filter(Boolean)
+                      )
+                    );
+
+                  const groupObservation =
+                    uniqueObservations.length === 0
+                      ? null
+                      : uniqueObservations.length === 1
+                        ? uniqueObservations[0]
+                        : uniqueObservations.join(" · ");
+
+                  const expanded =
+                    expandedBatchIds.has(
+                      batchId
+                    );
+
+                  const selectedGroup =
+                    selectedBatchId ===
+                    batchId;
+
+                  return (
+                    <div
+                      key={batchId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        onSelectBatch?.(
+                          kind,
+                          batchId,
+                          groupRecords
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" ||
+                          event.key === " "
+                        ) {
+                          event.preventDefault();
+                          onSelectBatch?.(
+                            kind,
+                            batchId,
+                            groupRecords
+                          );
+                        }
+                      }}
+                      title={
+                        isPlanned
+                          ? "Hacé click para ubicar toda esta planificación por zona en el mapa"
+                          : "Hacé click para ubicar todo este barrido realizado por zona en el mapa"
+                      }
+                      className={`cursor-pointer rounded-md border px-3 py-2.5 transition focus:outline-none focus:ring-2 ${
+                        !isPlanned || pendingCount === 0
+                          ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 focus:ring-emerald-300 dark:border-emerald-900 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30"
+                          : "bg-background hover:bg-blue-50/50 focus:ring-blue-300 dark:border-blue-900 dark:hover:bg-blue-950/20"
+                      } ${
+                        selectedGroup
+                          ? !isPlanned || pendingCount === 0
+                            ? "border-emerald-500 ring-2 ring-emerald-300 dark:bg-emerald-950/30"
+                            : "border-blue-500 bg-blue-50 ring-2 ring-blue-300 dark:bg-blue-950/30"
+                          : !isPlanned || pendingCount === 0
+                            ? ""
+                            : "border-blue-200"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold">
+                            {isPlanned
+                              ? "▣ Planificación por zona"
+                              : "▣ Barrido realizado por zona"}
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {firstRecord
+                              ? formatDateAr(
+                                  firstRecord.work_date
+                                )
+                              : ""}
+                            {" · "}
+                            {groupRecords.length}{" "}
+                            {groupRecords.length === 1
+                              ? "tramo"
+                              : "tramos"}
+                            {isPlanned ? (
+                              <>
+                                {" · "}
+                                {pendingCount} pendientes
+                                {" · "}
+                                {realizedCount} realizados
+                              </>
+                            ) : (
+                              <>
+                                {" · "}
+                                {realizedCount} realizados
+                              </>
+                            )}
+                          </p>
+
+                          {groupObservation && (
+                            <div className="mt-2 rounded-md border bg-muted/30 px-2.5 py-2 text-[11px] leading-relaxed">
+                              <span className="font-semibold">
+                                Observación:
+                              </span>{" "}
+                              <span className="text-muted-foreground">
+                                {groupObservation}
+                              </span>
+                            </div>
+                          )}
+
+                          <p
+                            className={`mt-2 text-[10px] font-medium ${
+                              isPlanned
+                                ? "text-blue-600 dark:text-blue-300"
+                                : "text-emerald-600 dark:text-emerald-300"
+                            }`}
+                          >
+                            Hacé click en la tarjeta para ubicar toda la zona en el mapa.
+                          </p>
+                        </div>
+
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                            isPlanned && pendingCount > 0
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          }`}
+                        >
+                          {!isPlanned
+                            ? `${groupRecords.length} realizados`
+                            : pendingCount > 0
+                              ? `${pendingCount} pendientes`
+                              : "✓ Grupo completo"}
+                        </span>
+                      </div>
+
+                      <div
+                        className="mt-2 flex flex-wrap gap-2"
+                        onClick={(event) =>
+                          event.stopPropagation()
+                        }
+                        onKeyDown={(event) =>
+                          event.stopPropagation()
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedBatchIds(
+                              (previous) => {
+                                const next =
+                                  new Set(
+                                    previous
+                                  );
+
+                                if (
+                                  next.has(
+                                    batchId
+                                  )
+                                ) {
+                                  next.delete(
+                                    batchId
+                                  );
+                                } else {
+                                  next.add(
+                                    batchId
+                                  );
+                                }
+
+                                return next;
+                              }
+                            )
+                          }
+                          className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300"
+                        >
+                          {expanded
+                            ? "Ocultar calles"
+                            : `Ver ${groupRecords.length} calles`}
+                        </button>
+
+                        {isPlanned ? (
+                          pendingCount > 0 ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onMarkBatchCompleted?.(
+                                    batchId,
+                                    groupRecords
+                                  )
+                                }
+                                disabled={
+                                  actionsDisabled
+                                }
+                                className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                              >
+                                {markingThisBatch
+                                  ? "Registrando grupo..."
+                                  : `✓ Marcar ${pendingCount} como realizados`}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onDeleteBatch?.(
+                                    batchId,
+                                    groupRecords
+                                  )
+                                }
+                                disabled={
+                                  actionsDisabled
+                                }
+                                className="rounded-md border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                              >
+                                {deletingThisBatch
+                                  ? "Eliminando grupo..."
+                                  : `Eliminar ${pendingCount} pendientes`}
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                              ✓ Todos los tramos fueron realizados
+                            </span>
+                          )
+                        ) : (
+                          !readOnly && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onDeleteCompletedBatch?.(
+                                  batchId,
+                                  groupRecords
+                                )
+                              }
+                              disabled={
+                                actionsDisabled
+                              }
+                              className="rounded-md border border-red-200 bg-background px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                            >
+                              {deletingThisBatch
+                                ? "Eliminando realizados..."
+                                : `Eliminar ${groupRecords.length} realizados de esta zona`}
+                            </button>
+                          )
+                        )}
+                      </div>
+
+                      {expanded && (
+                        <div
+                          className="mt-3 max-h-64 overflow-y-auto rounded-md border bg-muted/20"
+                          onClick={(event) =>
+                            event.stopPropagation()
+                          }
+                          onKeyDown={(event) =>
+                            event.stopPropagation()
+                          }
+                        >
+                          {groupRecords.map(
+                            (
+                              record,
+                              recordIndex
+                            ) => {
+                              const isAlreadyRealized =
+                                isPlanned
+                                  ? Boolean(
+                                      record.realized_record_id
+                                    )
+                                  : true;
+
+                              return (
+                                <div
+                                  key={
+                                    record.id
+                                  }
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() =>
+                                    onSelectRoute(
+                                      kind,
+                                      record
+                                    )
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.key ===
+                                        "Enter" ||
+                                      event.key ===
+                                        " "
+                                    ) {
+                                      event.preventDefault();
+
+                                      onSelectRoute(
+                                        kind,
+                                        record
+                                      );
+                                    }
+                                  }}
+                                  className="flex w-full items-start justify-between gap-3 border-b px-3 py-2 text-left text-[11px] transition last:border-b-0 hover:bg-background"
+                                >
+                                  <div className="flex min-w-0 items-start gap-2">
+                                    <span className="mt-0.5 shrink-0 font-semibold text-blue-600">
+                                      {recordIndex +
+                                        1}.
+                                    </span>
+
+                                    <span className="min-w-0">
+                                      <span className="font-semibold">
+                                        {
+                                          record.main_street
+                                        }
+                                      </span>
+
+                                      <span className="text-muted-foreground">
+                                        {" "}
+                                        —{" "}
+                                        {
+                                          record.from_street
+                                        }{" "}
+                                        →{" "}
+                                        {
+                                          record.to_street
+                                        }
+                                      </span>
+
+                                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                                        {isAlreadyRealized
+                                          ? "Ya realizado"
+                                          : "Pendiente"}
+                                      </span>
+                                    </span>
+                                  </div>
+
+                                  {!readOnly && (
+                                    <div
+                                      className="flex shrink-0 flex-wrap items-center gap-1.5"
+                                      onClick={(
+                                        event
+                                      ) =>
+                                        event.stopPropagation()
+                                      }
+                                      onKeyDown={(
+                                        event
+                                      ) =>
+                                        event.stopPropagation()
+                                      }
+                                    >
+                                      {isPlanned &&
+                                        !isAlreadyRealized && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            onMarkCompleted?.(
+                                              record
+                                            )
+                                          }
+                                          disabled={
+                                            actionsDisabled
+                                          }
+                                          className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                        >
+                                          {markingRealizedId ===
+                                          record.id
+                                            ? "Registrando..."
+                                            : "✓ Realizado"}
+                                        </button>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          onDelete(
+                                            record
+                                          )
+                                        }
+                                        disabled={
+                                          actionsDisabled
+                                        }
+                                        className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                                      >
+                                        {deletingId ===
+                                        record.id
+                                          ? "Eliminando..."
+                                          : "Eliminar"}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </div>
+        )}
+
+      {routes.length === 0 ? (
+        <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+          {isPlanned
+            ? "No hay tramos planificados."
+            : "No hay barridos realizados."}
+        </div>
+      ) : filteredRoutes.length === 0 ? (
+        <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+          No hay tramos que coincidan con la búsqueda.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {paginatedRoutes.map(
+              (record, index) => {
+                const isSelected =
+                  selectedRouteId ===
+                  record.id;
+
+                return (
+                  <div
+                    key={record.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      onSelectRoute(
+                        kind,
+                        record
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                      ) {
+                        event.preventDefault();
+
+                        onSelectRoute(
+                          kind,
+                          record
+                        );
+                      }
+                    }}
+                    title="Hacé click para ubicar este tramo en el mapa"
+                    className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition hover:bg-muted/40 focus:outline-none focus:ring-2 ${
+                      record.sweeping_type === "MECANICO"
+                        ? "border-orange-300 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/20"
+                        : "bg-background"
+                    } ${
+                      editingRecordId ===
+                      record.id
+                        ? "ring-2 ring-amber-400"
+                        : isSelected
+                          ? record.sweeping_type === "MECANICO"
+                            ? "border-orange-500 bg-orange-50 ring-4 ring-orange-300 dark:bg-orange-950/30"
+                            : isPlanned
+                              ? "border-blue-500 bg-blue-50 ring-4 ring-blue-300 dark:bg-blue-950/30"
+                              : "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-300 dark:bg-emerald-950/30"
+                          : ""
+                    }`}
+                  >
+                    {isPlanned ? (
+                      <span
+                        className={`mt-1 h-3 w-3 shrink-0 rounded-full ${
+                          record.sweeping_type === "MECANICO"
+                            ? "bg-orange-500"
+                            : "bg-blue-600"
+                        }`}
+                      />
+                    ) : (
+                      <span
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor:
+                            record.color,
+                        }}
+                      />
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-xs">
+                          <span className="font-semibold">
+                            {pageStart +
+                              index +
+                              1}
+                            .{" "}
+                            {record.main_street}
+                          </span>
+
+                          <span className="text-muted-foreground">
+                            {" "}
+                            — {record.from_street} →{" "}
+                            {record.to_street}
+                          </span>
+                        </p>
+
+                        {record.sweeping_type === "MECANICO" && (
+                          <span className="rounded-full border border-orange-300 bg-orange-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-orange-700 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                            🚛 Mecánico
+                          </span>
+                        )}
+
+                        {record.sweeping_type === "MANUAL" && (
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                            👥 Manual
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {formatDateAr(
+                          record.work_date
+                        )}
+                        {isPlanned
+                          ? " · Planificado"
+                          : ` · Semana ${
+                              record.weekIndex +
+                              1
+                            } · Realizado${
+                              record.planned_record_id
+                                ? " · Desde planificación"
+                                : ""
+                            }`}
+                        {record.sweeping_type === "MECANICO"
+                          ? " · Barrido mecánico"
+                          : record.sweeping_type === "MANUAL"
+                            ? " · Barrido manual"
+                            : ""}
+                      </p>
+
+                      {record.observations?.trim() && (
+                        <div className="mt-2 rounded-md border bg-muted/30 px-2.5 py-2 text-[11px] leading-relaxed">
+                          <span className="font-semibold">
+                            Observación:
+                          </span>{" "}
+                          <span className="text-muted-foreground">
+                            {record.observations}
+                          </span>
+                        </div>
+                      )}
+
+                      <div
+                        className="mt-2 flex flex-wrap gap-2"
+                        onClick={(event) =>
+                          event.stopPropagation()
+                        }
+                        onKeyDown={(event) =>
+                          event.stopPropagation()
+                        }
+                      >
+                        {isPlanned &&
+                          (record.realized_record_id ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 opacity-90 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                            >
+                              ✓ Ya realizado
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onMarkCompleted?.(
+                                  record
+                                )
+                              }
+                              disabled={
+                                actionsDisabled
+                              }
+                              className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                            >
+                              {markingRealizedId ===
+                              record.id
+                                ? "Registrando..."
+                                : "✓ Marcar como realizado"}
+                            </button>
+                          ))}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onEdit(record)
+                          }
+                          disabled={
+                            actionsDisabled
+                          }
+                          className="rounded-md border px-2.5 py-1 text-[11px] font-medium transition hover:bg-muted disabled:opacity-50"
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onDelete(record)
+                          }
+                          disabled={
+                            actionsDisabled
+                          }
+                          className="rounded-md border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {deletingId ===
+                          record.id
+                            ? "Eliminando..."
+                            : "Eliminar"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+              <p className="text-[11px] text-muted-foreground">
+                {visibleFrom}-{visibleTo} de{" "}
+                {filteredRoutes.length}
+              </p>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    goToPage(
+                      currentPage - 1
+                    )
+                  }
+                  disabled={
+                    currentPage === 1
+                  }
+                  className="h-8 rounded-md border bg-background px-2.5 text-xs font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ← Anterior
+                </button>
+
+                <span className="min-w-[88px] text-center text-xs text-muted-foreground">
+                  {currentPage} /{" "}
+                  {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    goToPage(
+                      currentPage + 1
+                    )
+                  }
+                  disabled={
+                    currentPage ===
+                    totalPages
+                  }
+                  className="h-8 rounded-md border bg-background px-2.5 text-xs font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Siguiente →
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 /*
 
@@ -562,7 +2754,9 @@ function validateRange(
 
   fromValue: string,
 
-  toValue: string
+  toValue: string,
+
+  maxDays: number
 
 ) {
 
@@ -626,7 +2820,13 @@ function validateRange(
 
     );
 
-  if (difference > 30) {
+  if (
+
+    difference >
+
+    maxDays - 1
+
+  ) {
 
     return {
 
@@ -634,7 +2834,7 @@ function validateRange(
 
       error:
 
-        "El rango máximo permitido es de 31 días.",
+        `El rango máximo permitido es de ${maxDays} días.`,
 
     };
 
@@ -742,6 +2942,804 @@ function FitRoutes({
 
 }
 
+function FitComplaintPoints({
+  complaints,
+}: {
+  complaints: SweepingComplaint[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (complaints.length === 0) {
+      return;
+    }
+
+    const bounds = L.latLngBounds(
+      complaints.map(
+        (complaint) =>
+          [
+            complaint.lat,
+            complaint.lng,
+          ] as [number, number]
+      )
+    );
+
+    if (!bounds.isValid()) {
+      return;
+    }
+
+    map.fitBounds(
+      bounds as LatLngBoundsExpression,
+      {
+        padding: [40, 40],
+        maxZoom: 16,
+      }
+    );
+  }, [map, complaints]);
+
+  return null;
+}
+
+function FitAlltrackVehicles({
+  vehicles,
+}: {
+  vehicles: SweepingAlltrackVehicle[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const positions =
+      vehicles
+        .filter(
+          (item) =>
+            item.available_position &&
+            item.position
+        )
+        .map(
+          (item) =>
+            [
+              item.position!.lat,
+              item.position!.lng,
+            ] as [number, number]
+        );
+
+    if (positions.length === 0) {
+      return;
+    }
+
+    const bounds =
+      L.latLngBounds(
+        positions
+      );
+
+    if (!bounds.isValid()) {
+      return;
+    }
+
+    map.fitBounds(
+      bounds as LatLngBoundsExpression,
+      {
+        padding: [45, 45],
+        maxZoom: 15,
+      }
+    );
+  }, [map, vehicles]);
+
+  return null;
+}
+
+function FitAlltrackHistory({
+  paths,
+  stops,
+}: {
+  paths: AlltrackHistoryPoint[][];
+  stops: AlltrackHistoryStop[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const positions: [number, number][] = [
+      ...paths.flatMap((path) =>
+        path.map(
+          (point) =>
+            [
+              Number(point.lat),
+              Number(point.lon),
+            ] as [number, number]
+        )
+      ),
+      ...stops.map(
+        (stop) =>
+          [
+            Number(stop.lat),
+            Number(stop.lng),
+          ] as [number, number]
+      ),
+    ].filter(
+      ([lat, lng]) =>
+        Number.isFinite(lat) &&
+        Number.isFinite(lng)
+    );
+
+    if (positions.length === 0) {
+      return;
+    }
+
+    const bounds =
+      L.latLngBounds(positions);
+
+    if (!bounds.isValid()) {
+      return;
+    }
+
+    map.fitBounds(
+      bounds as LatLngBoundsExpression,
+      {
+        padding: [45, 45],
+        maxZoom: 16,
+      }
+    );
+  }, [map, paths, stops]);
+
+  return null;
+}
+
+function FocusSelectedRoute({
+  positions,
+  focusToken,
+}: {
+  positions: LatLngExpression[] | null;
+  focusToken: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!positions || positions.length < 2) {
+      return;
+    }
+
+    const bounds = L.latLngBounds(
+      positions as L.LatLngExpression[]
+    );
+
+    if (!bounds.isValid()) {
+      return;
+    }
+
+    map.fitBounds(
+      bounds as LatLngBoundsExpression,
+      {
+        padding: [60, 60],
+        maxZoom: 18,
+      }
+    );
+  }, [map, positions, focusToken]);
+
+  return null;
+}
+
+function InvalidateMapOnFullscreen({
+
+  fullscreen,
+
+}: {
+
+  fullscreen: boolean;
+
+}) {
+
+  const map =
+
+    useMap();
+
+  useEffect(() => {
+
+    const firstTimeout =
+      window.setTimeout(
+
+        () => {
+
+          map.invalidateSize({
+
+            pan: false,
+
+          });
+
+        },
+
+        100
+
+      );
+
+    const secondTimeout =
+      window.setTimeout(
+
+        () => {
+
+          map.invalidateSize({
+
+            pan: false,
+
+          });
+
+        },
+
+        350
+
+      );
+
+    const thirdTimeout =
+      window.setTimeout(
+
+        () => {
+
+          map.invalidateSize({
+
+            pan: false,
+
+          });
+
+        },
+
+        700
+
+      );
+
+    const fourthTimeout =
+      window.setTimeout(
+
+        () => {
+
+          map.invalidateSize({
+
+            pan: false,
+
+          });
+
+        },
+
+        1200
+
+      );
+
+    return () => {
+
+      window.clearTimeout(
+
+        firstTimeout
+
+      );
+
+      window.clearTimeout(
+
+        secondTimeout
+
+      );
+
+      window.clearTimeout(
+
+        thirdTimeout
+
+      );
+
+      window.clearTimeout(
+
+        fourthTimeout
+
+      );
+
+    };
+
+  }, [
+
+    map,
+
+    fullscreen,
+
+  ]);
+
+  return null;
+
+}
+
+
+function InvalidateMapOnResize() {
+  const map = useMap();
+
+  useEffect(() => {
+    const mapContainer = map.getContainer();
+    const sizeContainer = mapContainer.parentElement;
+
+    let frameId: number | null = null;
+    const timeoutIds: number[] = [];
+
+    const invalidate = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        map.invalidateSize({
+          pan: false,
+        });
+      });
+    };
+
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            invalidate();
+          })
+        : null;
+
+    if (sizeContainer && observer) {
+      observer.observe(sizeContainer);
+    }
+
+    [0, 80, 180, 350, 700].forEach(
+      (delay) => {
+        timeoutIds.push(
+          window.setTimeout(
+            invalidate,
+            delay
+          )
+        );
+      }
+    );
+
+    return () => {
+      observer?.disconnect();
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      timeoutIds.forEach((id) => {
+        window.clearTimeout(id);
+      });
+    };
+  }, [map]);
+
+  return null;
+}
+
+function areaStreetToLeafletPaths(
+  geometry?: AreaStreetGeometry | null
+): LatLngExpression[][] {
+  if (!geometry) {
+    return [];
+  }
+
+  const toPath = (
+    coordinates: number[][]
+  ): LatLngExpression[] =>
+    coordinates
+      .filter(
+        (coordinate) =>
+          Array.isArray(coordinate) &&
+          coordinate.length >= 2 &&
+          Number.isFinite(Number(coordinate[0])) &&
+          Number.isFinite(Number(coordinate[1]))
+      )
+      .map(
+        (coordinate) =>
+          [
+            Number(coordinate[1]),
+            Number(coordinate[0]),
+          ] as [number, number]
+      );
+
+  if (geometry.type === "LineString") {
+    const path = toPath(geometry.coordinates);
+    return path.length >= 2 ? [path] : [];
+  }
+
+  return geometry.coordinates
+    .map(toPath)
+    .filter((path) => path.length >= 2);
+}
+
+function isAreaStreetSelectableByDefault(
+  street: AreaStreet
+) {
+  const excludedHighwayTypes = new Set([
+    "cycleway",
+    "footway",
+    "path",
+    "steps",
+    "bridleway",
+    "construction",
+    "proposed",
+  ]);
+
+  if (
+    street.street_name
+      .trim()
+      .toLocaleLowerCase("es") === "bicisenda"
+  ) {
+    return false;
+  }
+
+  return !(street.highway_types ?? []).some(
+    (type) => excludedHighwayTypes.has(
+      String(type || "").toLowerCase()
+    )
+  );
+}
+
+type AreaSelectionDrawProps = {
+  drawing: boolean;
+  clearToken: number;
+  finishToken: number;
+  undoToken: number;
+  onCreated: (geometry: GeoJsonPolygon) => void;
+  onDrawingFinished: () => void;
+};
+
+function orientation(
+  a: [number, number],
+  b: [number, number],
+  c: [number, number]
+) {
+  const value =
+    (b[1] - a[1]) * (c[0] - b[0]) -
+    (b[0] - a[0]) * (c[1] - b[1]);
+
+  if (Math.abs(value) < 1e-12) {
+    return 0;
+  }
+
+  return value > 0 ? 1 : 2;
+}
+
+function pointOnSegment(
+  a: [number, number],
+  b: [number, number],
+  c: [number, number]
+) {
+  return (
+    b[0] <= Math.max(a[0], c[0]) + 1e-12 &&
+    b[0] + 1e-12 >= Math.min(a[0], c[0]) &&
+    b[1] <= Math.max(a[1], c[1]) + 1e-12 &&
+    b[1] + 1e-12 >= Math.min(a[1], c[1])
+  );
+}
+
+function segmentsIntersect(
+  p1: [number, number],
+  q1: [number, number],
+  p2: [number, number],
+  q2: [number, number]
+) {
+  const o1 = orientation(p1, q1, p2);
+  const o2 = orientation(p1, q1, q2);
+  const o3 = orientation(p2, q2, p1);
+  const o4 = orientation(p2, q2, q1);
+
+  if (o1 !== o2 && o3 !== o4) {
+    return true;
+  }
+
+  if (o1 === 0 && pointOnSegment(p1, p2, q1)) return true;
+  if (o2 === 0 && pointOnSegment(p1, q2, q1)) return true;
+  if (o3 === 0 && pointOnSegment(p2, p1, q2)) return true;
+  if (o4 === 0 && pointOnSegment(p2, q1, q2)) return true;
+
+  return false;
+}
+
+function areaPolygonSelfIntersects(
+  points: [number, number][]
+) {
+  if (points.length < 4) {
+    return false;
+  }
+
+  for (let i = 0; i < points.length; i += 1) {
+    const a1 = points[i];
+    const a2 = points[(i + 1) % points.length];
+
+    for (let j = i + 1; j < points.length; j += 1) {
+      const b1 = points[j];
+      const b2 = points[(j + 1) % points.length];
+
+      const adjacent =
+        i === j ||
+        (i + 1) % points.length === j ||
+        i === (j + 1) % points.length;
+
+      if (adjacent) {
+        continue;
+      }
+
+      if (segmentsIntersect(a1, a2, b1, b2)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function normalizeAreaPolygonPoints(
+  points: [number, number][]
+) {
+  /*
+   * Si el usuario marcó los puntos alrededor del perímetro,
+   * respetamos exactamente ese orden. Solo corregimos cuando
+   * los segmentos se cruzan (el típico "moño" que se veía en
+   * el mapa al marcar las esquinas en un orden distinto).
+   */
+  if (
+    points.length < 4 ||
+    !areaPolygonSelfIntersects(points)
+  ) {
+    return points;
+  }
+
+  const centerLat =
+    points.reduce((sum, point) => sum + point[0], 0) /
+    points.length;
+
+  const centerLng =
+    points.reduce((sum, point) => sum + point[1], 0) /
+    points.length;
+
+  return [...points].sort((a, b) => {
+    const angleA = Math.atan2(
+      a[0] - centerLat,
+      a[1] - centerLng
+    );
+    const angleB = Math.atan2(
+      b[0] - centerLat,
+      b[1] - centerLng
+    );
+
+    return angleA - angleB;
+  });
+}
+
+function createAreaPointIcon(index: number) {
+  return L.divIcon({
+    className: "",
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    html: `
+      <div style="
+        width:24px;
+        height:24px;
+        border-radius:9999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#2563eb;
+        color:white;
+        border:2px solid white;
+        box-shadow:0 2px 7px rgba(0,0,0,.35);
+        font-size:10px;
+        font-weight:800;
+      ">${index + 1}</div>
+    `,
+  });
+}
+
+function AreaSelectionDraw({
+  drawing,
+  clearToken,
+  finishToken,
+  undoToken,
+  onCreated,
+  onDrawingFinished,
+}: AreaSelectionDrawProps) {
+  const [points, setPoints] =
+    useState<[number, number][]>([]);
+
+  const lastHandledFinishTokenRef =
+    useRef(finishToken);
+
+  const normalizedPoints = useMemo(
+    () => normalizeAreaPolygonPoints(points),
+    [points]
+  );
+
+  const wasAutoOrdered =
+    points.length >= 4 &&
+    areaPolygonSelfIntersects(points);
+
+  useMapEvents({
+    click(event) {
+      if (!drawing) {
+        return;
+      }
+
+      setPoints((previous) => [
+        ...previous,
+        [event.latlng.lat, event.latlng.lng],
+      ]);
+    },
+  });
+
+  useEffect(() => {
+    setPoints([]);
+  }, [clearToken]);
+
+  useEffect(() => {
+    if (!drawing) {
+      return;
+    }
+
+    setPoints((previous) =>
+      previous.slice(0, -1)
+    );
+  }, [undoToken, drawing]);
+
+  useEffect(() => {
+    if (
+      !drawing ||
+      finishToken === 0 ||
+      finishToken === lastHandledFinishTokenRef.current
+    ) {
+      return;
+    }
+
+    lastHandledFinishTokenRef.current =
+      finishToken;
+
+    if (normalizedPoints.length < 3) {
+      return;
+    }
+
+    const ring = [
+      ...normalizedPoints.map(([lat, lng]) => [lng, lat]),
+      [normalizedPoints[0][1], normalizedPoints[0][0]],
+    ];
+
+    onCreated({
+      type: "Polygon",
+      coordinates: [ring],
+    });
+
+    onDrawingFinished();
+  }, [
+    drawing,
+    finishToken,
+    normalizedPoints,
+    onCreated,
+    onDrawingFinished,
+  ]);
+
+  if (points.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {normalizedPoints.length >= 3 ? (
+        <Polygon
+          positions={normalizedPoints}
+          interactive={false}
+          pathOptions={{
+            color: wasAutoOrdered
+              ? "#7c3aed"
+              : "#2563eb",
+            weight: 3,
+            fillOpacity: 0.14,
+          }}
+        />
+      ) : (
+        <Polyline
+          positions={points}
+          interactive={false}
+          pathOptions={{
+            color: "#2563eb",
+            weight: 3,
+            dashArray: "6 6",
+          }}
+        />
+      )}
+
+      {points.map((point, index) => (
+        <Marker
+          key={`area-point-${index}`}
+          position={point}
+          icon={createAreaPointIcon(index)}
+          interactive={false}
+        />
+      ))}
+    </>
+  );
+}
+
+
+function createMechanicalPointIcon(
+  label: "A" | "B"
+) {
+  return L.divIcon({
+    className: "",
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    html: `
+      <div style="
+        width:26px;
+        height:26px;
+        border-radius:9999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#f97316;
+        color:white;
+        border:2px solid white;
+        box-shadow:0 2px 8px rgba(0,0,0,.35);
+        font-size:11px;
+        font-weight:900;
+      ">${label}</div>
+    `,
+  });
+}
+
+function MechanicalCorridorMapSelector({
+  active,
+  startPoint,
+  endPoint,
+  onMapPoint,
+}: {
+  active: boolean;
+  startPoint: MechanicalMapPoint | null;
+  endPoint: MechanicalMapPoint | null;
+  onMapPoint: (point: MechanicalMapPoint) => void;
+}) {
+  useMapEvents({
+    click(event) {
+      if (!active) {
+        return;
+      }
+
+      onMapPoint({
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+      });
+    },
+  });
+
+  return (
+    <>
+      {startPoint && (
+        <Marker
+          position={[startPoint.lat, startPoint.lng]}
+          icon={createMechanicalPointIcon("A")}
+          interactive={false}
+          zIndexOffset={1100}
+        />
+      )}
+
+      {endPoint && (
+        <Marker
+          position={[endPoint.lat, endPoint.lng]}
+          icon={createMechanicalPointIcon("B")}
+          interactive={false}
+          zIndexOffset={1100}
+        />
+      )}
+
+      {startPoint && endPoint && (
+        <Polyline
+          positions={[
+            [startPoint.lat, startPoint.lng],
+            [endPoint.lat, endPoint.lng],
+          ]}
+          interactive={false}
+          pathOptions={{
+            color: "#f97316",
+            weight: 2,
+            opacity: 0.65,
+            dashArray: "5 7",
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 /*
 
  * ============================================================
@@ -828,6 +3826,14 @@ export default function TestSweepingMap({
 
   ] = useState("");
 
+  const [
+
+    observations,
+
+    setObservations,
+
+  ] = useState("");
+
   /*
 
    * ==========================================================
@@ -876,6 +3882,448 @@ export default function TestSweepingMap({
 
   ] = useState(0);
 
+  const [
+
+    manualUndoToken,
+
+    setManualUndoToken,
+
+  ] = useState(0);
+
+  /*
+   * ==========================================================
+   * SELECCIÓN DE ZONA
+   * ==========================================================
+   */
+
+  const [areaDrawing, setAreaDrawing] =
+    useState(false);
+
+  const [areaGeometry, setAreaGeometry] =
+    useState<GeoJsonPolygon | null>(null);
+
+  const [
+    plannedAreaBatches,
+    setPlannedAreaBatches,
+  ] = useState<SweepingAreaBatch[]>([]);
+
+  const [areaClearToken, setAreaClearToken] =
+    useState(0);
+
+  const [areaFinishToken, setAreaFinishToken] =
+    useState(0);
+
+  const [areaUndoToken, setAreaUndoToken] =
+    useState(0);
+
+  const [areaLoading, setAreaLoading] =
+    useState(false);
+
+  const [areaSaving, setAreaSaving] =
+    useState(false);
+
+  const [areaStreets, setAreaStreets] =
+    useState<AreaStreet[]>([]);
+
+  const [selectedAreaStreetKeys, setSelectedAreaStreetKeys] =
+    useState<Set<string>>(new Set());
+
+  const [areaWorkDate, setAreaWorkDate] =
+    useState(getTodayYmd());
+
+  const [areaColor, setAreaColor] =
+    useState("#f97316");
+
+  /*
+   * ==========================================================
+   * CORREDOR MECÁNICO - DOS PUNTOS
+   * ==========================================================
+   */
+
+  const [
+    mechanicalSelecting,
+    setMechanicalSelecting,
+  ] = useState(false);
+
+  const [
+    mechanicalStartPoint,
+    setMechanicalStartPoint,
+  ] = useState<MechanicalMapPoint | null>(null);
+
+  const [
+    mechanicalEndPoint,
+    setMechanicalEndPoint,
+  ] = useState<MechanicalMapPoint | null>(null);
+
+  const [
+    mechanicalPreview,
+    setMechanicalPreview,
+  ] = useState<MechanicalCorridorPreview | null>(null);
+
+  const [
+    mechanicalLoading,
+    setMechanicalLoading,
+  ] = useState(false);
+
+  const [
+    mechanicalSaving,
+    setMechanicalSaving,
+  ] = useState(false);
+
+  const [
+    mechanicalWorkDate,
+    setMechanicalWorkDate,
+  ] = useState(getTodayYmd());
+
+  /*
+   * ==========================================================
+   * CENTRO DE MONITOREO / PANTALLA COMPLETA 4 MAPAS
+   * ==========================================================
+   */
+
+  const [
+    monitorMode,
+    setMonitorMode,
+  ] = useState(false);
+
+  const [
+    fullscreenActive,
+    setFullscreenActive,
+  ] = useState(false);
+
+  const monitorCenterRef =
+    useRef<HTMLDivElement | null>(null);
+
+  /*
+   * ==========================================================
+   * PANTALLA COMPLETA DE MAPAS
+   * ==========================================================
+   */
+
+  const [
+
+    fullscreenMap,
+
+    setFullscreenMap,
+
+  ] = useState<
+
+    "planned" |
+
+    "completed" |
+
+    "complaints" |
+
+    "alltrack" |
+
+    null
+
+  >(null);
+
+  const plannedMapCardRef =
+
+    useRef<HTMLDivElement | null>(
+
+      null
+
+    );
+
+  const completedMapCardRef =
+
+    useRef<HTMLDivElement | null>(
+
+      null
+
+    );
+
+  const complaintsMapCardRef =
+
+    useRef<HTMLDivElement | null>(
+
+      null
+
+    );
+
+  const alltrackMapCardRef =
+
+    useRef<HTMLDivElement | null>(
+
+      null
+
+    );
+
+  useEffect(() => {
+
+    function syncFullscreenState() {
+      const element =
+        document.fullscreenElement;
+
+      setFullscreenActive(
+        Boolean(element)
+      );
+
+      if (
+        element ===
+        monitorCenterRef.current
+      ) {
+        setMonitorMode(true);
+        setFullscreenMap(null);
+        return;
+      }
+
+      setMonitorMode(false);
+
+      if (
+        element ===
+        plannedMapCardRef.current
+      ) {
+        setFullscreenMap(
+          "planned"
+        );
+        return;
+      }
+
+      if (
+        element ===
+        completedMapCardRef.current
+      ) {
+        setFullscreenMap(
+          "completed"
+        );
+        return;
+      }
+
+      if (
+        element ===
+        complaintsMapCardRef.current
+      ) {
+        setFullscreenMap(
+          "complaints"
+        );
+        return;
+      }
+
+      if (
+        element ===
+        alltrackMapCardRef.current
+      ) {
+        setFullscreenMap(
+          "alltrack"
+        );
+        return;
+      }
+
+      setFullscreenMap(null);
+
+      /*
+       * Al entrar o salir de Fullscreen el navegador restaura el layout
+       * en varios pasos. Este resize diferido hace que Leaflet recalcule
+       * también el mapa vecino cuando vuelve la grilla de dos columnas.
+       */
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.dispatchEvent(
+            new Event("resize")
+          );
+        });
+      });
+    }
+
+    syncFullscreenState();
+
+    document.addEventListener(
+      "fullscreenchange",
+      syncFullscreenState
+    );
+
+    window.addEventListener(
+      "focus",
+      syncFullscreenState
+    );
+
+    window.addEventListener(
+      "resize",
+      syncFullscreenState
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        syncFullscreenState
+      );
+
+      window.removeEventListener(
+        "focus",
+        syncFullscreenState
+      );
+
+      window.removeEventListener(
+        "resize",
+        syncFullscreenState
+      );
+    };
+
+  }, []);
+
+  async function toggleMapFullscreen(
+
+    mapType:
+
+      | "planned"
+
+      | "completed"
+
+      | "complaints"
+
+      | "alltrack"
+
+  ) {
+
+    const target =
+
+      mapType === "planned"
+
+        ? plannedMapCardRef.current
+
+        : mapType === "completed"
+
+          ? completedMapCardRef.current
+
+          : mapType === "complaints"
+
+            ? complaintsMapCardRef.current
+
+            : alltrackMapCardRef.current;
+
+    if (!target) {
+
+      return;
+
+    }
+
+    try {
+
+      if (
+
+        document.fullscreenElement ===
+
+        target
+
+      ) {
+
+        await document.exitFullscreen();
+
+        return;
+
+      }
+
+      if (
+
+        document.fullscreenElement
+
+      ) {
+
+        await document.exitFullscreen();
+
+      }
+
+      await target.requestFullscreen();
+
+    } catch (err) {
+
+      console.error(
+
+        "No se pudo cambiar el modo de pantalla completa:",
+
+        err
+
+      );
+
+      setError(
+
+        "No se pudo abrir el mapa en pantalla completa."
+
+      );
+
+    }
+
+  }
+
+  async function openMonitorCenter() {
+    const target =
+      monitorCenterRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    try {
+      /*
+       * El elemento del centro siempre existe en el DOM, así el
+       * Fullscreen API se ejecuta directamente desde el click del
+       * usuario y el navegador permite ocultar pestañas/barra.
+       */
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+
+      await target.requestFullscreen();
+
+      /*
+       * Refrescamos los cuatro tableros ya dentro del modo monitor.
+       * No esperamos estas consultas para no demorar la entrada.
+       */
+      void refreshMonitorCenter();
+    } catch (err) {
+      console.error(
+        "No se pudo abrir el Centro de monitoreo:",
+        err
+      );
+
+      setMonitorMode(false);
+      setError(
+        "No se pudo abrir el Centro de monitoreo en pantalla completa."
+      );
+    }
+  }
+
+  async function closeMonitorCenter() {
+    try {
+      if (
+        document.fullscreenElement ===
+        monitorCenterRef.current
+      ) {
+        await document.exitFullscreen();
+      } else {
+        setMonitorMode(false);
+      }
+    } catch (err) {
+      console.error(
+        "No se pudo cerrar el Centro de monitoreo:",
+        err
+      );
+      setMonitorMode(false);
+    }
+  }
+
+  async function refreshMonitorCenter() {
+    await Promise.all([
+      loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      ),
+      loadCompletedRecords(
+        completedAppliedFrom,
+        completedAppliedTo
+      ),
+      loadSweepingComplaints(
+        complaintsAppliedFrom,
+        complaintsAppliedTo
+      ),
+      refreshAlltrackActiveView(),
+    ]);
+  }
+
   /*
    * ==========================================================
    * FECHAS / FILTROS INDEPENDIENTES
@@ -907,6 +4355,22 @@ export default function TestSweepingMap({
         0,
         12
       )
+    );
+  }, []);
+
+  const oneMonthAgo = useMemo(() => {
+    const now = new Date();
+
+    const previousMonth =
+      new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        now.getDate(),
+        12
+      );
+
+    return dateToYmd(
+      previousMonth
     );
   }, []);
 
@@ -949,6 +4413,127 @@ export default function TestSweepingMap({
     completedAppliedTo,
     setCompletedAppliedTo,
   ] = useState(today);
+
+  /*
+   * ==========================================================
+   * MAPA DE RECLAMOS DE BARRIDO
+   * Se carga únicamente cuando el usuario lo abre.
+   * ==========================================================
+   */
+
+  const [
+    complaintsMapOpen,
+    setComplaintsMapOpen,
+  ] = useState(false);
+
+  const [
+    complaintsLoaded,
+    setComplaintsLoaded,
+  ] = useState(false);
+
+  const [
+    loadingComplaints,
+    setLoadingComplaints,
+  ] = useState(false);
+
+  const [
+    sweepingComplaints,
+    setSweepingComplaints,
+  ] = useState<SweepingComplaint[]>([]);
+
+  const [
+    complaintsTotal,
+    setComplaintsTotal,
+  ] = useState(0);
+
+  const [
+    complaintsWithoutGeo,
+    setComplaintsWithoutGeo,
+  ] = useState(0);
+
+  const [
+    complaintsFilterFrom,
+    setComplaintsFilterFrom,
+  ] = useState(oneMonthAgo);
+
+  const [
+    complaintsFilterTo,
+    setComplaintsFilterTo,
+  ] = useState(today);
+
+  const [
+    complaintsAppliedFrom,
+    setComplaintsAppliedFrom,
+  ] = useState(oneMonthAgo);
+
+  const [
+    complaintsAppliedTo,
+    setComplaintsAppliedTo,
+  ] = useState(today);
+
+  /*
+   * ==========================================================
+   * MAPA DE VEHÍCULOS DE BARRIDO - ALL TRACK
+   * Se consulta únicamente cuando el usuario lo abre o actualiza.
+   * ==========================================================
+   */
+
+  const [
+    alltrackMapOpen,
+    setAlltrackMapOpen,
+  ] = useState(false);
+
+  const [
+    alltrackLoaded,
+    setAlltrackLoaded,
+  ] = useState(false);
+
+  const [
+    loadingAlltrack,
+    setLoadingAlltrack,
+  ] = useState(false);
+
+  const [
+    alltrackVehicles,
+    setAlltrackVehicles,
+  ] = useState<SweepingAlltrackVehicle[]>([]);
+
+  const [
+    alltrackUpdatedAt,
+    setAlltrackUpdatedAt,
+  ] = useState<string | null>(null);
+
+  const [
+    alltrackLocated,
+    setAlltrackLocated,
+  ] = useState(0);
+
+  const [
+    alltrackWithoutPosition,
+    setAlltrackWithoutPosition,
+  ] = useState(0);
+
+  const [
+    alltrackViewMode,
+    setAlltrackViewMode,
+  ] = useState<"current" | "today">(
+    "current"
+  );
+
+  const [
+    selectedAlltrackVehicleCode,
+    setSelectedAlltrackVehicleCode,
+  ] = useState("B.6");
+
+  const [
+    loadingAlltrackHistory,
+    setLoadingAlltrackHistory,
+  ] = useState(false);
+
+  const [
+    alltrackHistory,
+    setAlltrackHistory,
+  ] = useState<SweepingAlltrackHistoryResponse | null>(null);
 
   /*
    * ==========================================================
@@ -1000,6 +4585,35 @@ export default function TestSweepingMap({
 
   >(null);
 
+  const [
+    selectedBatchId,
+    setSelectedBatchId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    focusedRouteKind,
+    setFocusedRouteKind,
+  ] = useState<
+    "planned" |
+    "completed" |
+    null
+  >(null);
+
+  const [
+    focusedRoutePositions,
+    setFocusedRoutePositions,
+  ] = useState<
+    LatLngExpression[] |
+    null
+  >(null);
+
+  const [
+    focusedRouteToken,
+    setFocusedRouteToken,
+  ] = useState(0);
+
   /*
    * ==========================================================
    * EDICIÓN / ELIMINACIÓN
@@ -1007,17 +4621,25 @@ export default function TestSweepingMap({
    */
 
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
-  const [editStreet, setEditStreet] = useState("");
-  const [editFromStreet, setEditFromStreet] = useState("");
-  const [editToStreet, setEditToStreet] = useState("");
-  const [editWorkDate, setEditWorkDate] = useState("");
-  const [editStatus, setEditStatus] = useState<SweepingStatus>("COMPLETADO");
-  const [editZone, setEditZone] = useState("");
-  const [editObservations, setEditObservations] = useState("");
-  const [editGeometry, setEditGeometry] = useState<GeoJsonLineString | null>(null);
-  const [editRecalculateGeometry, setEditRecalculateGeometry] = useState(false);
+  const [editingWorkDate, setEditingWorkDate] = useState("");
+  const [editingOriginalStreet, setEditingOriginalStreet] = useState("");
+  const [editingOriginalFromStreet, setEditingOriginalFromStreet] = useState("");
+  const [editingOriginalToStreet, setEditingOriginalToStreet] = useState("");
+  const [editingOriginalGeometry, setEditingOriginalGeometry] =
+    useState<GeoJsonLineString | null>(null);
+  const [editingZone, setEditingZone] = useState<string | null>(null);
+  const [editingObservations, setEditingObservations] =
+    useState<string | null>(null);
   const [editingSaving, setEditingSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [markingRealizedId, setMarkingRealizedId] =
+    useState<string | null>(null);
+  const [deletingBatchId, setDeletingBatchId] =
+    useState<string | null>(null);
+  const [markingBatchId, setMarkingBatchId] =
+    useState<string | null>(null);
+  const [deletingAllPlanned, setDeletingAllPlanned] =
+    useState(false);
 
   /*
 
@@ -1070,6 +4692,82 @@ export default function TestSweepingMap({
     string | null
 
   >(null);
+
+  const [
+    confirmDialog,
+    setConfirmDialog,
+  ] = useState<
+    ConfirmDialogConfig | null
+  >(null);
+
+  const confirmResolverRef =
+    useRef<
+      ((confirmed: boolean) => void) |
+      null
+    >(null);
+
+  useEffect(() => {
+    if (!success) {
+      return;
+    }
+
+    const timeout =
+      window.setTimeout(
+        () => {
+          setSuccess(null);
+        },
+        3500
+      );
+
+    return () =>
+      window.clearTimeout(timeout);
+  }, [success]);
+
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+
+    const timeout =
+      window.setTimeout(
+        () => {
+          setError(null);
+        },
+        5000
+      );
+
+    return () =>
+      window.clearTimeout(timeout);
+  }, [error]);
+
+  function requestConfirmation(
+    config: ConfirmDialogConfig
+  ) {
+    return new Promise<boolean>(
+      (resolve) => {
+        confirmResolverRef.current =
+          resolve;
+
+        setConfirmDialog(
+          config
+        );
+      }
+    );
+  }
+
+  function closeConfirmation(
+    confirmed: boolean
+  ) {
+    const resolver =
+      confirmResolverRef.current;
+
+    confirmResolverRef.current =
+      null;
+
+    setConfirmDialog(null);
+
+    resolver?.(confirmed);
+  }
 
   /*
 
@@ -1150,9 +4848,15 @@ export default function TestSweepingMap({
     toValue: string,
     status: SweepingStatus
   ) {
+    const maxDays =
+      status === "PLANIFICADO"
+        ? 180
+        : 31;
+
     const validation = validateRange(
       fromValue,
-      toValue
+      toValue,
+      maxDays
     );
 
     if (!validation.valid) {
@@ -1165,6 +4869,7 @@ export default function TestSweepingMap({
     const params = new URLSearchParams({
       from: fromValue,
       to: toValue,
+      status,
     });
 
     const response = await fetch(
@@ -1212,13 +4917,48 @@ export default function TestSweepingMap({
       );
   }
 
+  async function fetchPlannedAreaBatches(
+    fromValue: string,
+    toValue: string
+  ) {
+    const params =
+      new URLSearchParams({
+        from: fromValue,
+        to: toValue,
+      });
+
+    const response =
+      await fetch(
+        `/api/test-sweeping/area-batch?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+    const json =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        json?.error ||
+          "No se pudieron cargar las zonas planificadas."
+      );
+    }
+
+    return Array.isArray(json)
+      ? (json as SweepingAreaBatch[])
+      : [];
+  }
+
   async function loadPlannedRecords(
     fromValue: string,
     toValue: string
   ) {
     const validation = validateRange(
       fromValue,
-      toValue
+      toValue,
+      180
     );
 
     if (!validation.valid) {
@@ -1231,15 +4971,27 @@ export default function TestSweepingMap({
       setError(null);
       setHoveredRouteId(null);
       setSelectedRouteId(null);
+      setSelectedBatchId(null);
 
-      const prepared =
-        await fetchRecordsForStatus(
+      const [
+        prepared,
+        areaBatches,
+      ] = await Promise.all([
+        fetchRecordsForStatus(
           fromValue,
           toValue,
           "PLANIFICADO"
-        );
+        ),
+        fetchPlannedAreaBatches(
+          fromValue,
+          toValue
+        ),
+      ]);
 
       setPlannedRoutes(prepared);
+      setPlannedAreaBatches(
+        areaBatches
+      );
       setPlannedAppliedFrom(fromValue);
       setPlannedAppliedTo(toValue);
 
@@ -1268,7 +5020,8 @@ export default function TestSweepingMap({
   ) {
     const validation = validateRange(
       fromValue,
-      toValue
+      toValue,
+      31
     );
 
     if (!validation.valid) {
@@ -1281,6 +5034,7 @@ export default function TestSweepingMap({
       setError(null);
       setHoveredRouteId(null);
       setSelectedRouteId(null);
+      setSelectedBatchId(null);
 
       const prepared =
         await fetchRecordsForStatus(
@@ -1356,6 +5110,42 @@ export default function TestSweepingMap({
       ),
     [completedRoutes]
   );
+
+  const plannedBaseWeight =
+    getRouteWeight(
+      plannedRoutes.length
+    );
+
+  const completedBaseWeight =
+    getRouteWeight(
+      completedRoutes.length
+    );
+
+  const plannedHoverEnabled =
+    plannedRoutes.length < 300;
+
+  const completedHoverEnabled =
+    completedRoutes.length < 300;
+
+  const plannedCanvasRenderer =
+    useMemo(
+      () =>
+        L.canvas({
+          padding: 0.5,
+          tolerance: 8,
+        }),
+      []
+    );
+
+  const completedCanvasRenderer =
+    useMemo(
+      () =>
+        L.canvas({
+          padding: 0.5,
+          tolerance: 8,
+        }),
+      []
+    );
 
   /*
    * ==========================================================
@@ -1637,6 +5427,496 @@ export default function TestSweepingMap({
 
   /*
    * ==========================================================
+   * RECLAMOS DE BARRIDO
+   * ==========================================================
+   */
+
+  async function loadSweepingComplaints(
+    fromValue: string,
+    toValue: string
+  ) {
+    const validation = validateRange(
+      fromValue,
+      toValue,
+      366
+    );
+
+    if (!validation.valid) {
+      setError(validation.error);
+      return false;
+    }
+
+    try {
+      setLoadingComplaints(true);
+      setError(null);
+
+      const params =
+        new URLSearchParams({
+          from: fromValue,
+          to: toValue,
+        });
+
+      const response = await fetch(
+        `/api/test-sweeping/complaints?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const json =
+        (await response.json()) as
+          | SweepingComplaintsResponse
+          | {
+              error?: string;
+            };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in json &&
+          json.error
+            ? json.error
+            : "No se pudieron cargar los reclamos de barrido."
+        );
+      }
+
+      const result =
+        json as SweepingComplaintsResponse;
+
+      setSweepingComplaints(
+        Array.isArray(result.data)
+          ? result.data
+          : []
+      );
+
+      setComplaintsTotal(
+        Number(
+          result.total ?? 0
+        )
+      );
+
+      setComplaintsWithoutGeo(
+        Number(
+          result.without_georeference ??
+            0
+        )
+      );
+
+      setComplaintsAppliedFrom(
+        fromValue
+      );
+
+      setComplaintsAppliedTo(
+        toValue
+      );
+
+      setComplaintsLoaded(true);
+
+      return true;
+    } catch (err) {
+      console.error(
+        "Error cargando reclamos de barrido:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al cargar los reclamos de barrido."
+      );
+
+      return false;
+    } finally {
+      setLoadingComplaints(false);
+    }
+  }
+
+  async function toggleComplaintsMap() {
+    if (!document.fullscreenElement) {
+      setFullscreenMap(null);
+      setFullscreenActive(false);
+      setMonitorMode(false);
+    }
+
+    if (complaintsMapOpen) {
+      setComplaintsMapOpen(false);
+      return;
+    }
+
+    setComplaintsMapOpen(true);
+
+    if (!complaintsLoaded) {
+      await loadSweepingComplaints(
+        complaintsFilterFrom,
+        complaintsFilterTo
+      );
+    }
+  }
+
+  async function refreshComplaintsMap() {
+    await loadSweepingComplaints(
+      complaintsAppliedFrom,
+      complaintsAppliedTo
+    );
+  }
+
+  async function applyComplaintsFilter() {
+    await loadSweepingComplaints(
+      complaintsFilterFrom,
+      complaintsFilterTo
+    );
+  }
+
+  async function complaintsFilterToday() {
+    const currentToday =
+      getTodayYmd();
+
+    setComplaintsFilterFrom(
+      currentToday
+    );
+
+    setComplaintsFilterTo(
+      currentToday
+    );
+
+    await loadSweepingComplaints(
+      currentToday,
+      currentToday
+    );
+  }
+
+  async function complaintsFilterThisWeek() {
+    const now = new Date();
+    const day = now.getDay();
+
+    const daysSinceMonday =
+      day === 0
+        ? 6
+        : day - 1;
+
+    const monday =
+      new Date(now);
+
+    monday.setDate(
+      monday.getDate() -
+        daysSinceMonday
+    );
+
+    const from =
+      dateToYmd(monday);
+
+    const to =
+      getTodayYmd();
+
+    setComplaintsFilterFrom(
+      from
+    );
+
+    setComplaintsFilterTo(
+      to
+    );
+
+    await loadSweepingComplaints(
+      from,
+      to
+    );
+  }
+
+  async function complaintsFilterThisMonth() {
+    setComplaintsFilterFrom(
+      firstDayOfMonth
+    );
+
+    setComplaintsFilterTo(
+      today
+    );
+
+    await loadSweepingComplaints(
+      firstDayOfMonth,
+      today
+    );
+  }
+
+  /*
+   * ==========================================================
+   * VEHÍCULOS DE BARRIDO - ALL TRACK
+   * ==========================================================
+   */
+
+  async function loadAlltrackVehicles() {
+    try {
+      setLoadingAlltrack(true);
+      setError(null);
+
+      const response =
+        await fetch(
+          "/api/test-sweeping/alltrack-vehicles",
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+      const json =
+        (await response.json()) as
+          | SweepingAlltrackResponse
+          | {
+              error?: string;
+            };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in json &&
+          json.error
+            ? json.error
+            : "No se pudieron cargar los vehículos de barrido."
+        );
+      }
+
+      const result =
+        json as SweepingAlltrackResponse;
+
+      setAlltrackVehicles(
+        Array.isArray(result.data)
+          ? result.data
+          : []
+      );
+
+      setAlltrackLocated(
+        Number(
+          result.located ?? 0
+        )
+      );
+
+      setAlltrackWithoutPosition(
+        Number(
+          result.without_position ?? 0
+        )
+      );
+
+      setAlltrackUpdatedAt(
+        result.updated_at ??
+          new Date().toISOString()
+      );
+
+      setAlltrackLoaded(true);
+
+      return true;
+    } catch (err) {
+      console.error(
+        "Error cargando vehículos de barrido desde All Track:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al cargar los vehículos de barrido."
+      );
+
+      return false;
+    } finally {
+      setLoadingAlltrack(false);
+    }
+  }
+
+  async function toggleAlltrackMap() {
+    if (!document.fullscreenElement) {
+      setFullscreenMap(null);
+      setFullscreenActive(false);
+      setMonitorMode(false);
+    }
+
+    if (alltrackMapOpen) {
+      setAlltrackMapOpen(false);
+      return;
+    }
+
+    setAlltrackMapOpen(true);
+
+    /*
+     * Como este mapa representa ubicación actual, cada vez que
+     * se vuelve a abrir consultamos de nuevo All Track.
+     */
+    await loadAlltrackVehicles();
+  }
+
+  async function refreshAlltrackVehicles() {
+    await loadAlltrackVehicles();
+  }
+
+  async function loadAlltrackHistory(
+    vehicleCode =
+      selectedAlltrackVehicleCode
+  ) {
+    try {
+      setLoadingAlltrackHistory(true);
+      setError(null);
+
+      const currentToday =
+        getTodayYmd();
+
+      const params =
+        new URLSearchParams({
+          from: currentToday,
+          to: currentToday,
+          includeRoute: "1",
+        });
+
+      const response =
+        await fetch(
+          `/api/test-sweeping/alltrack-history/${encodeURIComponent(
+            vehicleCode
+          )}?${params.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+      const json =
+        (await response.json()) as
+          | SweepingAlltrackHistoryResponse
+          | {
+              error?: string;
+              data?: unknown;
+              vehicle?: unknown;
+              summary?: unknown;
+              stops?: unknown;
+              route?: unknown;
+            };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in json &&
+          json.error
+            ? json.error
+            : "No se pudo cargar el recorrido de hoy."
+        );
+      }
+
+      /*
+       * El historial debe venir con:
+       * { data: { vehicle, summary, stops, route } }
+       *
+       * Para evitar que una respuesta 200 con otra envoltura rompa
+       * todo React, normalizamos también dos variantes posibles:
+       * { data: { data: {...} } } y { vehicle, summary, ... }.
+       */
+      const rawHistory =
+        json as any;
+
+      const normalizedHistory:
+        SweepingAlltrackHistoryResponse | null =
+        rawHistory?.data?.vehicle &&
+        rawHistory?.data?.summary
+          ? rawHistory
+          : rawHistory?.data?.data?.vehicle &&
+              rawHistory?.data?.data?.summary
+            ? rawHistory.data
+            : rawHistory?.vehicle &&
+                rawHistory?.summary
+              ? {
+                  meta:
+                    rawHistory.meta,
+                  data: {
+                    vehicle:
+                      rawHistory.vehicle,
+                    period:
+                      rawHistory.period ?? {
+                        from:
+                          currentToday,
+                        to:
+                          currentToday,
+                      },
+                    summary:
+                      rawHistory.summary,
+                    stops:
+                      Array.isArray(
+                        rawHistory.stops
+                      )
+                        ? rawHistory.stops
+                        : [],
+                    route:
+                      rawHistory.route ??
+                      null,
+                  },
+                }
+              : null;
+
+      if (
+        !normalizedHistory ||
+        !normalizedHistory.data ||
+        !normalizedHistory.data.vehicle ||
+        !normalizedHistory.data.summary
+      ) {
+        console.error(
+          "Respuesta inesperada de All Track historial:",
+          json
+        );
+
+        throw new Error(
+          "All Track respondió correctamente, pero el formato del recorrido no es el esperado."
+        );
+      }
+
+      setAlltrackHistory(
+        normalizedHistory
+      );
+
+      return true;
+    } catch (err) {
+      console.error(
+        "Error cargando recorrido de All Track:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al cargar el recorrido de hoy."
+      );
+
+      return false;
+    } finally {
+      setLoadingAlltrackHistory(false);
+    }
+  }
+
+  async function showAlltrackCurrentView() {
+    setAlltrackViewMode("current");
+
+    if (!alltrackLoaded) {
+      await loadAlltrackVehicles();
+    }
+  }
+
+  async function selectAlltrackHistoryVehicle(
+    vehicleCode: string
+  ) {
+    setSelectedAlltrackVehicleCode(
+      vehicleCode
+    );
+
+    setAlltrackViewMode("today");
+    setAlltrackHistory(null);
+
+    await loadAlltrackHistory(
+      vehicleCode
+    );
+  }
+
+  async function refreshAlltrackActiveView() {
+    if (alltrackViewMode === "today") {
+      await loadAlltrackHistory();
+      return;
+    }
+
+    await refreshAlltrackVehicles();
+  }
+
+  /*
+   * ==========================================================
    * RECARGAR EL MAPA CORRESPONDIENTE AL GUARDAR
    * ==========================================================
    */
@@ -1784,6 +6064,10 @@ export default function TestSweepingMap({
 
               status,
 
+              observations:
+                observations.trim() ||
+                null,
+
             }),
 
         }
@@ -1853,7 +6137,7 @@ export default function TestSweepingMap({
 
       setError(
 
-        "Completá la calle principal, desde calle y hasta calle."
+        "Seleccioná la calle principal, desde calle y hasta calle desde el desplegable."
 
       );
 
@@ -1989,6 +6273,8 @@ export default function TestSweepingMap({
 
       setToStreet("");
 
+      setObservations("");
+
       setSuccess(
 
         `${cleanStreet} desde ${cleanFrom} hasta ${cleanTo} fue guardado correctamente.`
@@ -2059,7 +6345,7 @@ export default function TestSweepingMap({
 
       setError(
 
-        "Completá la calle principal, desde calle y hasta calle antes de dibujar."
+        "Seleccioná la calle principal, desde calle y hasta calle desde el desplegable antes de dibujar."
 
       );
 
@@ -2165,7 +6451,7 @@ export default function TestSweepingMap({
 
       setError(
 
-        "Completá la calle principal, desde calle y hasta calle."
+        "Seleccioná la calle principal, desde calle y hasta calle desde el desplegable."
 
       );
 
@@ -2197,51 +6483,43 @@ export default function TestSweepingMap({
 
       setSuccess(null);
 
-      await saveGeometry(
+      if (editingRecordId) {
+        await patchEditedRecord(
+          manualGeometry
+        );
+      } else {
+        await saveGeometry(
+          manualGeometry,
+          cleanStreet,
+          cleanFrom,
+          cleanTo,
+          recordStatus
+        );
+      }
 
-        manualGeometry,
+      if (!editingRecordId) {
+        setDrawingManual(
+          false
+        );
 
-        cleanStreet,
+        setManualGeometry(
+          null
+        );
 
-        cleanFrom,
+        setManualClearToken(
+          (previous) =>
+            previous + 1
+        );
 
-        cleanTo,
+        setStreet("");
+        setFromStreet("");
+        setToStreet("");
+        setObservations("");
 
-        recordStatus
-
-      );
-
-      setDrawingManual(
-
-        false
-
-      );
-
-      setManualGeometry(
-
-        null
-
-      );
-
-      setManualClearToken(
-
-        (previous) =>
-
-          previous + 1
-
-      );
-
-      setStreet("");
-
-      setFromStreet("");
-
-      setToStreet("");
-
-      setSuccess(
-
-        `${cleanStreet} desde ${cleanFrom} hasta ${cleanTo} fue guardado correctamente.`
-
-      );
+        setSuccess(
+          `${cleanStreet} desde ${cleanFrom} hasta ${cleanTo} fue guardado correctamente.`
+        );
+      }
 
     } catch (err) {
 
@@ -2269,6 +6547,547 @@ export default function TestSweepingMap({
 
     }
 
+  }
+
+  /*
+   * ==========================================================
+   * SELECCIONAR ZONA
+   * ==========================================================
+   */
+
+  function resetAreaSelection() {
+    setAreaDrawing(false);
+    setAreaGeometry(null);
+    setAreaStreets([]);
+    setSelectedAreaStreetKeys(new Set());
+    setAreaClearToken((previous) => previous + 1);
+  }
+
+  function switchToArea() {
+    if (recordStatus !== "PLANIFICADO") {
+      setRecordStatus("PLANIFICADO");
+    }
+
+    setLoadMode("area");
+    setDrawingManual(false);
+    setManualGeometry(null);
+    setManualClearToken((previous) => previous + 1);
+    resetAreaSelection();
+    resetMechanicalSelection();
+    setError(null);
+    setSuccess(null);
+  }
+
+  function startAreaDrawing() {
+    setError(null);
+    setSuccess(null);
+    setAreaGeometry(null);
+    setAreaStreets([]);
+    setSelectedAreaStreetKeys(new Set());
+    setAreaClearToken((previous) => previous + 1);
+    setAreaDrawing(true);
+  }
+
+  function cancelAreaDrawing() {
+    resetAreaSelection();
+    setError(null);
+  }
+
+  async function analyzeArea(
+    geometry: GeoJsonPolygon
+  ) {
+    try {
+      setAreaLoading(true);
+      setError(null);
+      setSuccess(null);
+      setAreaGeometry(geometry);
+
+      const response = await fetch(
+        "/api/test-sweeping/area-streets",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            geometry,
+            min_length_meters: 2,
+          }),
+        }
+      );
+
+      const json =
+        (await response.json()) as
+          AreaStreetsResponse & {
+            error?: string;
+          };
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudieron detectar las calles de la zona."
+        );
+      }
+
+      const streets =
+        Array.isArray(json.streets)
+          ? json.streets
+          : [];
+
+      setAreaStreets(streets);
+      setSelectedAreaStreetKeys(
+        new Set(
+          streets
+            .filter(
+              isAreaStreetSelectableByDefault
+            )
+            .map(
+              (item) => item.corridor_key
+            )
+        )
+      );
+
+      if (streets.length === 0) {
+        setError(
+          "No se encontraron calles dentro de la zona dibujada."
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Error analizando zona:",
+        err
+      );
+      setAreaStreets([]);
+      setSelectedAreaStreetKeys(new Set());
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al analizar la zona."
+      );
+    } finally {
+      setAreaLoading(false);
+    }
+  }
+
+  function toggleAreaStreet(
+    corridorKey: string
+  ) {
+    setSelectedAreaStreetKeys(
+      (previous) => {
+        const next = new Set(previous);
+
+        if (next.has(corridorKey)) {
+          next.delete(corridorKey);
+        } else {
+          next.add(corridorKey);
+        }
+
+        return next;
+      }
+    );
+  }
+
+  function selectAllAreaStreets() {
+    setSelectedAreaStreetKeys(
+      new Set(
+        areaStreets.map(
+          (item) => item.corridor_key
+        )
+      )
+    );
+  }
+
+
+
+  async function saveAreaPlanning() {
+    if (!areaWorkDate) {
+      setError(
+        "Seleccioná la fecha de planificación."
+      );
+      return;
+    }
+
+    if (!areaGeometry) {
+      setError(
+        "Primero dibujá la zona sobre el mapa."
+      );
+      return;
+    }
+
+    const selectedStreets =
+      areaStreets.filter((item) =>
+        selectedAreaStreetKeys.has(
+          item.corridor_key
+        )
+      );
+
+    if (selectedStreets.length === 0) {
+      setError(
+        "Seleccioná al menos una calle de la zona."
+      );
+      return;
+    }
+
+    const recordsToSave =
+      selectedStreets.flatMap((item) =>
+        areaStreetToLeafletPaths(
+          item.geometry
+        ).map((path) => ({
+          main_street:
+            item.street_name,
+          from_street:
+            "Límite de zona",
+          to_street:
+            "Límite de zona",
+          geometry: {
+            type: "LineString" as const,
+            coordinates:
+              path.map(
+                (position) => {
+                  const point =
+                    L.latLng(
+                      position as L.LatLngExpression
+                    );
+
+                  return [
+                    point.lng,
+                    point.lat,
+                  ];
+                }
+              ),
+          },
+        }))
+      );
+
+    if (recordsToSave.length === 0) {
+      setError(
+        "Las calles seleccionadas no tienen geometrías válidas para guardar."
+      );
+      return;
+    }
+
+    const areaBatchId =
+      window.crypto.randomUUID();
+
+    const areaObservation =
+      observations.trim() ||
+      "Planificación por zona";
+
+    try {
+      setAreaSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      /*
+       * UNA sola llamada HTTP + UNA sola RPC/transacción SQL.
+       * Antes una zona grande podía generar decenas de POST separados.
+       */
+      const response =
+        await fetch(
+          "/api/test-sweeping/area-batch",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              batch_id:
+                areaBatchId,
+              work_date:
+                areaWorkDate,
+              observations:
+                areaObservation,
+              color:
+                areaColor,
+              geometry:
+                areaGeometry,
+              records:
+                recordsToSave,
+            }),
+          }
+        );
+
+      const json =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo guardar la planificación por zona."
+        );
+      }
+
+      const savedCount =
+        Number(
+          json?.saved_count
+        ) ||
+        recordsToSave.length;
+
+      setSuccess(
+        `Planificación creada: ${selectedStreets.length} calles y ${savedCount} tramos guardados en una sola operación.`
+      );
+
+      /*
+       * Mostramos el polígono y su etiqueta inmediatamente.
+       * El refresco completo de los tramos se hace en segundo plano,
+       * así el usuario no queda mirando "Creando planificación..."
+       * mientras vuelve a descargarse todo el mes.
+       */
+      setPlannedAreaBatches(
+        (previous) => [
+          ...previous.filter(
+            (item) =>
+              item.batch_id !==
+              areaBatchId
+          ),
+          {
+            batch_id:
+              areaBatchId,
+            work_date:
+              areaWorkDate,
+            observations:
+              areaObservation,
+            color:
+              areaColor,
+            geometry:
+              areaGeometry,
+            pending_count:
+              savedCount,
+            realized_count:
+              0,
+            created_at:
+              new Date().toISOString(),
+          },
+        ]
+      );
+
+      setObservations("");
+      resetAreaSelection();
+
+      void loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      );
+    } catch (err) {
+      console.error(
+        "Error guardando planificación por zona:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al guardar la planificación por zona."
+      );
+    } finally {
+      setAreaSaving(false);
+    }
+  }
+
+  /*
+   * ==========================================================
+   * CORREDOR MECÁNICO POR DOS PUNTOS
+   * ==========================================================
+   */
+
+  function resetMechanicalSelection() {
+    setMechanicalSelecting(false);
+    setMechanicalStartPoint(null);
+    setMechanicalEndPoint(null);
+    setMechanicalPreview(null);
+  }
+
+  function switchToMechanical() {
+    if (recordStatus !== "PLANIFICADO") {
+      setRecordStatus("PLANIFICADO");
+    }
+
+    setLoadMode("mechanical");
+    setDrawingManual(false);
+    setManualGeometry(null);
+    setManualClearToken(
+      (previous) => previous + 1
+    );
+    resetAreaSelection();
+    resetMechanicalSelection();
+    setError(null);
+    setSuccess(null);
+  }
+
+  function startMechanicalSelection() {
+    setError(null);
+    setSuccess(null);
+    setMechanicalStartPoint(null);
+    setMechanicalEndPoint(null);
+    setMechanicalPreview(null);
+    setMechanicalSelecting(true);
+  }
+
+  async function detectMechanicalCorridor(
+    startPoint: MechanicalMapPoint,
+    endPoint: MechanicalMapPoint
+  ) {
+    try {
+      setMechanicalLoading(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(
+        "/api/test-sweeping/mechanical-corridor",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "detect",
+            start: startPoint,
+            end: endPoint,
+          }),
+        }
+      );
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo detectar el corredor mecánico."
+        );
+      }
+
+      const corridor =
+        json?.data as MechanicalCorridorPreview;
+
+      if (
+        !corridor?.geometry ||
+        corridor.geometry.type !== "LineString"
+      ) {
+        throw new Error(
+          "El corredor detectado no tiene una geometría válida."
+        );
+      }
+
+      setMechanicalPreview(corridor);
+    } catch (err) {
+      // Error de validación/detección esperado: lo mostramos en la UI
+      // sin disparar el overlay rojo de Next.js en desarrollo.
+      setMechanicalPreview(null);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al detectar el corredor mecánico."
+      );
+    } finally {
+      setMechanicalLoading(false);
+    }
+  }
+
+  function handleMechanicalMapPoint(
+    point: MechanicalMapPoint
+  ) {
+    if (
+      !mechanicalSelecting ||
+      mechanicalLoading
+    ) {
+      return;
+    }
+
+    if (
+      !mechanicalStartPoint ||
+      mechanicalEndPoint
+    ) {
+      setMechanicalStartPoint(point);
+      setMechanicalEndPoint(null);
+      setMechanicalPreview(null);
+      return;
+    }
+
+    setMechanicalEndPoint(point);
+    setMechanicalSelecting(false);
+
+    void detectMechanicalCorridor(
+      mechanicalStartPoint,
+      point
+    );
+  }
+
+  async function saveMechanicalCorridor() {
+    if (
+      !mechanicalStartPoint ||
+      !mechanicalEndPoint ||
+      !mechanicalPreview
+    ) {
+      setError(
+        "Seleccioná dos puntos y esperá a que el sistema detecte el corredor."
+      );
+      return;
+    }
+
+    if (!mechanicalWorkDate) {
+      setError(
+        "Seleccioná la fecha de planificación."
+      );
+      return;
+    }
+
+    try {
+      setMechanicalSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(
+        "/api/test-sweeping/mechanical-corridor",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "save",
+            start: mechanicalStartPoint,
+            end: mechanicalEndPoint,
+            work_date: mechanicalWorkDate,
+            observations:
+              observations.trim() || null,
+          }),
+        }
+      );
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo guardar el corredor mecánico."
+        );
+      }
+
+      setSuccess(
+        `${mechanicalPreview.street_name} fue agregado a la planificación mecánica.`
+      );
+
+      setObservations("");
+      resetMechanicalSelection();
+
+      void loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      );
+    } catch (err) {
+      console.error(
+        "Error guardando corredor mecánico:",
+        err
+      );
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al guardar el corredor mecánico."
+      );
+    } finally {
+      setMechanicalSaving(false);
+    }
   }
 
   /*
@@ -2309,6 +7128,9 @@ export default function TestSweepingMap({
 
     );
 
+    resetAreaSelection();
+    resetMechanicalSelection();
+
     setError(null);
 
     setSuccess(null);
@@ -2343,6 +7165,9 @@ export default function TestSweepingMap({
 
     );
 
+    resetAreaSelection();
+    resetMechanicalSelection();
+
     setError(null);
 
     setSuccess(null);
@@ -2359,68 +7184,175 @@ export default function TestSweepingMap({
 
    */
 
+  function selectRouteFromList(
+    kind:
+      | "planned"
+      | "completed",
+    record: MapRoute
+  ) {
+    setSelectedBatchId(
+      null
+    );
+
+    setSelectedRouteId(
+      record.id
+    );
+
+    setHoveredRouteId(null);
+
+    setFocusedRouteKind(
+      kind
+    );
+
+    setFocusedRoutePositions(
+      record.positions
+    );
+
+    setFocusedRouteToken(
+      (previous) =>
+        previous + 1
+    );
+  }
+
   /*
    * ==========================================================
    * EDITAR / ELIMINAR
    * ==========================================================
    */
 
+  function selectBatchFromList(
+    kind:
+      | "planned"
+      | "completed",
+    batchId: string,
+    records: MapRoute[]
+  ) {
+    const positions =
+      records.flatMap(
+        (record) =>
+          record.positions
+      );
+
+    if (
+      positions.length < 2
+    ) {
+      return;
+    }
+
+    setSelectedRouteId(
+      null
+    );
+
+    setSelectedBatchId(
+      batchId
+    );
+
+    setHoveredRouteId(
+      null
+    );
+
+    setFocusedRouteKind(
+      kind
+    );
+
+    setFocusedRoutePositions(
+      positions
+    );
+
+    setFocusedRouteToken(
+      (previous) =>
+        previous + 1
+    );
+  }
+
   function startEditingRecord(record: MapRoute) {
     setEditingRecordId(record.id);
-    setEditStreet(record.main_street);
-    setEditFromStreet(record.from_street);
-    setEditToStreet(record.to_street);
-    setEditWorkDate(record.work_date);
-    setEditStatus(
+    setEditingWorkDate(record.work_date);
+    setEditingOriginalStreet(record.main_street);
+    setEditingOriginalFromStreet(record.from_street);
+    setEditingOriginalToStreet(record.to_street);
+    setEditingOriginalGeometry(record.geometry);
+    setEditingZone(record.zone ?? null);
+    setEditingObservations(record.observations ?? null);
+
+    setStreet(record.main_street);
+    setFromStreet(record.from_street);
+    setToStreet(record.to_street);
+    setObservations(record.observations ?? "");
+    setRecordStatus(
       (record.status ?? "").toUpperCase() === "PLANIFICADO"
         ? "PLANIFICADO"
         : "COMPLETADO"
     );
-    setEditZone(record.zone ?? "");
-    setEditObservations(record.observations ?? "");
-    setEditGeometry(record.geometry);
-    setEditRecalculateGeometry(false);
+
+    setLoadMode("automatic");
+    setDrawingManual(false);
+    setManualGeometry(null);
+    setManualClearToken((previous) => previous + 1);
+    resetAreaSelection();
+
     setError(null);
     setSuccess(null);
+    setSelectedRouteId(record.id);
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("sweeping-editor-form")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    });
   }
 
   function cancelEditingRecord() {
     setEditingRecordId(null);
-    setEditStreet("");
-    setEditFromStreet("");
-    setEditToStreet("");
-    setEditWorkDate("");
-    setEditStatus("COMPLETADO");
-    setEditZone("");
-    setEditObservations("");
-    setEditGeometry(null);
-    setEditRecalculateGeometry(false);
+    setEditingWorkDate("");
+    setEditingOriginalStreet("");
+    setEditingOriginalFromStreet("");
+    setEditingOriginalToStreet("");
+    setEditingOriginalGeometry(null);
+    setEditingZone(null);
+    setEditingObservations(null);
+
+    setStreet("");
+    setFromStreet("");
+    setToStreet("");
+    setObservations("");
+    setRecordStatus("COMPLETADO");
+
+    setDrawingManual(false);
+    setManualGeometry(null);
+    setManualClearToken((previous) => previous + 1);
+    resetAreaSelection();
+    setLoadMode("automatic");
+
     setError(null);
+    setSuccess(null);
   }
 
-  async function saveEditedRecord() {
+  async function patchEditedRecord(
+    geometryToSave: GeoJsonLineString
+  ) {
     if (!editingRecordId) {
       return;
     }
 
-    const cleanStreet = editStreet.trim();
-    const cleanFrom = editFromStreet.trim();
-    const cleanTo = editToStreet.trim();
+    const cleanStreet = street.trim();
+    const cleanFrom = fromStreet.trim();
+    const cleanTo = toStreet.trim();
 
     if (!cleanStreet || !cleanFrom || !cleanTo) {
       setError(
-        "Completá la calle principal, desde calle y hasta calle."
+        "Seleccioná la calle principal, desde calle y hasta calle desde el desplegable."
       );
       return;
     }
 
-    if (!editWorkDate) {
-      setError("Seleccioná una fecha válida.");
-      return;
-    }
-
-    if (!editGeometry) {
-      setError("El tramo no tiene una geometría válida.");
+    if (!editingWorkDate) {
+      setError(
+        "El tramo que estás editando no tiene una fecha válida."
+      );
       return;
     }
 
@@ -2428,49 +7360,6 @@ export default function TestSweepingMap({
       setEditingSaving(true);
       setError(null);
       setSuccess(null);
-
-      let geometryToSave = editGeometry;
-
-      if (editRecalculateGeometry) {
-        const params = new URLSearchParams({
-          street: cleanStreet,
-          from: cleanFrom,
-          to: cleanTo,
-        });
-
-        const segmentResponse = await fetch(
-          `/api/test-sweeping/segment?${params.toString()}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
-
-        const segmentJson = await segmentResponse.json();
-
-        if (!segmentResponse.ok) {
-          throw new Error(
-            segmentJson?.error ||
-              "No se pudo recalcular el recorrido con las calles indicadas."
-          );
-        }
-
-        const segment: SegmentResponse =
-          segmentJson?.data ?? segmentJson;
-
-        if (
-          !segment.geometry ||
-          segment.geometry.type !== "LineString" ||
-          !Array.isArray(segment.geometry.coordinates) ||
-          segment.geometry.coordinates.length < 2
-        ) {
-          throw new Error(
-            "La nueva geometría calculada no es válida."
-          );
-        }
-
-        geometryToSave = segment.geometry;
-      }
 
       const response = await fetch(
         "/api/test-sweeping/records",
@@ -2485,11 +7374,12 @@ export default function TestSweepingMap({
             from_street: cleanFrom,
             to_street: cleanTo,
             geometry: geometryToSave,
-            work_date: editWorkDate,
-            zone: editZone.trim() || null,
+            work_date: editingWorkDate,
+            zone: editingZone,
             observations:
-              editObservations.trim() || null,
-            status: editStatus,
+              observations.trim() ||
+              null,
+            status: recordStatus,
           }),
         }
       );
@@ -2503,11 +7393,11 @@ export default function TestSweepingMap({
         );
       }
 
-      cancelEditingRecord();
+      const successMessage =
+        `${cleanStreet} fue actualizado correctamente.`;
 
-      setSuccess(
-        `${cleanStreet} fue actualizado correctamente.`
-      );
+      cancelEditingRecord();
+      setSuccess(successMessage);
 
       await Promise.all([
         loadPlannedRecords(
@@ -2535,10 +7425,826 @@ export default function TestSweepingMap({
     }
   }
 
+  async function saveEditedAutomaticSegment() {
+    if (!editingRecordId) {
+      return;
+    }
+
+    const cleanStreet = street.trim();
+    const cleanFrom = fromStreet.trim();
+    const cleanTo = toStreet.trim();
+
+    if (!cleanStreet || !cleanFrom || !cleanTo) {
+      setError(
+        "Seleccioná la calle principal, desde calle y hasta calle desde el desplegable."
+      );
+      return;
+    }
+
+    const streetChanged =
+      cleanStreet !== editingOriginalStreet ||
+      cleanFrom !== editingOriginalFromStreet ||
+      cleanTo !== editingOriginalToStreet;
+
+    if (!streetChanged) {
+      if (!editingOriginalGeometry) {
+        setError(
+          "El tramo original no tiene una geometría válida."
+        );
+        return;
+      }
+
+      await patchEditedRecord(
+        editingOriginalGeometry
+      );
+      return;
+    }
+
+    try {
+      setEditingSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const params = new URLSearchParams({
+        street: cleanStreet,
+        from: cleanFrom,
+        to: cleanTo,
+      });
+
+      const segmentResponse = await fetch(
+        `/api/test-sweeping/segment?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const segmentJson =
+        await segmentResponse.json();
+
+      if (!segmentResponse.ok) {
+        throw new Error(
+          segmentJson?.error ||
+            "No se pudo calcular el nuevo recorrido."
+        );
+      }
+
+      const segment: SegmentResponse =
+        segmentJson?.data ?? segmentJson;
+
+      if (
+        !segment.geometry ||
+        segment.geometry.type !== "LineString" ||
+        !Array.isArray(
+          segment.geometry.coordinates
+        ) ||
+        segment.geometry.coordinates.length < 2
+      ) {
+        throw new Error(
+          "La nueva geometría calculada no es válida."
+        );
+      }
+
+      setEditingSaving(false);
+
+      await patchEditedRecord(
+        segment.geometry
+      );
+    } catch (err) {
+      console.error(
+        "Error recalculando tramo editado:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al recalcular el tramo."
+      );
+
+      setEditingSaving(false);
+    }
+  }
+
+  async function markPlannedAsCompleted(
+    record: MapRoute
+  ) {
+    if (record.realized_record_id) {
+      setSuccess(
+        "Este tramo ya está registrado como realizado."
+      );
+      return;
+    }
+
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Marcar tramo como realizado",
+        message:
+          `${record.main_street} — ${record.from_street} → ${record.to_street}`,
+        detail:
+          "El tramo planificado se conservará y se creará una copia en Realizados con la fecha de hoy.",
+        confirmLabel:
+          "Marcar como realizado",
+        variant:
+          "success",
+      });
+
+    if (!confirmed) {
+      return;
+    }
+
+    const workDate =
+      getTodayYmd();
+
+    try {
+      setMarkingRealizedId(
+        record.id
+      );
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(
+        "/api/test-sweeping/records",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            action:
+              "mark_completed",
+            planned_record_id:
+              record.id,
+            work_date:
+              workDate,
+          }),
+        }
+      );
+
+      const json =
+        await response.json();
+
+      if (!response.ok) {
+        if (
+          response.status === 409
+        ) {
+          await loadPlannedRecords(
+            plannedAppliedFrom,
+            plannedAppliedTo
+          );
+
+          setSuccess(
+            "Este tramo ya estaba registrado como realizado."
+          );
+
+          return;
+        }
+
+        throw new Error(
+          json?.error ||
+            "No se pudo registrar el tramo como realizado."
+        );
+      }
+
+      /*
+       * Siempre actualizamos Planificados para que aparezca
+       * inmediatamente como “Ya realizado”.
+       */
+      await loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      );
+
+      /*
+       * Si HOY está dentro del filtro actual de Realizados,
+       * mantenemos ese filtro.
+       *
+       * Si no está, pasamos el mapa de Realizados a HOY para
+       * que el nuevo tramo se vea automáticamente.
+       */
+      const currentDate =
+        dateFromYmd(
+          workDate
+        );
+
+      const completedFrom =
+        dateFromYmd(
+          completedAppliedFrom
+        );
+
+      const completedTo =
+        dateFromYmd(
+          completedAppliedTo
+        );
+
+      const todayIsVisible =
+        currentDate &&
+        completedFrom &&
+        completedTo &&
+        currentDate.getTime() >=
+          completedFrom.getTime() &&
+        currentDate.getTime() <=
+          completedTo.getTime();
+
+      if (todayIsVisible) {
+        await loadCompletedRecords(
+          completedAppliedFrom,
+          completedAppliedTo
+        );
+      } else {
+        setCompletedFilterFrom(
+          workDate
+        );
+        setCompletedFilterTo(
+          workDate
+        );
+
+        await loadCompletedRecords(
+          workDate,
+          workDate
+        );
+      }
+
+      setSuccess(
+        `${record.main_street} se registró como realizado. La planificación original se conserva.`
+      );
+    } catch (err) {
+      console.error(
+        "Error marcando tramo como realizado:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al registrar el tramo como realizado."
+      );
+    } finally {
+      setMarkingRealizedId(
+        null
+      );
+    }
+  }
+
+  async function markBatchAsCompleted(
+    batchId: string,
+    records: MapRoute[]
+  ) {
+    const pendingRecords =
+      records.filter(
+        (record) =>
+          !record.realized_record_id
+      );
+
+    if (pendingRecords.length === 0) {
+      setSuccess(
+        "Todos los tramos de esta zona ya están registrados como realizados."
+      );
+      return;
+    }
+
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Marcar zona como realizada",
+        message:
+          `Se registrarán ${pendingRecords.length} tramos pendientes como realizados.`,
+        detail:
+          "Los tramos planificados originales se conservarán. Solo se crearán realizados para los pendientes del grupo.",
+        confirmLabel:
+          "Marcar grupo como realizado",
+        variant:
+          "success",
+      });
+
+    if (!confirmed) {
+      return;
+    }
+
+    const workDate =
+      getTodayYmd();
+
+    try {
+      setMarkingBatchId(
+        batchId
+      );
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(
+        "/api/test-sweeping/records",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            action:
+              "mark_batch_completed",
+            batch_id:
+              batchId,
+            work_date:
+              workDate,
+          }),
+        }
+      );
+
+      const json =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo registrar el grupo como realizado."
+        );
+      }
+
+      await loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      );
+
+      const currentDate =
+        dateFromYmd(
+          workDate
+        );
+
+      const completedFrom =
+        dateFromYmd(
+          completedAppliedFrom
+        );
+
+      const completedTo =
+        dateFromYmd(
+          completedAppliedTo
+        );
+
+      const todayIsVisible =
+        currentDate &&
+        completedFrom &&
+        completedTo &&
+        currentDate.getTime() >=
+          completedFrom.getTime() &&
+        currentDate.getTime() <=
+          completedTo.getTime();
+
+      if (todayIsVisible) {
+        await loadCompletedRecords(
+          completedAppliedFrom,
+          completedAppliedTo
+        );
+      } else {
+        setCompletedFilterFrom(
+          workDate
+        );
+        setCompletedFilterTo(
+          workDate
+        );
+
+        await loadCompletedRecords(
+          workDate,
+          workDate
+        );
+      }
+
+      const completedCount =
+        Number(
+          json?.completed_count ??
+            pendingRecords.length
+        );
+
+      setSuccess(
+        `${completedCount} tramos de la zona se registraron como realizados. La planificación original se conserva.`
+      );
+    } catch (err) {
+      console.error(
+        "Error marcando grupo como realizado:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al registrar el grupo como realizado."
+      );
+    } finally {
+      setMarkingBatchId(
+        null
+      );
+    }
+  }
+
+  async function deleteBatchPending(
+    batchId: string,
+    records: MapRoute[]
+  ) {
+    const pendingRecords =
+      records.filter(
+        (record) =>
+          !record.realized_record_id
+      );
+
+    const realizedCount =
+      records.length -
+      pendingRecords.length;
+
+    if (pendingRecords.length === 0) {
+      setSuccess(
+        "Este grupo no tiene tramos planificados pendientes para eliminar."
+      );
+      return;
+    }
+
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Eliminar planificación por zona",
+        message:
+          `Se eliminarán ${pendingRecords.length} tramos planificados pendientes.`,
+        detail:
+          realizedCount > 0
+            ? `${realizedCount} tramos del grupo ya tienen un realizado asociado y se conservarán junto con su histórico.`
+            : "Se eliminará únicamente esta planificación agrupada. Esta acción no se puede deshacer.",
+        confirmLabel:
+          "Eliminar pendientes",
+        variant:
+          "danger",
+      });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingBatchId(
+        batchId
+      );
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(
+        `/api/test-sweeping/records?batch_id=${encodeURIComponent(
+          batchId
+        )}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const json =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo eliminar la planificación por zona."
+        );
+      }
+
+      if (
+        editingRecordId &&
+        pendingRecords.some(
+          (record) =>
+            record.id ===
+            editingRecordId
+        )
+      ) {
+        cancelEditingRecord();
+      }
+
+      await Promise.all([
+        loadPlannedRecords(
+          plannedAppliedFrom,
+          plannedAppliedTo
+        ),
+        loadCompletedRecords(
+          completedAppliedFrom,
+          completedAppliedTo
+        ),
+      ]);
+
+      const deletedCount =
+        Number(
+          json?.deleted_count ??
+            pendingRecords.length
+        );
+
+      setSuccess(
+        `${deletedCount} tramos pendientes de la zona fueron eliminados correctamente.`
+      );
+    } catch (err) {
+      console.error(
+        "Error eliminando grupo de planificación:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al eliminar la planificación por zona."
+      );
+    } finally {
+      setDeletingBatchId(
+        null
+      );
+    }
+  }
+
+  async function runDeleteRequestsInChunks(
+    urls: string[],
+    chunkSize = 8
+  ) {
+    let deleted = 0;
+
+    for (
+      let index = 0;
+      index < urls.length;
+      index += chunkSize
+    ) {
+      const chunk =
+        urls.slice(
+          index,
+          index + chunkSize
+        );
+
+      const results =
+        await Promise.all(
+          chunk.map(
+            async (url) => {
+              const response =
+                await fetch(
+                  url,
+                  {
+                    method: "DELETE",
+                  }
+                );
+
+              const json =
+                await response.json();
+
+              if (!response.ok) {
+                throw new Error(
+                  json?.error ||
+                    "No se pudo completar una de las eliminaciones."
+                );
+              }
+
+              return Number(
+                json?.deleted_count ??
+                  1
+              );
+            }
+          )
+        );
+
+      deleted +=
+        results.reduce(
+          (sum, value) =>
+            sum + value,
+          0
+        );
+    }
+
+    return deleted;
+  }
+
+  async function deleteAllPendingPlanning() {
+    const pendingRecords =
+      plannedRoutes.filter(
+        (record) =>
+          !record.realized_record_id
+      );
+
+    if (
+      pendingRecords.length === 0
+    ) {
+      setSuccess(
+        "No hay tramos planificados pendientes en el período visible."
+      );
+      return;
+    }
+
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Eliminar planificación pendiente",
+        message:
+          `Se eliminarán ${pendingRecords.length} tramos planificados pendientes del período visible.`,
+        detail:
+          `Período: ${formatDateAr(plannedAppliedFrom)} al ${formatDateAr(plannedAppliedTo)}. Los tramos que ya tienen un barrido realizado asociado NO se eliminarán.`,
+        confirmLabel:
+          `Eliminar ${pendingRecords.length} pendientes`,
+        variant:
+          "danger",
+      });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingAllPlanned(
+        true
+      );
+      setError(null);
+      setSuccess(null);
+
+      const batchIds =
+        Array.from(
+          new Set<string>(
+            pendingRecords
+              .map(
+                (record) =>
+                  record.batch_id?.trim() ||
+                  ""
+              )
+              .filter(Boolean)
+          )
+        );
+
+      const standaloneIds =
+        pendingRecords
+          .filter(
+            (record) =>
+              !record.batch_id?.trim()
+          )
+          .map(
+            (record) =>
+              record.id
+          );
+
+      const urls = [
+        ...batchIds.map(
+          (batchId) =>
+            `/api/test-sweeping/records?batch_id=${encodeURIComponent(
+              batchId
+            )}`
+        ),
+        ...standaloneIds.map(
+          (id) =>
+            `/api/test-sweeping/records?id=${encodeURIComponent(
+              id
+            )}`
+        ),
+      ];
+
+      await runDeleteRequestsInChunks(
+        urls
+      );
+
+      if (
+        editingRecordId &&
+        pendingRecords.some(
+          (record) =>
+            record.id ===
+            editingRecordId
+        )
+      ) {
+        cancelEditingRecord();
+      }
+
+      await Promise.all([
+        loadPlannedRecords(
+          plannedAppliedFrom,
+          plannedAppliedTo
+        ),
+        loadCompletedRecords(
+          completedAppliedFrom,
+          completedAppliedTo
+        ),
+      ]);
+
+      setSuccess(
+        `${pendingRecords.length} tramos planificados pendientes fueron eliminados. Los realizados se conservaron.`
+      );
+    } catch (err) {
+      console.error(
+        "Error eliminando planificación pendiente del período:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al eliminar la planificación pendiente."
+      );
+    } finally {
+      setDeletingAllPlanned(
+        false
+      );
+    }
+  }
+
+  async function deleteCompletedBatch(
+    batchId: string,
+    records: MapRoute[]
+  ) {
+    if (
+      records.length === 0
+    ) {
+      return;
+    }
+
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Eliminar barridos realizados de la zona",
+        message:
+          `Se eliminarán ${records.length} registros realizados de esta zona.`,
+        detail:
+          "Usá esta opción solamente para corregir una carga realizada por error. Si estos realizados provienen de una planificación, los tramos planificados quedarán nuevamente pendientes.",
+        confirmLabel:
+          `Eliminar ${records.length} realizados`,
+        variant:
+          "danger",
+      });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingBatchId(
+        batchId
+      );
+      setError(null);
+      setSuccess(null);
+
+      const urls =
+        records.map(
+          (record) =>
+            `/api/test-sweeping/records?id=${encodeURIComponent(
+              record.id
+            )}`
+        );
+
+      await runDeleteRequestsInChunks(
+        urls
+      );
+
+      if (
+        editingRecordId &&
+        records.some(
+          (record) =>
+            record.id ===
+            editingRecordId
+        )
+      ) {
+        cancelEditingRecord();
+      }
+
+      await Promise.all([
+        loadPlannedRecords(
+          plannedAppliedFrom,
+          plannedAppliedTo
+        ),
+        loadCompletedRecords(
+          completedAppliedFrom,
+          completedAppliedTo
+        ),
+      ]);
+
+      setSuccess(
+        `${records.length} barridos realizados de la zona fueron eliminados.`
+      );
+    } catch (err) {
+      console.error(
+        "Error eliminando realizados de la zona:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al eliminar los realizados de la zona."
+      );
+    } finally {
+      setDeletingBatchId(
+        null
+      );
+    }
+  }
+
   async function deleteRecord(record: MapRoute) {
-    const confirmed = window.confirm(
-      `¿Eliminar el tramo "${record.main_street}" desde ${record.from_street} hasta ${record.to_street}?\n\nEsta acción no se puede deshacer.`
-    );
+    const confirmed =
+      await requestConfirmation({
+        title:
+          "Eliminar tramo",
+        message:
+          `${record.main_street} — ${record.from_street} → ${record.to_street}`,
+        detail:
+          record.status?.toUpperCase() ===
+          "COMPLETADO"
+            ? "Se eliminará este barrido realizado. Si provino de una planificación, el tramo planificado quedará nuevamente pendiente."
+            : "Esta acción no se puede deshacer.",
+        confirmLabel:
+          "Eliminar tramo",
+        variant:
+          "danger",
+      });
 
     if (!confirmed) {
       return;
@@ -2615,6 +8321,10 @@ export default function TestSweepingMap({
 
     );
 
+    setSelectedBatchId(
+      null
+    );
+
     setSuccess(null);
 
     setError(null);
@@ -2631,9 +8341,935 @@ export default function TestSweepingMap({
 
    */
 
+  const globalLoading =
+    saving ||
+    editingSaving ||
+    deletingId !== null ||
+    markingRealizedId !== null ||
+    deletingBatchId !== null ||
+    markingBatchId !== null ||
+    loadingPlanned ||
+    loadingCompleted ||
+    loadingComplaints ||
+    loadingAlltrack;
+
+  const globalLoadingText =
+    deletingBatchId !== null
+      ? "Eliminando planificación por zona..."
+      : markingBatchId !== null
+        ? "Registrando zona como realizada..."
+        : deletingId !== null
+          ? "Eliminando tramo..."
+          : markingRealizedId !== null
+            ? "Registrando barrido realizado..."
+            : saving
+          ? "Guardando tramo..."
+          : editingSaving
+            ? "Guardando cambios..."
+            : loadingPlanned &&
+                loadingCompleted
+              ? "Actualizando mapas..."
+              : loadingPlanned
+                ? "Cargando planificación..."
+                : loadingCompleted
+                  ? "Cargando barridos realizados..."
+                  : loadingComplaints
+                    ? "Cargando reclamos de barrido..."
+                    : loadingAlltrack
+                      ? "Consultando ubicación de vehículos en All Track..."
+                      : "Procesando...";
+
+  const plannedFullscreen =
+    fullscreenActive &&
+    fullscreenMap === "planned";
+
+  const completedFullscreen =
+    fullscreenActive &&
+    fullscreenMap === "completed";
+
+  const complaintsFullscreen =
+    fullscreenActive &&
+    fullscreenMap === "complaints";
+
+  const alltrackFullscreen =
+    fullscreenActive &&
+    fullscreenMap === "alltrack";
+
+  const monitorFullscreen =
+    fullscreenActive &&
+    monitorMode;
+
   return (
 
     <div className="space-y-4">
+
+      {/* =====================================================
+          CENTRO DE MONITOREO - 4 MAPAS EN FULLSCREEN NATIVO
+      ===================================================== */}
+
+      <div
+        ref={monitorCenterRef}
+        className={
+          monitorFullscreen
+            ? "fixed inset-0 z-[20000] flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-white"
+            : "pointer-events-none fixed -left-[10000px] top-0 h-px w-px overflow-hidden opacity-0"
+        }
+        style={
+          monitorFullscreen
+            ? {
+                width: "100vw",
+                height: "100dvh",
+                minWidth: "100vw",
+                minHeight: "100dvh",
+                background: "#020617",
+              }
+            : undefined
+        }
+      >
+        {monitorFullscreen && (
+          <>
+            <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-slate-800 bg-slate-950 px-4">
+              <div className="min-w-0">
+                <p className="text-sm font-bold tracking-wide text-white">
+                  Centro de monitoreo de barrido
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Planificación · realizado · reclamos · vehículos All Track
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {(loadingPlanned ||
+                  loadingCompleted ||
+                  loadingComplaints ||
+                  loadingAlltrack) && (
+                  <span className="hidden items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 sm:flex">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-white" />
+                    Actualizando...
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void refreshMonitorCenter()
+                  }
+                  disabled={
+                    loadingPlanned ||
+                    loadingCompleted ||
+                    loadingComplaints ||
+                    loadingAlltrack
+                  }
+                  className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+                >
+                  ↻ Actualizar todo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void closeMonitorCenter()
+                  }
+                  className="rounded-md border border-red-800 bg-red-950/60 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-900"
+                >
+                  ✕ Salir
+                </button>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-2 p-2">
+              {/* PLANIFICACIÓN */}
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-blue-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-blue-50 px-3">
+                  <div>
+                    <p className="text-xs font-bold text-blue-700">Planificación de barrido</p>
+                    <p className="text-[10px] text-slate-500">{formatDateAr(plannedAppliedFrom)} al {formatDateAr(plannedAppliedTo)}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {plannedAreaBatches.length > 0 && (
+                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                        {plannedAreaBatches.length} {plannedAreaBatches.length === 1 ? "zona" : "zonas"}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                      {plannedRoutes.length} tramos
+                    </span>
+                  </div>
+                </div>
+                <div className="relative min-h-0 flex-1">
+                  <MapContainer
+                    center={GENERAL_PICO_CENTER}
+                    zoom={13}
+                    scrollWheelZoom
+                    preferCanvas
+                    className="h-full w-full"
+                    style={{ width: "100%", height: "100%" }}
+                  >
+                    <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+                    {plannedAreaBatches.flatMap(
+                      (batch) => {
+                        const positions =
+                          areaPolygonToLeaflet(
+                            batch.geometry
+                          );
+
+                        const center =
+                          areaPolygonCenter(
+                            batch.geometry
+                          );
+
+                        if (
+                          positions.length < 3
+                        ) {
+                          return [];
+                        }
+
+                        const batchColor =
+                          normalizeAreaColor(
+                            batch.color
+                          );
+
+                        const layers = [
+                          <Polygon
+                            key={`monitor-planned-area-${batch.batch_id}`}
+                            positions={
+                              positions
+                            }
+                            interactive={false}
+                            pathOptions={{
+                              color:
+                                batchColor,
+                              weight: 4,
+                              opacity: 0.95,
+                              fillColor:
+                                batchColor,
+                              fillOpacity:
+                                0.24,
+                            }}
+                          />,
+                        ];
+
+                        if (center) {
+                          layers.push(
+                            <Marker
+                              key={`monitor-planned-area-label-${batch.batch_id}`}
+                              position={
+                                center
+                              }
+                              icon={createAreaPlanningLabelIcon(
+                                batch.observations ||
+                                  "Zona planificada",
+                                batchColor
+                              )}
+                              interactive={
+                                false
+                              }
+                              zIndexOffset={
+                                900
+                              }
+                            />
+                          );
+                        }
+
+                        return layers;
+                      }
+                    )}
+
+                    {plannedRoutes.map((record) => (
+                      <Polyline
+                        key={`monitor-planned-${record.id}`}
+                        positions={record.positions}
+                        smoothFactor={2}
+                        pathOptions={{
+                          color:
+                            record.sweeping_type === "MECANICO"
+                              ? "#f97316"
+                              : "#2563eb",
+                          weight: 3,
+                          opacity: 0.9,
+                          dashArray:
+                            record.sweeping_type === "MECANICO"
+                              ? "12 8"
+                              : undefined,
+                        }}
+                      >
+                        <Popup>
+                          <div className="min-w-[190px]">
+                            <p className="font-bold">{record.main_street}</p>
+                            <p className="mt-1 text-sm"><strong>Desde:</strong> {record.from_street}</p>
+                            <p className="text-sm"><strong>Hasta:</strong> {record.to_street}</p>
+                            <p className="mt-1 text-sm"><strong>Fecha:</strong> {formatDateAr(record.work_date)}</p>
+                            <p className="text-sm">
+                              <strong>Tipo:</strong>{" "}
+                              {record.sweeping_type === "MECANICO"
+                                ? "Mecánico"
+                                : record.sweeping_type === "MANUAL"
+                                  ? "Manual"
+                                  : "Sin clasificar"}
+                            </p>
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    ))}
+                    <FitRoutes routes={plannedRoutesToFit} />
+                    <InvalidateMapOnFullscreen fullscreen={monitorFullscreen} />
+
+                    <InvalidateMapOnResize />
+                  </MapContainer>
+                </div>
+              </div>
+
+              {/* REALIZADO */}
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-emerald-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-emerald-50 px-3">
+                  <div>
+                    <p className="text-xs font-bold text-emerald-700">Barrido realizado</p>
+                    <p className="text-[10px] text-slate-500">{formatDateAr(completedAppliedFrom)} al {formatDateAr(completedAppliedTo)}</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{completedRoutes.length} tramos</span>
+                </div>
+                <div className="relative min-h-0 flex-1">
+                  <MapContainer
+                    center={GENERAL_PICO_CENTER}
+                    zoom={13}
+                    scrollWheelZoom
+                    preferCanvas
+                    className="h-full w-full"
+                    style={{ width: "100%", height: "100%" }}
+                  >
+                    <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    {completedRoutes.map((record) => (
+                      <Polyline
+                        key={`monitor-completed-${record.id}`}
+                        positions={record.positions}
+                        smoothFactor={2}
+                        pathOptions={{
+                          color: record.color,
+                          weight: 3,
+                          opacity: 0.9,
+                          dashArray:
+                            record.sweeping_type === "MECANICO"
+                              ? "12 8"
+                              : undefined,
+                        }}
+                      >
+                        <Popup>
+                          <div className="min-w-[190px]">
+                            <p className="font-bold">{record.main_street}</p>
+                            <p className="mt-1 text-sm"><strong>Desde:</strong> {record.from_street}</p>
+                            <p className="text-sm"><strong>Hasta:</strong> {record.to_street}</p>
+                            <p className="mt-1 text-sm"><strong>Fecha:</strong> {formatDateAr(record.work_date)}</p>
+                            <p className="text-sm">
+                              <strong>Tipo:</strong>{" "}
+                              {record.sweeping_type === "MECANICO"
+                                ? "Mecánico"
+                                : record.sweeping_type === "MANUAL"
+                                  ? "Manual"
+                                  : "Sin clasificar"}
+                            </p>
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    ))}
+                    <FitRoutes routes={completedRoutesToFit} />
+                    <InvalidateMapOnFullscreen fullscreen={monitorFullscreen} />
+
+                    <InvalidateMapOnResize />
+                  </MapContainer>
+                </div>
+              </div>
+
+              {/* RECLAMOS */}
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-amber-50 px-3">
+                  <div>
+                    <p className="text-xs font-bold text-amber-700">Reclamos georreferenciados de barrido</p>
+                    <p className="text-[10px] text-slate-500">{formatDateAr(complaintsAppliedFrom)} al {formatDateAr(complaintsAppliedTo)}</p>
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{sweepingComplaints.length} ubicados</span>
+                </div>
+                <div className="relative min-h-0 flex-1">
+                  <MapContainer
+                    center={GENERAL_PICO_CENTER}
+                    zoom={13}
+                    scrollWheelZoom
+                    className="h-full w-full"
+                    style={{ width: "100%", height: "100%" }}
+                  >
+                    <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    {sweepingComplaints.map((complaint) => {
+                      const status = (complaint.status ?? "").toLowerCase();
+                      const color =
+                        status.includes("resuelto") && !status.includes("no resuelto")
+                          ? "#16a34a"
+                          : status.includes("no resuelto")
+                            ? "#dc2626"
+                            : "#f59e0b";
+                      return (
+                        <Marker
+                          key={`monitor-complaint-${complaint.id}`}
+                          position={[complaint.lat, complaint.lng]}
+                          icon={createComplaintPinIcon(color)}
+                        >
+                          <Popup>
+                            <div className="min-w-[200px] space-y-1">
+                              <p className="font-semibold">Reclamo #{complaint.id}</p>
+                              <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
+                              <p className="text-sm"><strong>Estado:</strong> {complaint.status ?? "-"}</p>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      );
+                    })}
+                    <FitComplaintPoints complaints={sweepingComplaints} />
+                    <InvalidateMapOnFullscreen fullscreen={monitorFullscreen} />
+
+                    <InvalidateMapOnResize />
+                  </MapContainer>
+                </div>
+              </div>
+
+              {/* ALL TRACK */}
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-sky-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="flex min-h-10 shrink-0 items-center justify-between gap-2 border-b bg-sky-50 px-3 py-1.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-sky-700">
+                      Vehículos de barrido · All Track
+                    </p>
+                    <p className="truncate text-[10px] text-slate-500">
+                      {alltrackViewMode === "current"
+                        ? "Ubicación actual de la flota de barrido"
+                        : `Recorrido de hoy · ${selectedAlltrackVehicleCode}`}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void showAlltrackCurrentView()
+                      }
+                      className={`rounded-md border px-2 py-1 text-[10px] font-semibold transition ${
+                        alltrackViewMode === "current"
+                          ? "border-sky-600 bg-sky-600 text-white"
+                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      Ubicación actual
+                    </button>
+
+                    <details className="group relative">
+                      <summary
+                        className={`cursor-pointer list-none rounded-md border px-2 py-1 text-[10px] font-semibold transition [&::-webkit-details-marker]:hidden ${
+                          alltrackViewMode === "today"
+                            ? "border-sky-600 bg-sky-600 text-white"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        Recorrido de hoy
+                        <span className="ml-1 inline-block transition-transform group-open:rotate-180">
+                          ▾
+                        </span>
+                      </summary>
+
+                      <div className="absolute right-0 top-full z-[25000] mt-1.5 min-w-[220px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 shadow-2xl">
+                        <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          Seleccionar vehículo
+                        </p>
+
+                        {[
+                          "A.7",
+                          "B.4",
+                          "B.5",
+                          "B.6",
+                          "B.7",
+                          "B.P2",
+                          "B.P3",
+                          "B.P4",
+                        ].map((code) => {
+                          const vehicle =
+                            alltrackVehicles.find(
+                              (item) =>
+                                item.code === code
+                            );
+
+                          return (
+                            <button
+                              key={`monitor-history-${code}`}
+                              type="button"
+                              onClick={(event) => {
+                                event.currentTarget
+                                  .closest("details")
+                                  ?.removeAttribute("open");
+
+                                void selectAlltrackHistoryVehicle(
+                                  code
+                                );
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left transition hover:bg-slate-100 ${
+                                alltrackViewMode === "today" &&
+                                selectedAlltrackVehicleCode === code
+                                  ? "bg-sky-50"
+                                  : ""
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-bold text-slate-800">
+                                  {code}
+                                </p>
+                                <p className="truncate text-[10px] text-slate-500">
+                                  {vehicle?.vehicle?.name ??
+                                    "Vehículo de barrido"}
+                                </p>
+                              </div>
+
+                              {alltrackViewMode === "today" &&
+                                selectedAlltrackVehicleCode === code && (
+                                  <span className="text-xs font-bold text-sky-600">
+                                    ✓
+                                  </span>
+                                )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+
+                    {alltrackViewMode === "current" ? (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                        {alltrackLocated} ubicados
+                      </span>
+                    ) : loadingAlltrackHistory ? (
+                      <span className="flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                        <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-sky-300 border-t-sky-700" />
+                        Cargando
+                      </span>
+                    ) : alltrackHistory ? (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                        {alltrackHistory.data.summary.distance_km.toLocaleString(
+                          "es-AR",
+                          {
+                            maximumFractionDigits: 2,
+                          }
+                        )} km · {alltrackHistory.data.stops.length} paradas
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="relative min-h-0 flex-1">
+                  <MapContainer
+                    center={GENERAL_PICO_CENTER}
+                    zoom={13}
+                    scrollWheelZoom
+                    className="h-full w-full"
+                    style={{ width: "100%", height: "100%" }}
+                  >
+                    <TileLayer
+                      attribution='&copy; OpenStreetMap contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+
+                    {alltrackViewMode === "current" ? (
+                      <>
+                        {alltrackVehicles.map((item) => {
+                          if (
+                            !item.available_position ||
+                            !item.position
+                          ) {
+                            return null;
+                          }
+
+                          const freshness =
+                            getAlltrackFreshness(
+                              item.position.date,
+                              item.position.time
+                            );
+
+                          return (
+                            <Marker
+                              key={`monitor-alltrack-${item.code}`}
+                              position={[
+                                item.position.lat,
+                                item.position.lng,
+                              ]}
+                              icon={createAlltrackVehicleIcon(
+                                item.code,
+                                freshness.color
+                              )}
+                            >
+                              <Popup>
+                                <div className="min-w-[210px] space-y-1">
+                                  <p className="font-bold">{item.code}</p>
+                                  <p className="text-sm">
+                                    {item.vehicle?.name ??
+                                      "Vehículo de barrido"}
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Estado:</strong>{" "}
+                                    {item.position.status ?? "-"}
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Velocidad:</strong>{" "}
+                                    {item.position.speed ?? 0} km/h
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Última posición:</strong>{" "}
+                                    {item.position.date ?? "-"}{" "}
+                                    {item.position.time ?? ""}
+                                  </p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          );
+                        })}
+
+                        <FitAlltrackVehicles
+                          vehicles={alltrackVehicles}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {(alltrackHistory?.data.route?.paths ?? []).map(
+                          (path, index) => {
+                            const positions = path
+                              .map(
+                                (point) =>
+                                  [
+                                    Number(point.lat),
+                                    Number(point.lon),
+                                  ] as [number, number]
+                              )
+                              .filter(
+                                ([lat, lng]) =>
+                                  Number.isFinite(lat) &&
+                                  Number.isFinite(lng)
+                              );
+
+                            if (positions.length < 2) {
+                              return null;
+                            }
+
+                            return (
+                              <Polyline
+                                key={`monitor-history-path-${index}`}
+                                positions={positions}
+                                pathOptions={{
+                                  color: "#0284c7",
+                                  weight: 4,
+                                  opacity: 0.95,
+                                }}
+                                smoothFactor={1.5}
+                              />
+                            );
+                          }
+                        )}
+
+                        {(alltrackHistory?.data.stops ?? []).map(
+                          (stop, index) => (
+                            <Marker
+                              key={`monitor-history-stop-${index}`}
+                              position={[
+                                stop.lat,
+                                stop.lng,
+                              ]}
+                              icon={createAlltrackStopIcon(
+                                stop.minutes
+                              )}
+                            >
+                              <Popup>
+                                <div className="min-w-[205px] space-y-1.5">
+                                  <p className="font-semibold">
+                                    Detención del vehículo
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Desde:</strong>{" "}
+                                    {stop.from_time ?? "-"}
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Hasta:</strong>{" "}
+                                    {stop.to_time ?? "-"}
+                                  </p>
+                                  <p className="text-sm">
+                                    <strong>Duración:</strong>{" "}
+                                    {stop.minutes !== null
+                                      ? `${stop.minutes} minutos`
+                                      : "-"}
+                                  </p>
+
+                                  {selectedAlltrackVehicleCode === "B.6" &&
+                                    stop.validation === "spatial_b6" && (
+                                      <p className="border-t pt-1.5 text-xs text-slate-500">
+                                        Parada validada por quietud real de la barredora.
+                                      </p>
+                                    )}
+                                </div>
+                              </Popup>
+                            </Marker>
+                          )
+                        )}
+
+                        {(() => {
+                          const points =
+                            alltrackHistory?.data.route?.points ?? [];
+
+                          if (points.length === 0) {
+                            return null;
+                          }
+
+                          const first = points[0];
+                          const last = points[points.length - 1];
+
+                          return (
+                            <>
+                              <Marker
+                                position={[first.lat, first.lon]}
+                                icon={createAlltrackEndpointIcon(
+                                  "I",
+                                  "#16a34a"
+                                )}
+                              >
+                                <Popup>
+                                  <strong>Inicio del recorrido</strong>
+                                  <br />
+                                  {first.time ?? "-"}
+                                </Popup>
+                              </Marker>
+
+                              <Marker
+                                position={[last.lat, last.lon]}
+                                icon={createAlltrackEndpointIcon(
+                                  "F",
+                                  "#dc2626"
+                                )}
+                              >
+                                <Popup>
+                                  <strong>
+                                    Fin / última posición del recorrido
+                                  </strong>
+                                  <br />
+                                  {last.time ?? "-"}
+                                </Popup>
+                              </Marker>
+                            </>
+                          );
+                        })()}
+
+                        <FitAlltrackHistory
+                          paths={
+                            alltrackHistory?.data.route?.paths ?? []
+                          }
+                          stops={
+                            alltrackHistory?.data.stops ?? []
+                          }
+                        />
+                      </>
+                    )}
+
+                    <InvalidateMapOnFullscreen
+                      fullscreen={monitorFullscreen}
+                    />
+                    <InvalidateMapOnResize />
+                  </MapContainer>
+
+                  {alltrackViewMode === "today" &&
+                    loadingAlltrackHistory && (
+                      <div className="pointer-events-none absolute inset-0 z-[900] flex items-center justify-center bg-white/45 backdrop-blur-[1px]">
+                        <div className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg">
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" />
+                          Cargando recorrido de {selectedAlltrackVehicleCode}...
+                        </div>
+                      </div>
+                    )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* =====================================================
+          MODAL DE CONFIRMACIÓN
+      ===================================================== */}
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[2px]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sweeping-confirm-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border bg-background shadow-2xl"
+          >
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                    confirmDialog.variant ===
+                    "danger"
+                      ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                      : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  }`}
+                >
+                  <span className="text-xl font-bold">
+                    {confirmDialog.variant ===
+                    "danger"
+                      ? "!"
+                      : "✓"}
+                  </span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <h3
+                    id="sweeping-confirm-title"
+                    className="text-base font-semibold"
+                  >
+                    {confirmDialog.title}
+                  </h3>
+
+                  <p className="mt-2 text-sm font-medium">
+                    {confirmDialog.message}
+                  </p>
+
+                  {confirmDialog.detail && (
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {confirmDialog.detail}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t bg-muted/20 px-5 py-4">
+              <button
+                type="button"
+                onClick={() =>
+                  closeConfirmation(
+                    false
+                  )
+                }
+                className="rounded-lg border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  closeConfirmation(
+                    true
+                  )
+                }
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition ${
+                  confirmDialog.variant ===
+                  "danger"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
+              >
+                {confirmDialog.confirmLabel ??
+                  "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          PANTALLA DE CARGA
+      ===================================================== */}
+
+      {globalLoading &&
+        !confirmDialog && (
+          <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/25 px-4 backdrop-blur-[1px]">
+            <div className="flex min-w-[250px] items-center gap-4 rounded-2xl border bg-background px-5 py-4 shadow-2xl">
+              <div className="relative h-9 w-9 shrink-0">
+                <div className="absolute inset-0 rounded-full border-4 border-muted" />
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-emerald-500" />
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold">
+                  Procesando
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {globalLoadingText}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* =====================================================
+          NOTIFICACIONES
+      ===================================================== */}
+
+      {(success || error) &&
+        !confirmDialog && (
+          <div className="fixed right-4 top-24 z-[9997] w-[calc(100%-2rem)] max-w-sm">
+            <div
+              className={`overflow-hidden rounded-2xl border bg-background shadow-2xl ${
+                error
+                  ? "border-red-200 dark:border-red-900"
+                  : "border-emerald-200 dark:border-emerald-900"
+              }`}
+            >
+              <div className="flex items-start gap-3 p-4">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    error
+                      ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                      : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  }`}
+                >
+                  <span className="text-base font-bold">
+                    {error
+                      ? "!"
+                      : "✓"}
+                  </span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-sm font-semibold ${
+                      error
+                        ? "text-red-700 dark:text-red-300"
+                        : "text-emerald-700 dark:text-emerald-300"
+                    }`}
+                  >
+                    {error
+                      ? "Ocurrió un problema"
+                      : "Operación realizada"}
+                  </p>
+
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {error ?? success}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  aria-label="Cerrar notificación"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                className={`h-1 w-full ${
+                  error
+                    ? "bg-red-500"
+                    : "bg-emerald-500"
+                }`}
+              />
+            </div>
+          </div>
+        )}
 
       {readOnly && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 shadow-sm dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
@@ -2648,7 +9284,10 @@ export default function TestSweepingMap({
       ===================================================== */}
 
       {!readOnly && (
-      <div className="rounded-xl border bg-background p-4 shadow-sm">
+      <div
+        id="sweeping-editor-form"
+        className="scroll-mt-24 rounded-xl border bg-background p-4 shadow-sm"
+      >
 
         <div className="mb-4">
 
@@ -2662,13 +9301,35 @@ export default function TestSweepingMap({
 
             Agregá los tramos que se van barriendo.
 
-            Podés calcularlos por calles o dibujarlos
+            Podés calcularlos por calles, dibujarlos
 
-            manualmente punto por punto sobre el mapa.
+            manualmente o seleccionar una zona para detectar sus calles automáticamente.
 
           </p>
 
         </div>
+
+        {editingRecordId && (
+          <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/30">
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Editando tramo
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ya cargamos sus datos arriba. Podés modificar las calles y guardar, o elegir “Dibujar manualmente” para reemplazar el recorrido.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={cancelEditingRecord}
+              disabled={editingSaving}
+              className="shrink-0 rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
+            >
+              Cancelar edición
+            </button>
+          </div>
+        )}
 
         <div className="mb-4 rounded-lg border bg-muted/20 p-3">
 
@@ -2689,6 +9350,9 @@ export default function TestSweepingMap({
                 setManualGeometry(null);
 
                 setManualClearToken((previous) => previous + 1);
+
+                resetAreaSelection();
+                resetMechanicalSelection();
 
                 setError(null);
 
@@ -2725,6 +9389,16 @@ export default function TestSweepingMap({
                 setManualGeometry(null);
 
                 setManualClearToken((previous) => previous + 1);
+
+                resetAreaSelection();
+                resetMechanicalSelection();
+
+                if (
+                  loadMode === "area" ||
+                  loadMode === "mechanical"
+                ) {
+                  setLoadMode("automatic");
+                }
 
                 setError(null);
 
@@ -2826,6 +9500,38 @@ export default function TestSweepingMap({
 
           </button>
 
+          <button
+            type="button"
+            onClick={switchToArea}
+            disabled={Boolean(editingRecordId)}
+            title={editingRecordId ? "Terminá o cancelá la edición antes de seleccionar una zona." : undefined}
+            className={`rounded-md border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              loadMode === "area"
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "bg-background hover:bg-muted"
+            }`}
+          >
+            Seleccionar zona
+          </button>
+
+          <button
+            type="button"
+            onClick={switchToMechanical}
+            disabled={Boolean(editingRecordId)}
+            title={
+              editingRecordId
+                ? "Terminá o cancelá la edición antes de crear un corredor mecánico."
+                : "Elegí dos puntos sobre una misma calle para crear el corredor de la barredora."
+            }
+            className={`rounded-md border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              loadMode === "mechanical"
+                ? "border-orange-500 bg-orange-500 text-white"
+                : "bg-background hover:bg-muted"
+            }`}
+          >
+            🚛 Corredor mecánico
+          </button>
+
         </div>
 
         {/* ===================================================
@@ -2834,11 +9540,13 @@ export default function TestSweepingMap({
 
         =================================================== */}
 
+        {loadMode !== "area" &&
+         loadMode !== "mechanical" && (
         <div className="grid gap-3 lg:grid-cols-4">
 
           <div>
 
-            <StreetAutocomplete
+            <RequiredStreetAutocomplete
 
               label="Calle principal"
 
@@ -2848,7 +9556,7 @@ export default function TestSweepingMap({
 
               }
 
-              onChange={
+              onSelectedChange={
 
                 setStreet
 
@@ -2862,7 +9570,7 @@ export default function TestSweepingMap({
 
           <div>
 
-            <StreetAutocomplete
+            <RequiredStreetAutocomplete
 
               label="Desde calle"
 
@@ -2872,7 +9580,7 @@ export default function TestSweepingMap({
 
               }
 
-              onChange={
+              onSelectedChange={
 
                 setFromStreet
 
@@ -2886,7 +9594,7 @@ export default function TestSweepingMap({
 
           <div>
 
-            <StreetAutocomplete
+            <RequiredStreetAutocomplete
 
               label="Hasta calle"
 
@@ -2896,7 +9604,7 @@ export default function TestSweepingMap({
 
               }
 
-              onChange={
+              onSelectedChange={
 
                 setToStreet
 
@@ -2919,26 +9627,25 @@ export default function TestSweepingMap({
                 type="button"
 
                 onClick={
-
-                  addStreetSegment
-
+                  editingRecordId
+                    ? saveEditedAutomaticSegment
+                    : addStreetSegment
                 }
 
                 disabled={
-
-                  saving
-
+                  saving ||
+                  editingSaving
                 }
 
                 className="h-10 w-full rounded-md bg-emerald-500 px-4 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
 
               >
 
-                {saving
-
+                {saving || editingSaving
                   ? "Guardando..."
-
-                  : "Agregar tramo"}
+                  : editingRecordId
+                    ? "Guardar cambios"
+                    : "Agregar tramo"}
 
               </button>
 
@@ -2967,14 +9674,12 @@ export default function TestSweepingMap({
               >
 
                 {drawingManual
-
                   ? "Dibujando..."
-
                   : manualGeometry
-
                     ? "Dibujar de nuevo"
-
-                    : "Dibujar tramo"}
+                    : editingRecordId
+                      ? "Redibujar tramo"
+                      : "Dibujar tramo"}
 
               </button>
 
@@ -2983,6 +9688,14 @@ export default function TestSweepingMap({
           </div>
 
         </div>
+        )}
+
+        <LocalObservationInput
+          value={observations}
+          onCommit={
+            setObservations
+          }
+        />
 
         {/* ===================================================
 
@@ -3006,7 +9719,9 @@ export default function TestSweepingMap({
 
                 <p className="mt-1 text-sm text-muted-foreground">
 
-                  Completá los datos del tramo y presioná “Dibujar tramo”.
+                  {editingRecordId
+                    ? "Presioná “Redibujar tramo” para reemplazar el recorrido actual."
+                    : "Completá los datos del tramo y presioná “Dibujar tramo”."}
 
                 </p>
 
@@ -3042,13 +9757,57 @@ export default function TestSweepingMap({
 
                 <p className="mt-1 text-xs text-muted-foreground">
 
-                  Podés arrastrar el mapa normalmente para desplazarte. Cuando termines,
+                  Podés arrastrar el mapa normalmente para desplazarte. Si te equivocás,
 
-                  presioná “Finalizar tramo”.
+                  usá “Deshacer último punto”. Cuando termines, presioná “Finalizar tramo”.
 
                 </p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => {
+
+                      setManualUndoToken(
+
+                        (previous) => previous + 1
+
+                      );
+
+                    }}
+
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+
+                  >
+
+                    Deshacer último punto
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => {
+
+                      setManualClearToken(
+
+                        (previous) => previous + 1
+
+                      );
+
+                    }}
+
+                    className="rounded-md border border-red-200 bg-background px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+
+                  >
+
+                    Limpiar dibujo
+
+                  </button>
 
                   <button
 
@@ -3154,13 +9913,17 @@ export default function TestSweepingMap({
 
                     onClick={saveManualSegment}
 
-                    disabled={saving}
+                    disabled={saving || editingSaving}
 
                     className="rounded-md bg-emerald-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-60"
 
                   >
 
-                    {saving ? "Guardando..." : "Guardar dibujo"}
+                    {saving || editingSaving
+                      ? "Guardando..."
+                      : editingRecordId
+                        ? "Guardar cambios"
+                        : "Guardar dibujo"}
 
                   </button>
 
@@ -3174,205 +9937,414 @@ export default function TestSweepingMap({
 
         )}
 
-        {/* ===================================================
+        {loadMode === "area" && (
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                  Seleccionar zona para planificación
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Dibujá un polígono sobre el mapa de Planificación. Al finalizar, el sistema detecta automáticamente las calles que quedan dentro.
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+                  El color identifica visualmente la zona; las líneas azules siguen representando los tramos individuales.
+                </p>
+              </div>
 
-            ERROR
+              <div className="flex flex-wrap gap-2">
+                {!areaDrawing && (
+                  <button
+                    type="button"
+                    onClick={startAreaDrawing}
+                    disabled={areaLoading || areaSaving}
+                    className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {areaGeometry ? "Dibujar otra zona" : "Dibujar zona"}
+                  </button>
+                )}
 
-        =================================================== */}
-
-        {error && (
-
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
-
-            {error}
-
-          </div>
-
-        )}
-
-        {/* ===================================================
-
-            ÉXITO
-
-        =================================================== */}
-
-        {success &&
-
-          !error && (
-
-            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400">
-
-              {success}
-
+                {(areaGeometry || areaStreets.length > 0) && !areaDrawing && (
+                  <button
+                    type="button"
+                    onClick={cancelAreaDrawing}
+                    disabled={areaSaving}
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
+                  >
+                    Limpiar zona
+                  </button>
+                )}
+              </div>
             </div>
 
-          )}
+            {areaDrawing && (
+              <div className="mt-3 rounded-md border bg-background p-3">
+                <p className="text-xs font-semibold">Dibujando zona...</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Hacé clic en al menos 3 puntos del mapa. Cuando cierres visualmente el sector, presioná “Finalizar zona”.
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAreaUndoToken((previous) => previous + 1)}
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                  >
+                    Deshacer último punto
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAreaClearToken((previous) => previous + 1)}
+                    className="rounded-md border border-red-200 bg-background px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:border-red-900"
+                  >
+                    Limpiar dibujo
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAreaFinishToken((previous) => previous + 1)}
+                    className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    Finalizar zona
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={cancelAreaDrawing}
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {areaLoading && (
+              <div className="mt-3 rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                Detectando calles dentro de la zona...
+              </div>
+            )}
+
+            {!areaLoading && areaStreets.length > 0 && (
+              <div className="mt-3">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-md border bg-background p-2">
+                    <p className="text-[10px] text-muted-foreground">Calles detectadas</p>
+                    <p className="text-base font-bold">{areaStreets.length}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-2">
+                    <p className="text-[10px] text-muted-foreground">Seleccionadas</p>
+                    <p className="text-base font-bold text-blue-700">{selectedAreaStreetKeys.size}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-2">
+                    <p className="text-[10px] text-muted-foreground">Longitud detectada</p>
+                    <p className="text-base font-bold">{(areaStreets.reduce((total, item) => total + Number(item.length_meters || 0), 0) / 1000).toFixed(2)} km</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllAreaStreets}
+                    disabled={areaSaving}
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
+                  >
+                    Seleccionar todas
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAreaStreetKeys(new Set())}
+                    disabled={areaSaving}
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
+                  >
+                    Desmarcar todas
+                  </button>
+
+                  <div className="ml-auto">
+                    <p className="mb-1 text-xs font-medium">
+                      Color de la zona
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {AREA_COLOR_OPTIONS.map(
+                        (option) => {
+                          const active =
+                            areaColor ===
+                            option.value;
+
+                          return (
+                            <button
+                              key={
+                                option.value
+                              }
+                              type="button"
+                              title={
+                                option.label
+                              }
+                              aria-label={`Usar color ${option.label}`}
+                              onClick={() =>
+                                setAreaColor(
+                                  option.value
+                                )
+                              }
+                              disabled={
+                                areaSaving
+                              }
+                              className={`h-8 w-8 rounded-full border-2 transition hover:scale-110 disabled:opacity-50 ${
+                                active
+                                  ? "border-slate-900 ring-2 ring-offset-2 dark:border-white"
+                                  : "border-white shadow"
+                              }`}
+                              style={{
+                                backgroundColor:
+                                  option.value,
+                              }}
+                            />
+                          );
+                        }
+                      )}
+                    </div>
+                  </div>
+
+                  <label className="min-w-[190px] text-xs font-medium">
+                    Fecha de planificación
+                    <input
+                      type="date"
+                      value={areaWorkDate}
+                      onChange={(event) => setAreaWorkDate(event.target.value)}
+                      className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-xs"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-3 max-h-[300px] overflow-y-auto rounded-md border bg-background">
+                  {areaStreets.map((item) => {
+                    const selected = selectedAreaStreetKeys.has(item.corridor_key);
+                    const autoExcluded = !isAreaStreetSelectableByDefault(item);
+
+                    return (
+                      <label
+                        key={item.corridor_key}
+                        className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-xs last:border-b-0 ${selected ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleAreaStreet(item.corridor_key)}
+                          disabled={areaSaving}
+                          className="h-4 w-4"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold">{item.street_name}</span>
+                            {autoExcluded && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                                no vehicular
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {Math.round(item.length_meters)} m dentro de la zona
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void saveAreaPlanning()}
+                    disabled={areaSaving || selectedAreaStreetKeys.size === 0}
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {areaSaving
+                      ? "Creando planificación..."
+                      : `Crear planificación (${selectedAreaStreetKeys.size})`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {loadMode === "mechanical" && (
+          <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3 dark:border-orange-900 dark:bg-orange-950/20">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                  Planificación de barrido mecánico
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Elegí dos puntos A y B. El sistema los ajusta a la red vial y busca el recorrido conectado entre ambos; puede atravesar varias piezas o calles si la cartografía lo necesita.
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+                  El corredor mecánico queda naranja y discontinuo para diferenciarlo del barrido manual.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {!mechanicalSelecting && (
+                  <button
+                    type="button"
+                    onClick={startMechanicalSelection}
+                    disabled={
+                      mechanicalLoading ||
+                      mechanicalSaving
+                    }
+                    className="rounded-md bg-orange-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+                  >
+                    {mechanicalPreview
+                      ? "Elegir otros 2 puntos"
+                      : "Seleccionar 2 puntos"}
+                  </button>
+                )}
+
+                {(mechanicalStartPoint ||
+                  mechanicalPreview) &&
+                  !mechanicalSelecting && (
+                    <button
+                      type="button"
+                      onClick={resetMechanicalSelection}
+                      disabled={mechanicalSaving}
+                      className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+              </div>
+            </div>
+
+            {mechanicalSelecting && (
+              <div className="mt-3 rounded-md border border-orange-200 bg-background p-3">
+                <p className="text-xs font-semibold text-orange-700">
+                  {!mechanicalStartPoint
+                    ? "1. Hacé click en el punto inicial del corredor."
+                    : "2. Hacé click en el punto final sobre la misma calle."}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={resetMechanicalSelection}
+                  className="mt-2 rounded-md border px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                >
+                  Cancelar selección
+                </button>
+              </div>
+            )}
+
+            {mechanicalLoading && (
+              <div className="mt-3 rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                Detectando calle y calculando corredor real...
+              </div>
+            )}
+
+            {!mechanicalLoading &&
+              mechanicalPreview && (
+                <div className="mt-3 rounded-lg border border-orange-200 bg-background p-3">
+                  <div className="grid gap-2 md:grid-cols-4">
+                    <div className="rounded-md border bg-orange-50/40 p-2 dark:bg-orange-950/20">
+                      <p className="text-[10px] text-muted-foreground">
+                        Corredor detectado
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-orange-700 dark:text-orange-300">
+                        {mechanicalPreview.street_name}
+                      </p>
+                      {mechanicalPreview.streets_used &&
+                        mechanicalPreview.streets_used.length > 1 && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Vías utilizadas:{" "}
+                            {mechanicalPreview.streets_used.join(
+                              " → "
+                            )}
+                          </p>
+                        )}
+                    </div>
+
+                    <div className="rounded-md border p-2">
+                      <p className="text-[10px] text-muted-foreground">Desde</p>
+                      <p className="mt-1 text-xs font-semibold">
+                        {mechanicalPreview.from_street}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border p-2">
+                      <p className="text-[10px] text-muted-foreground">Hasta</p>
+                      <p className="mt-1 text-xs font-semibold">
+                        {mechanicalPreview.to_street}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border p-2">
+                      <p className="text-[10px] text-muted-foreground">Longitud</p>
+                      <p className="mt-1 text-sm font-bold">
+                        {(Number(
+                          mechanicalPreview.length_meters
+                        ) / 1000).toFixed(2)} km
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-end justify-end gap-2">
+                    <label className="min-w-[190px] text-xs font-medium">
+                      Fecha de planificación
+                      <input
+                        type="date"
+                        value={mechanicalWorkDate}
+                        onChange={(event) =>
+                          setMechanicalWorkDate(
+                            event.target.value
+                          )
+                        }
+                        className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-xs"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void saveMechanicalCorridor()
+                      }
+                      disabled={mechanicalSaving}
+                      className="h-9 rounded-md bg-orange-500 px-4 text-xs font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+                    >
+                      {mechanicalSaving
+                        ? "Guardando corredor..."
+                        : "Guardar corredor mecánico"}
+                    </button>
+                  </div>
+                </div>
+              )}
+          </div>
+        )}
+
+
 
       </div>
 
       )}
 
-      {/* =====================================================
-          EDICIÓN DE TRAMO
-      ===================================================== */}
-
-      {!readOnly && editingRecordId && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm dark:border-amber-900 dark:bg-amber-950/20">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="font-semibold text-amber-800 dark:text-amber-300">
-                Editar tramo
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Modificá los datos y guardá los cambios. El recorrido actual se conserva salvo que marques “Recalcular recorrido”.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={cancelEditingRecord}
-              disabled={editingSaving}
-              className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-60"
-            >
-              Cancelar edición
-            </button>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-3">
-            <StreetAutocomplete
-              label="Calle principal"
-              value={editStreet}
-              onChange={setEditStreet}
-              placeholder="Ej: Calle 21"
-            />
-
-            <StreetAutocomplete
-              label="Desde calle"
-              value={editFromStreet}
-              onChange={setEditFromStreet}
-              placeholder="Ej: Calle 2"
-            />
-
-            <StreetAutocomplete
-              label="Hasta calle"
-              value={editToStreet}
-              onChange={setEditToStreet}
-              placeholder="Ej: Calle 56"
-            />
-          </div>
-
-          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Fecha
-              </label>
-              <input
-                type="date"
-                value={editWorkDate}
-                onChange={(event) =>
-                  setEditWorkDate(event.target.value)
-                }
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Estado
-              </label>
-              <select
-                value={editStatus}
-                onChange={(event) =>
-                  setEditStatus(
-                    event.target.value as SweepingStatus
-                  )
-                }
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="PLANIFICADO">
-                  Planificado
-                </option>
-                <option value="COMPLETADO">
-                  Realizado
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Zona
-              </label>
-              <input
-                type="text"
-                value={editZone}
-                onChange={(event) =>
-                  setEditZone(event.target.value)
-                }
-                placeholder="Opcional"
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              />
-            </div>
-
-            <label className="flex min-h-10 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={editRecalculateGeometry}
-                onChange={(event) =>
-                  setEditRecalculateGeometry(
-                    event.target.checked
-                  )
-                }
-              />
-              <span>
-                Recalcular recorrido por calles
-              </span>
-            </label>
-          </div>
-
-          <div className="mt-3">
-            <label className="mb-1 block text-sm font-medium">
-              Observaciones
-            </label>
-            <textarea
-              value={editObservations}
-              onChange={(event) =>
-                setEditObservations(event.target.value)
-              }
-              rows={3}
-              placeholder="Opcional"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          </div>
-
-          {editRecalculateGeometry && (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              Al guardar, el sistema volverá a calcular la línea usando Calle principal, Desde y Hasta. Si el tramo fue dibujado manualmente y querés conservar ese dibujo, dejá esta opción desmarcada.
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={cancelEditingRecord}
-              disabled={editingSaving}
-              className="rounded-md border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={saveEditedRecord}
-              disabled={editingSaving}
-              className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {editingSaving
-                ? "Guardando cambios..."
-                : "Guardar cambios"}
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() =>
+            void openMonitorCenter()
+          }
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:border-slate-700"
+        >
+          <span className="grid grid-cols-2 gap-0.5">
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-blue-400" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-emerald-400" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-amber-400" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-sky-400" />
+          </span>
+          Centro de monitoreo
+        </button>
+      </div>
 
       {/* =====================================================
 
@@ -3396,17 +10368,33 @@ export default function TestSweepingMap({
 
                 <p className="mt-1 text-xs text-muted-foreground">
 
-                  Tramos previstos para el período seleccionado.
+                  Tramos previstos para el período seleccionado. Podés consultar hasta 180 días.
 
                 </p>
 
               </div>
 
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              <div className="flex flex-wrap items-center justify-end gap-2">
 
-                {plannedRoutes.length} {plannedRoutes.length === 1 ? "tramo" : "tramos"}
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
 
-              </span>
+                  {plannedRoutes.length} {plannedRoutes.length === 1 ? "tramo" : "tramos"}
+
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void toggleMapFullscreen(
+                      "planned"
+                    )
+                  }
+                  className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+                >
+                  ⛶ Pantalla completa
+                </button>
+
+              </div>
 
             </div>
 
@@ -3502,17 +10490,60 @@ export default function TestSweepingMap({
             </p>
           </div>
 
-          <MapContainer
-
-            center={GENERAL_PICO_CENTER}
-
-            zoom={13}
-
-            scrollWheelZoom
-
-            className="relative z-0 h-[560px] w-full"
-
+          <div
+            ref={plannedMapCardRef}
+            className={`relative w-full overflow-hidden bg-background ${
+              plannedFullscreen
+                ? "h-screen"
+                : "h-[560px]"
+            }`}
+            style={
+              plannedFullscreen
+                ? {
+                    width: "100vw",
+                    height: "100dvh",
+                    minHeight: "100dvh",
+                    maxHeight: "100dvh",
+                    background: "#ffffff",
+                  }
+                : {
+                    width: "100%",
+                    height: "560px",
+                  }
+            }
           >
+            {plannedFullscreen && (
+              <button
+                type="button"
+                onClick={() =>
+                  void toggleMapFullscreen(
+                    "planned"
+                  )
+                }
+                className="absolute right-4 top-4 z-[2000] rounded-md border bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg backdrop-blur transition hover:bg-white"
+              >
+                ✕ Salir de pantalla completa
+              </button>
+            )}
+
+            <MapContainer
+
+              center={GENERAL_PICO_CENTER}
+
+              zoom={13}
+
+              scrollWheelZoom
+
+              preferCanvas
+
+              className="relative z-0 h-full w-full"
+
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+
+            >
 
             <TileLayer
 
@@ -3521,6 +10552,84 @@ export default function TestSweepingMap({
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 
             />
+
+            {plannedAreaBatches.flatMap(
+              (batch) => {
+                const positions =
+                  areaPolygonToLeaflet(
+                    batch.geometry
+                  );
+
+                const center =
+                  areaPolygonCenter(
+                    batch.geometry
+                  );
+
+                if (
+                  positions.length < 3
+                ) {
+                  return [];
+                }
+
+                const selected =
+                  selectedBatchId ===
+                  batch.batch_id;
+
+                const batchColor =
+                  normalizeAreaColor(
+                    batch.color
+                  );
+
+                const layers = [
+                  <Polygon
+                    key={`planned-area-polygon-${batch.batch_id}`}
+                    positions={
+                      positions
+                    }
+                    interactive={false}
+                    pathOptions={{
+                      color:
+                        batchColor,
+                      weight:
+                        selected
+                          ? 6
+                          : 4,
+                      opacity: 0.95,
+                      fillColor:
+                        batchColor,
+                      fillOpacity:
+                        selected
+                          ? 0.34
+                          : 0.24,
+                    }}
+                  />,
+                ];
+
+                if (center) {
+                  layers.push(
+                    <Marker
+                      key={`planned-area-label-${batch.batch_id}`}
+                      position={
+                        center
+                      }
+                      icon={createAreaPlanningLabelIcon(
+                        batch.observations ||
+                          "Zona planificada",
+                        batchColor
+                      )}
+                      interactive={
+                        false
+                      }
+                      zIndexOffset={
+                        900
+                      }
+                    />
+                  );
+                }
+
+                return layers;
+              }
+            )}
 
             {!readOnly && loadMode === "manual" && recordStatus === "PLANIFICADO" && (
 
@@ -3532,12 +10641,127 @@ export default function TestSweepingMap({
 
                 finishToken={manualFinishToken}
 
+                undoToken={manualUndoToken}
+
                 onCreated={(geometry) => setManualGeometry(geometry)}
 
                 onDrawingFinished={() => setDrawingManual(false)}
 
               />
 
+            )}
+
+            {!readOnly &&
+              loadMode === "mechanical" &&
+              recordStatus === "PLANIFICADO" && (
+                <>
+                  <MechanicalCorridorMapSelector
+                    active={mechanicalSelecting}
+                    startPoint={mechanicalStartPoint}
+                    endPoint={mechanicalEndPoint}
+                    onMapPoint={handleMechanicalMapPoint}
+                  />
+
+                  {mechanicalPreview && (
+                    <Polyline
+                      positions={
+                        mechanicalPreview.geometry.coordinates.map(
+                          ([lng, lat]) =>
+                            [lat, lng] as [number, number]
+                        )
+                      }
+                      interactive={false}
+                      pathOptions={{
+                        color: "#f97316",
+                        weight: 7,
+                        opacity: 0.95,
+                        dashArray: "14 9",
+                        lineCap: "round",
+                      }}
+                    />
+                  )}
+                </>
+              )}
+
+            {!readOnly && loadMode === "area" && recordStatus === "PLANIFICADO" && (
+              <>
+                <AreaSelectionDraw
+                  drawing={areaDrawing}
+                  clearToken={areaClearToken}
+                  finishToken={areaFinishToken}
+                  undoToken={areaUndoToken}
+                  onCreated={(geometry) => {
+                    setAreaGeometry(geometry);
+                    void analyzeArea(geometry);
+                  }}
+                  onDrawingFinished={() => setAreaDrawing(false)}
+                />
+
+                {areaGeometry && (
+                  <>
+                    <Polygon
+                      positions={
+                        areaGeometry.coordinates[0].map(
+                          ([lng, lat]) =>
+                            [lat, lng] as [number, number]
+                        )
+                      }
+                      interactive={false}
+                      pathOptions={{
+                        color:
+                          areaColor,
+                        weight: 4,
+                        opacity: 0.95,
+                        fillColor:
+                          areaColor,
+                        fillOpacity: 0.24,
+                      }}
+                    />
+
+                    {areaPolygonCenter(
+                      areaGeometry
+                    ) && (
+                      <Marker
+                        position={
+                          areaPolygonCenter(
+                            areaGeometry
+                          ) as [number, number]
+                        }
+                        icon={createAreaPlanningLabelIcon(
+                          observations.trim() ||
+                            "Zona seleccionada",
+                          areaColor
+                        )}
+                        interactive={false}
+                        zIndexOffset={1000}
+                      />
+                    )}
+                  </>
+                )}
+
+                {areaStreets.flatMap((item) =>
+                  areaStreetToLeafletPaths(item.geometry).map((positions, pathIndex) => {
+                    const selected = selectedAreaStreetKeys.has(item.corridor_key);
+
+                    return (
+                      <Polyline
+                        key={`area-${item.corridor_key}-${pathIndex}`}
+                        positions={positions}
+                        interactive={false}
+                        pathOptions={{
+                          color: selected
+                            ? "#2563eb"
+                            : "#94a3b8",
+                          weight: selected ? 6 : 3,
+                          opacity: selected ? 0.95 : 0.35,
+                          lineCap: "round",
+                          lineJoin: "round",
+                        }}
+                      />
+                    );
+                  })
+                )}
+              </>
             )}
 
             {plannedRoutes.map((record) => (
@@ -3548,31 +10772,78 @@ export default function TestSweepingMap({
 
                 positions={record.positions}
 
+                renderer={plannedCanvasRenderer}
+
+                smoothFactor={2}
+
                 pathOptions={{
 
-                  color: "#2563eb",
+                  color:
+                    record.sweeping_type === "MECANICO"
+                      ? "#f97316"
+                      : "#2563eb",
 
-                  weight: selectedRouteId === record.id ? 9 : hoveredRouteId === record.id ? 8 : 6,
+                  dashArray:
+                    record.sweeping_type === "MECANICO"
+                      ? "14 9"
+                      : undefined,
 
-                  opacity: 0.9,
+                  weight:
+                    selectedRouteId === record.id
+                      ? Math.max(
+                          plannedBaseWeight + 7,
+                          10
+                        )
+                      : selectedBatchId &&
+                          record.batch_id ===
+                            selectedBatchId
+                        ? Math.max(
+                            plannedBaseWeight + 3,
+                            7
+                          )
+                        : hoveredRouteId === record.id
+                          ? plannedBaseWeight + 2
+                          : plannedBaseWeight,
+
+                  opacity:
+                    selectedRouteId === record.id ||
+                    (
+                      selectedBatchId &&
+                      record.batch_id ===
+                        selectedBatchId
+                    )
+                      ? 1
+                      : 0.9,
 
                 }}
 
                 eventHandlers={{
-
-                  mouseover: (event) => {
-
-                    setHoveredRouteId(record.id);
-
-                    event.target.bringToFront();
-
-                  },
-
-                  mouseout: () => setHoveredRouteId(null),
+                  ...(plannedHoverEnabled
+                    ? {
+                        mouseover: (event) => {
+                          setHoveredRouteId(record.id);
+                          event.target.bringToFront();
+                        },
+                        mouseout: () =>
+                          setHoveredRouteId(null),
+                      }
+                    : {}),
 
                   click: (event) => {
 
+                    setSelectedBatchId(
+                      null
+                    );
+
                     setSelectedRouteId(record.id);
+
+                    setFocusedRouteKind(
+                      "planned"
+                    );
+
+                    setFocusedRoutePositions(
+                      record.positions
+                    );
 
                     event.target.bringToFront();
 
@@ -3598,6 +10869,61 @@ export default function TestSweepingMap({
 
                     <p className="text-sm"><strong>Estado:</strong> PLANIFICADO</p>
 
+                    {record.observations && (
+
+                      <p className="mt-2 text-sm">
+                        <strong>Observación:</strong>{" "}
+                        {record.observations}
+                      </p>
+
+                    )}
+
+                    {!readOnly && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void markPlannedAsCompleted(
+                              record
+                            )
+                          }
+                          disabled={
+                            markingRealizedId ===
+                              record.id ||
+                            deletingId ===
+                              record.id
+                          }
+                          className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                        >
+                          {markingRealizedId ===
+                          record.id
+                            ? "Marcando..."
+                            : "✓ Marcar como realizado"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void deleteRecord(
+                              record
+                            )
+                          }
+                          disabled={
+                            deletingId ===
+                              record.id ||
+                            markingRealizedId ===
+                              record.id
+                          }
+                          className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {deletingId ===
+                          record.id
+                            ? "Eliminando..."
+                            : "Eliminar tramo"}
+                        </button>
+                      </div>
+                    )}
+
                   </div>
 
                 </Popup>
@@ -3608,7 +10934,30 @@ export default function TestSweepingMap({
 
             <FitRoutes routes={plannedRoutesToFit} />
 
-          </MapContainer>
+            <FocusSelectedRoute
+              positions={
+                focusedRouteKind ===
+                "planned"
+                  ? focusedRoutePositions
+                  : null
+              }
+              focusToken={
+                focusedRouteToken
+              }
+            />
+
+            <InvalidateMapOnFullscreen
+              fullscreen={
+                fullscreenMap ===
+                "planned"
+              }
+            />
+
+            <InvalidateMapOnResize />
+
+            </MapContainer>
+
+          </div>
 
         </div>
 
@@ -3632,11 +10981,27 @@ export default function TestSweepingMap({
 
               </div>
 
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              <div className="flex flex-wrap items-center justify-end gap-2">
 
-                {completedRoutes.length} {completedRoutes.length === 1 ? "tramo" : "tramos"}
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
 
-              </span>
+                  {completedRoutes.length} {completedRoutes.length === 1 ? "tramo" : "tramos"}
+
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void toggleMapFullscreen(
+                      "completed"
+                    )
+                  }
+                  className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+                >
+                  ⛶ Pantalla completa
+                </button>
+
+              </div>
 
             </div>
 
@@ -3732,17 +11097,60 @@ export default function TestSweepingMap({
             </p>
           </div>
 
-          <MapContainer
-
-            center={GENERAL_PICO_CENTER}
-
-            zoom={13}
-
-            scrollWheelZoom
-
-            className="relative z-0 h-[560px] w-full"
-
+          <div
+            ref={completedMapCardRef}
+            className={`relative w-full overflow-hidden bg-background ${
+              completedFullscreen
+                ? "h-screen"
+                : "h-[560px]"
+            }`}
+            style={
+              completedFullscreen
+                ? {
+                    width: "100vw",
+                    height: "100dvh",
+                    minHeight: "100dvh",
+                    maxHeight: "100dvh",
+                    background: "#ffffff",
+                  }
+                : {
+                    width: "100%",
+                    height: "560px",
+                  }
+            }
           >
+            {completedFullscreen && (
+              <button
+                type="button"
+                onClick={() =>
+                  void toggleMapFullscreen(
+                    "completed"
+                  )
+                }
+                className="absolute right-4 top-4 z-[2000] rounded-md border bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg backdrop-blur transition hover:bg-white"
+              >
+                ✕ Salir de pantalla completa
+              </button>
+            )}
+
+            <MapContainer
+
+              center={GENERAL_PICO_CENTER}
+
+              zoom={13}
+
+              scrollWheelZoom
+
+              preferCanvas
+
+              className="relative z-0 h-full w-full"
+
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+
+            >
 
             <TileLayer
 
@@ -3761,6 +11169,8 @@ export default function TestSweepingMap({
                 clearToken={manualClearToken}
 
                 finishToken={manualFinishToken}
+
+                undoToken={manualUndoToken}
 
                 onCreated={(geometry) => setManualGeometry(geometry)}
 
@@ -3784,31 +11194,61 @@ export default function TestSweepingMap({
 
                   positions={record.positions}
 
+                  renderer={completedCanvasRenderer}
+
+                  smoothFactor={2}
+
                   pathOptions={{
 
                     color: record.color,
 
-                    weight: isSelected ? 10 : isHovered ? 8 : 6,
+                    dashArray:
+                      record.sweeping_type === "MECANICO"
+                        ? "14 9"
+                        : undefined,
 
-                    opacity: isSelected || isHovered ? 1 : 0.85,
+                    weight:
+                      isSelected
+                        ? Math.max(
+                            completedBaseWeight + 7,
+                            10
+                          )
+                        : isHovered
+                          ? completedBaseWeight + 2
+                          : completedBaseWeight,
+
+                    opacity:
+                      isSelected
+                        ? 1
+                        : isHovered
+                          ? 1
+                          : 0.85,
 
                   }}
 
                   eventHandlers={{
-
-                    mouseover: (event) => {
-
-                      setHoveredRouteId(record.id);
-
-                      event.target.bringToFront();
-
-                    },
-
-                    mouseout: () => setHoveredRouteId(null),
+                    ...(completedHoverEnabled
+                      ? {
+                          mouseover: (event) => {
+                            setHoveredRouteId(record.id);
+                            event.target.bringToFront();
+                          },
+                          mouseout: () =>
+                            setHoveredRouteId(null),
+                        }
+                      : {}),
 
                     click: (event) => {
 
                       setSelectedRouteId(record.id);
+
+                      setFocusedRouteKind(
+                        "completed"
+                      );
+
+                      setFocusedRoutePositions(
+                        record.positions
+                      );
 
                       event.target.bringToFront();
 
@@ -3842,6 +11282,25 @@ export default function TestSweepingMap({
 
                       )}
 
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void deleteRecord(
+                              record
+                            )
+                          }
+                          disabled={
+                            deletingId === record.id
+                          }
+                          className="mt-3 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {deletingId === record.id
+                            ? "Eliminando..."
+                            : "Eliminar tramo"}
+                        </button>
+                      )}
+
                     </div>
 
                   </Popup>
@@ -3854,8 +11313,1085 @@ export default function TestSweepingMap({
 
             <FitRoutes routes={completedRoutesToFit} />
 
-          </MapContainer>
+            <FocusSelectedRoute
+              positions={
+                focusedRouteKind ===
+                "completed"
+                  ? focusedRoutePositions
+                  : null
+              }
+              focusToken={
+                focusedRouteToken
+              }
+            />
 
+            <InvalidateMapOnFullscreen
+              fullscreen={
+                fullscreenMap ===
+                "completed"
+              }
+            />
+
+            <InvalidateMapOnResize />
+
+            </MapContainer>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* =====================================================
+          MAPAS COMPLEMENTARIOS
+          Reclamos ocupa una columna; la segunda queda preparada
+          para el futuro mapa de vehículos All Track.
+      ===================================================== */}
+
+      <div
+        className={`grid gap-4 lg:grid-cols-2 ${
+          complaintsMapOpen &&
+          alltrackMapOpen
+            ? "items-stretch"
+            : "items-start"
+        }`}
+      >
+
+        <div
+          className={`rounded-xl border bg-background shadow-sm ${
+            complaintsMapOpen &&
+            alltrackMapOpen
+              ? "flex h-full flex-col"
+              : ""
+          }`}
+        >
+        <div className="flex w-full items-center justify-between gap-4 px-4 py-4">
+          <button
+            type="button"
+            onClick={() =>
+              void toggleComplaintsMap()
+            }
+            className="min-w-0 flex-1 text-left"
+          >
+            <p className="text-sm font-semibold">
+              Reclamos georreferenciados de barrido
+            </p>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Se carga únicamente cuando abrís este mapa.
+            </p>
+          </button>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {complaintsLoaded && (
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                {sweepingComplaints.length} ubicados
+              </span>
+            )}
+
+            {complaintsMapOpen && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void refreshComplaintsMap()
+                  }
+                  disabled={
+                    loadingComplaints
+                  }
+                  className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+                >
+                  ↻ Actualizar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void toggleMapFullscreen(
+                      "complaints"
+                    )
+                  }
+                  className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                >
+                  ⛶ Pantalla completa
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                void toggleComplaintsMap()
+              }
+              className="rounded-md border px-3 py-2 text-xs font-medium transition hover:bg-muted"
+            >
+              {complaintsMapOpen
+                ? "Ocultar mapa"
+                : "Ver reclamos de barrido"}
+            </button>
+          </div>
+        </div>
+
+        {complaintsMapOpen && (
+          <div
+            className={`border-t ${
+              alltrackMapOpen
+                ? "flex flex-1 flex-col"
+                : ""
+            }`}
+          >
+            <div className="bg-amber-50/40 p-4 dark:bg-amber-950/10">
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void complaintsFilterToday()
+                  }
+                  disabled={
+                    loadingComplaints
+                  }
+                  className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+                >
+                  Hoy
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void complaintsFilterThisWeek()
+                  }
+                  disabled={
+                    loadingComplaints
+                  }
+                  className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+                >
+                  Esta semana
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void complaintsFilterThisMonth()
+                  }
+                  disabled={
+                    loadingComplaints
+                  }
+                  className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+                >
+                  Este mes
+                </button>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Desde
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      complaintsFilterFrom
+                    }
+                    onChange={(event) =>
+                      setComplaintsFilterFrom(
+                        event.target.value
+                      )
+                    }
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Hasta
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      complaintsFilterTo
+                    }
+                    onChange={(event) =>
+                      setComplaintsFilterTo(
+                        event.target.value
+                      )
+                    }
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void applyComplaintsFilter()
+                  }
+                  disabled={
+                    loadingComplaints
+                  }
+                  className="self-end rounded-md bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Aplicar
+                </button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  Mostrando reclamos del{" "}
+                  {formatDateAr(
+                    complaintsAppliedFrom
+                  )}{" "}
+                  al{" "}
+                  {formatDateAr(
+                    complaintsAppliedTo
+                  )}.
+                </span>
+
+                <span>
+                  {sweepingComplaints.length} georreferenciados
+                </span>
+
+                <span>
+                  {complaintsWithoutGeo} sin ubicación
+                </span>
+
+                <span>
+                  {complaintsTotal} reclamos en el período
+                </span>
+              </div>
+            </div>
+
+            <div
+              ref={complaintsMapCardRef}
+              className={`relative w-full overflow-hidden bg-background ${
+                complaintsFullscreen
+                  ? "h-screen"
+                  : alltrackMapOpen
+                    ? "min-h-[560px] flex-1 rounded-b-xl"
+                    : "h-[560px] rounded-b-xl"
+              }`}
+              style={
+                complaintsFullscreen
+                  ? {
+                      width: "100vw",
+                      height: "100dvh",
+                      minHeight: "100dvh",
+                      maxHeight: "100dvh",
+                      background: "#ffffff",
+                    }
+                  : alltrackMapOpen
+                    ? {
+                        width: "100%",
+                        minHeight: "560px",
+                        flex: "1 1 0%",
+                      }
+                    : {
+                        width: "100%",
+                        height: "560px",
+                      }
+              }
+            >
+              {complaintsFullscreen && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void toggleMapFullscreen(
+                      "complaints"
+                    )
+                  }
+                  className="absolute right-4 top-4 z-[2000] rounded-md border bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg backdrop-blur transition hover:bg-white"
+                >
+                  ✕ Salir de pantalla completa
+                </button>
+              )}
+
+              <MapContainer
+                center={
+                  GENERAL_PICO_CENTER
+                }
+                zoom={13}
+                scrollWheelZoom
+                className="relative z-0 h-full w-full"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                {sweepingComplaints.map(
+                  (complaint) => {
+                    const status =
+                      (
+                        complaint.status ??
+                        ""
+                      ).toLowerCase();
+
+                    const color =
+                      status.includes(
+                        "resuelto"
+                      ) &&
+                      !status.includes(
+                        "no resuelto"
+                      )
+                        ? "#16a34a"
+                        : status.includes(
+                              "no resuelto"
+                            )
+                          ? "#dc2626"
+                          : "#f59e0b";
+
+                    return (
+                      <Marker
+                        key={
+                          complaint.id
+                        }
+                        position={[
+                          complaint.lat,
+                          complaint.lng,
+                        ]}
+                        icon={
+                          createComplaintPinIcon(
+                            color
+                          )
+                        }
+                      >
+                        <Popup>
+                          <div className="min-w-[220px] space-y-2">
+                            <p className="font-semibold">
+                              Reclamo #
+                              {complaint.id}
+                            </p>
+
+                            <p className="text-sm">
+                              <strong>
+                                Dirección:
+                              </strong>{" "}
+                              {complaint.address ??
+                                "Sin calle"}{" "}
+                              {complaint.street_number ??
+                                ""}
+                            </p>
+
+                            <p className="text-sm">
+                              <strong>
+                                Fecha:
+                              </strong>{" "}
+                              {formatDateAr(
+                                complaint.complaint_date
+                              )}
+                            </p>
+
+                            <p className="text-sm">
+                              <strong>
+                                Estado:
+                              </strong>{" "}
+                              {complaint.status ??
+                                "-"}
+                            </p>
+
+                            {complaint.details && (
+                              <p className="text-sm leading-relaxed">
+                                <strong>
+                                  Detalle:
+                                </strong>{" "}
+                                {complaint.details}
+                              </p>
+                            )}
+                          </div>
+                        </Popup>
+                      </Marker>
+                    );
+                  }
+                )}
+
+                <FitComplaintPoints
+                  complaints={
+                    sweepingComplaints
+                  }
+                />
+
+                <InvalidateMapOnFullscreen
+                  fullscreen={
+                    fullscreenMap ===
+                    "complaints"
+                  }
+                />
+
+                <InvalidateMapOnResize />
+              </MapContainer>
+            </div>
+
+            <div className="flex flex-wrap gap-4 border-t px-4 py-3 text-xs">
+              <span className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-amber-500" />
+                En proceso
+              </span>
+
+              <span className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-green-600" />
+                Resuelto
+              </span>
+
+              <span className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-red-600" />
+                No resuelto
+              </span>
+            </div>
+          </div>
+        )}
+        </div>
+
+        {/* ===================================================
+            VEHÍCULOS DE BARRIDO - ALL TRACK
+        =================================================== */}
+
+        <div
+          className={`rounded-xl border bg-background shadow-sm ${
+            complaintsMapOpen &&
+            alltrackMapOpen
+              ? "flex h-full flex-col"
+              : ""
+          }`}
+        >
+          <div className="flex w-full items-center justify-between gap-4 px-4 py-4">
+            <button
+              type="button"
+              onClick={() =>
+                void toggleAlltrackMap()
+              }
+              className="min-w-0 flex-1 text-left"
+            >
+              <p className="text-sm font-semibold">
+                Vehículos de barrido · All Track
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ubicación actual de los móviles vinculados a barrido.
+              </p>
+            </button>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {alltrackLoaded && (
+                <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                  {alltrackLocated} ubicados
+                </span>
+              )}
+
+              {alltrackMapOpen && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void refreshAlltrackActiveView()
+                    }
+                    disabled={
+                      loadingAlltrack
+                    }
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+                  >
+                    ↻ Actualizar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void toggleMapFullscreen(
+                        "alltrack"
+                      )
+                    }
+                    className="rounded-md border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                  >
+                    ⛶ Pantalla completa
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  void toggleAlltrackMap()
+                }
+                className="rounded-md border px-3 py-2 text-xs font-medium transition hover:bg-muted"
+              >
+                {alltrackMapOpen
+                  ? "Ocultar mapa"
+                  : "Ver vehículos"}
+              </button>
+            </div>
+          </div>
+
+          {alltrackMapOpen && (
+            <div
+              className={`border-t ${
+                complaintsMapOpen
+                  ? "flex flex-1 flex-col"
+                  : ""
+              }`}
+            >
+              <div className="bg-sky-50/40 p-4 dark:bg-sky-950/10">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void showAlltrackCurrentView()
+                      }
+                      className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${
+                        alltrackViewMode === "current"
+                          ? "border-sky-600 bg-sky-600 text-white"
+                          : "bg-background hover:bg-muted"
+                      }`}
+                    >
+                      Ubicación actual
+                    </button>
+
+                    <details className="group relative">
+                      <summary
+                        className={`cursor-pointer list-none rounded-md border px-3 py-2 text-xs font-semibold transition [&::-webkit-details-marker]:hidden ${
+                          alltrackViewMode === "today"
+                            ? "border-sky-600 bg-sky-600 text-white"
+                            : "bg-background hover:bg-muted"
+                        }`}
+                      >
+                        Recorrido de hoy
+                        <span className="ml-1.5 inline-block transition-transform group-open:rotate-180">
+                          ▾
+                        </span>
+                      </summary>
+
+                      <div className="absolute left-0 top-full z-[1200] mt-2 min-w-[235px] overflow-hidden rounded-lg border bg-background p-1.5 shadow-xl">
+                        <p className="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Seleccionar vehículo
+                        </p>
+
+                        {[
+                          "A.7",
+                          "B.4",
+                          "B.5",
+                          "B.6",
+                          "B.7",
+                          "B.P2",
+                          "B.P3",
+                          "B.P4",
+                        ].map((code) => {
+                          const vehicle =
+                            alltrackVehicles.find(
+                              (item) =>
+                                item.code === code
+                            );
+
+                          return (
+                            <button
+                              key={code}
+                              type="button"
+                              onClick={(event) => {
+                                event.currentTarget
+                                  .closest("details")
+                                  ?.removeAttribute("open");
+
+                                void selectAlltrackHistoryVehicle(
+                                  code
+                                );
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition hover:bg-muted ${
+                                alltrackViewMode === "today" &&
+                                selectedAlltrackVehicleCode === code
+                                  ? "bg-sky-50 dark:bg-sky-950/30"
+                                  : ""
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold">
+                                  {code}
+                                </p>
+
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                  {vehicle?.vehicle?.name ??
+                                    "Vehículo de barrido"}
+                                </p>
+                              </div>
+
+                              {alltrackViewMode === "today" &&
+                                selectedAlltrackVehicleCode === code && (
+                                  <span className="text-xs font-bold text-sky-600">
+                                    ✓
+                                  </span>
+                                )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  </div>
+
+                  {alltrackViewMode === "current" ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded-full border bg-background px-2.5 py-1">
+                        {alltrackLocated} con posición
+                      </span>
+
+                      {alltrackWithoutPosition > 0 && (
+                        <span className="rounded-full border bg-background px-2.5 py-1 text-muted-foreground">
+                          {alltrackWithoutPosition} sin posición
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-full border bg-background px-3 py-1.5 text-xs font-semibold">
+                      {selectedAlltrackVehicleCode}
+                    </div>
+                  )}
+                </div>
+
+                {alltrackViewMode === "current" ? (
+                  <>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      A.7 · B.4 · B.5 · B.6 · B.7 · B.P2 · B.P3 · B.P4
+                    </p>
+
+                    {alltrackUpdatedAt && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Consulta realizada:{" "}
+                        {new Date(
+                          alltrackUpdatedAt
+                        ).toLocaleString(
+                          "es-AR"
+                        )}
+                      </p>
+                    )}
+                  </>
+                ) : loadingAlltrackHistory ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" />
+                    Cargando recorrido de {selectedAlltrackVehicleCode}...
+                  </div>
+                ) : alltrackHistory?.data?.vehicle &&
+                    alltrackHistory?.data?.summary ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                    <div className="rounded-md border bg-background px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Vehículo
+                      </p>
+                      <p className="mt-1 text-xs font-semibold">
+                        {alltrackHistory.data.vehicle.code} · {alltrackHistory.data.vehicle.name}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border bg-background px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Distancia
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {Number(
+                          alltrackHistory.data.summary.distance_km ?? 0
+                        ).toLocaleString("es-AR", {
+                          maximumFractionDigits: 2,
+                        })} km
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border bg-background px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Sesión
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {alltrackHistory.data.summary.session_time}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border bg-background px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Detenciones
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {alltrackHistory.data.stops?.length ?? 0}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Seleccioná un vehículo para consultar su recorrido de hoy.
+                  </p>
+                )}
+
+                {alltrackViewMode === "today" &&
+                  selectedAlltrackVehicleCode === "B.6" && (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      B.6: las detenciones se validan por quietud real para evitar falsos positivos por su baja velocidad de trabajo.
+                    </p>
+                  )}
+              </div>
+
+              <div
+                ref={alltrackMapCardRef}
+                className={`relative w-full overflow-hidden bg-background ${
+                  alltrackFullscreen
+                    ? "h-screen"
+                    : complaintsMapOpen
+                      ? "min-h-[560px] flex-1 rounded-b-xl"
+                      : "h-[560px] rounded-b-xl"
+                }`}
+                style={
+                  alltrackFullscreen
+                    ? {
+                        width: "100vw",
+                        height: "100dvh",
+                        minHeight: "100dvh",
+                        maxHeight: "100dvh",
+                        background: "#ffffff",
+                      }
+                    : complaintsMapOpen
+                      ? {
+                          width: "100%",
+                          minHeight: "560px",
+                          flex: "1 1 0%",
+                        }
+                      : {
+                          width: "100%",
+                          height: "560px",
+                        }
+                }
+              >
+                {alltrackFullscreen && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void toggleMapFullscreen(
+                        "alltrack"
+                      )
+                    }
+                    className="absolute right-4 top-4 z-[2000] rounded-md border bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg backdrop-blur transition hover:bg-white"
+                  >
+                    ✕ Salir de pantalla completa
+                  </button>
+                )}
+
+                <MapContainer
+                  center={GENERAL_PICO_CENTER}
+                  zoom={13}
+                  scrollWheelZoom
+                  className="relative z-0 h-full w-full"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  <TileLayer
+                    attribution='&copy; OpenStreetMap contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+
+                  {alltrackViewMode === "current" ? (
+                    <>
+                      {alltrackVehicles.map(
+                        (item) => {
+                          if (
+                            !item.available_position ||
+                            !item.position
+                          ) {
+                            return null;
+                          }
+
+                          const freshness =
+                            getAlltrackFreshness(
+                              item.position.date,
+                              item.position.time
+                            );
+
+                          return (
+                            <Marker
+                              key={item.code}
+                              position={[
+                                item.position.lat,
+                                item.position.lng,
+                              ]}
+                              icon={
+                                createAlltrackVehicleIcon(
+                                  item.code,
+                                  freshness.color
+                                )
+                              }
+                            >
+                              <Popup>
+                                <div className="min-w-[250px] space-y-2">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-base font-bold">
+                                        {item.code}
+                                      </p>
+
+                                      <p className="text-sm text-muted-foreground">
+                                        {item.vehicle?.name ??
+                                          "Vehículo de barrido"}
+                                      </p>
+                                    </div>
+
+                                    <span
+                                      className={`rounded-full px-2 py-1 text-[10px] font-semibold ${freshness.className}`}
+                                    >
+                                      {freshness.label}
+                                    </span>
+                                  </div>
+
+                                  <div className="border-t pt-2">
+                                    <p className="text-sm">
+                                      <strong>Patente:</strong>{" "}
+                                      {item.vehicle?.license_plate ??
+                                        item.position.alltrack_plate ??
+                                        "-"}
+                                    </p>
+
+                                    <p className="mt-1 text-sm">
+                                      <strong>Estado All Track:</strong>{" "}
+                                      {item.position.status ?? "-"}
+                                    </p>
+
+                                    <p className="mt-1 text-sm">
+                                      <strong>Velocidad:</strong>{" "}
+                                      {item.position.speed ?? 0} km/h
+                                    </p>
+
+                                    <p className="mt-1 text-sm">
+                                      <strong>Conductor:</strong>{" "}
+                                      {item.position.driver ??
+                                        item.vehicle?.primary_driver_1 ??
+                                        "-"}
+                                    </p>
+
+                                    <p className="mt-1 text-sm">
+                                      <strong>Última posición:</strong>{" "}
+                                      {item.position.date ?? "-"}{" "}
+                                      {item.position.time ?? ""}
+                                    </p>
+                                  </div>
+
+                                  {item.position.address && (
+                                    <p className="border-t pt-2 text-sm leading-relaxed">
+                                      <strong>Dirección:</strong>{" "}
+                                      {item.position.address}
+                                    </p>
+                                  )}
+
+                                  <div className="border-t pt-2 text-xs text-muted-foreground">
+                                    <p>
+                                      Estado municipal:{" "}
+                                      {item.vehicle?.operational_status ?? "-"}
+                                    </p>
+
+                                    {item.vehicle?.utilization && (
+                                      <p className="mt-1">
+                                        Uso: {item.vehicle.utilization}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          );
+                        }
+                      )}
+
+                      <FitAlltrackVehicles
+                        vehicles={alltrackVehicles}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {(alltrackHistory?.data.route?.paths ?? []).map(
+                        (path, index) => {
+                          const positions = path
+                            .map(
+                              (point) =>
+                                [
+                                  Number(point.lat),
+                                  Number(point.lon),
+                                ] as [number, number]
+                            )
+                            .filter(
+                              ([lat, lng]) =>
+                                Number.isFinite(lat) &&
+                                Number.isFinite(lng)
+                            );
+
+                          if (positions.length < 2) {
+                            return null;
+                          }
+
+                          return (
+                            <Polyline
+                              key={`history-path-${index}`}
+                              positions={positions}
+                              pathOptions={{
+                                color: "#0284c7",
+                                weight: 5,
+                                opacity: 0.9,
+                              }}
+                              smoothFactor={1.5}
+                            />
+                          );
+                        }
+                      )}
+
+                      {(alltrackHistory?.data.stops ?? []).map(
+                        (stop, index) => (
+                          <Marker
+                            key={`history-stop-${index}`}
+                            position={[
+                              stop.lat,
+                              stop.lng,
+                            ]}
+                            icon={createAlltrackStopIcon(
+                              stop.minutes
+                            )}
+                          >
+                            <Popup>
+                              <div className="min-w-[220px] space-y-2">
+                                <p className="font-semibold">
+                                  Detención del vehículo
+                                </p>
+
+                                <p className="text-sm">
+                                  <strong>Desde:</strong>{" "}
+                                  {stop.from_time ?? "-"}
+                                </p>
+
+                                <p className="text-sm">
+                                  <strong>Hasta:</strong>{" "}
+                                  {stop.to_time ?? "-"}
+                                </p>
+
+                                <p className="text-sm">
+                                  <strong>Duración:</strong>{" "}
+                                  {stop.minutes !== null
+                                    ? `${stop.minutes} minutos`
+                                    : "-"}
+                                </p>
+
+                                {selectedAlltrackVehicleCode === "B.6" &&
+                                  stop.validation === "spatial_b6" && (
+                                    <p className="border-t pt-2 text-xs text-muted-foreground">
+                                      Parada validada por quietud real de la barredora.
+                                    </p>
+                                  )}
+                              </div>
+                            </Popup>
+                          </Marker>
+                        )
+                      )}
+
+                      {(() => {
+                        const points =
+                          alltrackHistory?.data.route?.points ?? [];
+
+                        if (points.length === 0) {
+                          return null;
+                        }
+
+                        const first = points[0];
+                        const last = points[points.length - 1];
+
+                        return (
+                          <>
+                            <Marker
+                              position={[first.lat, first.lon]}
+                              icon={createAlltrackEndpointIcon(
+                                "I",
+                                "#16a34a"
+                              )}
+                            >
+                              <Popup>
+                                <strong>Inicio del recorrido</strong>
+                                <br />
+                                {first.time ?? "-"}
+                              </Popup>
+                            </Marker>
+
+                            <Marker
+                              position={[last.lat, last.lon]}
+                              icon={createAlltrackEndpointIcon(
+                                "F",
+                                "#dc2626"
+                              )}
+                            >
+                              <Popup>
+                                <strong>Fin / última posición del recorrido</strong>
+                                <br />
+                                {last.time ?? "-"}
+                              </Popup>
+                            </Marker>
+                          </>
+                        );
+                      })()}
+
+                      <FitAlltrackHistory
+                        paths={
+                          alltrackHistory?.data.route?.paths ?? []
+                        }
+                        stops={
+                          alltrackHistory?.data.stops ?? []
+                        }
+                      />
+                    </>
+                  )}
+
+                  <InvalidateMapOnFullscreen
+                    fullscreen={
+                      alltrackFullscreen
+                    }
+                  />
+
+                  <InvalidateMapOnResize />
+                </MapContainer>
+              </div>
+
+              <div className="flex flex-wrap gap-4 border-t px-4 py-3 text-xs">
+                {alltrackViewMode === "current" ? (
+                  <>
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-green-600" />
+                      Posición reciente (hasta 2 h)
+                    </span>
+
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-amber-500" />
+                      Posición de hoy, no reciente
+                    </span>
+
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-slate-500" />
+                      Posición antigua
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-2">
+                      <span className="h-1 w-6 rounded-full bg-sky-600" />
+                      Recorrido GPS de hoy
+                    </span>
+
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-orange-500" />
+                      Detención de 10 min o más
+                    </span>
+
+                    <span className="flex items-center gap-2">
+                      <span className="font-bold text-green-600">I</span>
+                      Inicio
+                    </span>
+
+                    <span className="flex items-center gap-2">
+                      <span className="font-bold text-red-600">F</span>
+                      Fin / última posición
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -4001,194 +12537,102 @@ export default function TestSweepingMap({
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/20">
-
-              <div className="mb-3 flex items-center justify-between gap-2">
-
-                <div>
-
-                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Planificados</p>
-
-                  <p className="text-xs text-muted-foreground">Del {formatDateAr(plannedAppliedFrom)} al {formatDateAr(plannedAppliedTo)}.</p>
-
-                </div>
-
-                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-
-                  {plannedRoutes.length}
-
-                </span>
-
-              </div>
-
-              {plannedRoutes.length > 0 ? (
-
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-
-                  {plannedRoutes.map((record, index) => (
-
-                    <div
-                      key={record.id}
-                      className={`flex items-start gap-3 rounded-md border bg-background px-3 py-2 ${
-                        editingRecordId === record.id
-                          ? "ring-2 ring-amber-400"
-                          : ""
-                      }`}
-                    >
-
-                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-blue-600" />
-
-                      <div className="min-w-0 flex-1">
-
-                        <p className="text-xs">
-
-                          <span className="font-semibold">{index + 1}. {record.main_street}</span>
-
-                          <span className="text-muted-foreground"> — {record.from_street} → {record.to_street}</span>
-
-                        </p>
-
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-
-                          {formatDateAr(record.work_date)} · Planificado
-
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-
-                          <button
-                            type="button"
-                            onClick={() => startEditingRecord(record)}
-                            disabled={readOnly || editingSaving || deletingId !== null}
-                            className="rounded-md border px-2.5 py-1 text-[11px] font-medium transition hover:bg-muted disabled:opacity-50"
-                          >
-                            Editar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => void deleteRecord(record)}
-                            disabled={readOnly || editingSaving || deletingId !== null}
-                            className="rounded-md border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
-                          >
-                            {deletingId === record.id
-                              ? "Eliminando..."
-                              : "Eliminar"}
-                          </button>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              ) : (
-
-                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">No hay tramos planificados.</div>
-
-              )}
-
-            </div>
-
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
-
-              <div className="mb-3 flex items-center justify-between gap-2">
-
-                <div>
-
-                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Realizados</p>
-
-                  <p className="text-xs text-muted-foreground">Del {formatDateAr(completedAppliedFrom)} al {formatDateAr(completedAppliedTo)}.</p>
-
-                </div>
-
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-
-                  {completedRoutes.length}
-
-                </span>
-
-              </div>
-
-              {completedRoutes.length > 0 ? (
-
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-
-                  {completedRoutes.map((record, index) => (
-
-                    <div
-                      key={record.id}
-                      className={`flex items-start gap-3 rounded-md border bg-background px-3 py-2 ${
-                        editingRecordId === record.id
-                          ? "ring-2 ring-amber-400"
-                          : ""
-                      }`}
-                    >
-
-                      <span
-                        className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: record.color }}
-                      />
-
-                      <div className="min-w-0 flex-1">
-
-                        <p className="text-xs">
-
-                          <span className="font-semibold">{index + 1}. {record.main_street}</span>
-
-                          <span className="text-muted-foreground"> — {record.from_street} → {record.to_street}</span>
-
-                        </p>
-
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-
-                          {formatDateAr(record.work_date)} · Semana {record.weekIndex + 1} · Realizado
-
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-
-                          <button
-                            type="button"
-                            onClick={() => startEditingRecord(record)}
-                            disabled={readOnly || editingSaving || deletingId !== null}
-                            className="rounded-md border px-2.5 py-1 text-[11px] font-medium transition hover:bg-muted disabled:opacity-50"
-                          >
-                            Editar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => void deleteRecord(record)}
-                            disabled={readOnly || editingSaving || deletingId !== null}
-                            className="rounded-md border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
-                          >
-                            {deletingId === record.id
-                              ? "Eliminando..."
-                              : "Eliminar"}
-                          </button>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              ) : (
-
-                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">No hay barridos realizados.</div>
-
-              )}
-
-            </div>
+            <ShownRoutesPanel
+              kind="planned"
+              routes={plannedRoutes}
+              fromDate={plannedAppliedFrom}
+              toDate={plannedAppliedTo}
+              editingRecordId={editingRecordId}
+              selectedRouteId={selectedRouteId}
+              selectedBatchId={selectedBatchId}
+              readOnly={readOnly}
+              editingSaving={editingSaving}
+              deletingId={deletingId}
+              markingRealizedId={markingRealizedId}
+              deletingBatchId={deletingBatchId}
+              markingBatchId={markingBatchId}
+              deletingAllPending={deletingAllPlanned}
+              onEdit={
+                startEditingRecord
+              }
+              onDelete={(record) =>
+                void deleteRecord(
+                  record
+                )
+              }
+              onSelectRoute={
+                selectRouteFromList
+              }
+              onSelectBatch={
+                selectBatchFromList
+              }
+              onMarkCompleted={(record) =>
+                void markPlannedAsCompleted(
+                  record
+                )
+              }
+              onMarkBatchCompleted={(
+                batchId,
+                records
+              ) =>
+                void markBatchAsCompleted(
+                  batchId,
+                  records
+                )
+              }
+              onDeleteBatch={(
+                batchId,
+                records
+              ) =>
+                void deleteBatchPending(
+                  batchId,
+                  records
+                )
+              }
+              onDeleteAllPending={() =>
+                void deleteAllPendingPlanning()
+              }
+            />
+
+            <ShownRoutesPanel
+              kind="completed"
+              routes={completedRoutes}
+              fromDate={completedAppliedFrom}
+              toDate={completedAppliedTo}
+              editingRecordId={editingRecordId}
+              selectedRouteId={selectedRouteId}
+              selectedBatchId={selectedBatchId}
+              readOnly={readOnly}
+              editingSaving={editingSaving}
+              deletingId={deletingId}
+              markingRealizedId={markingRealizedId}
+              deletingBatchId={deletingBatchId}
+              markingBatchId={markingBatchId}
+              deletingAllPending={deletingAllPlanned}
+              onEdit={
+                startEditingRecord
+              }
+              onDelete={(record) =>
+                void deleteRecord(
+                  record
+                )
+              }
+              onSelectRoute={
+                selectRouteFromList
+              }
+              onSelectBatch={
+                selectBatchFromList
+              }
+              onDeleteCompletedBatch={(
+                batchId,
+                records
+              ) =>
+                void deleteCompletedBatch(
+                  batchId,
+                  records
+                )
+              }
+            />
 
           </div>
 

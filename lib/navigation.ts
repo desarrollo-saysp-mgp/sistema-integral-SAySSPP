@@ -10,6 +10,7 @@ export type AppModule =
   | "apu"
   | "zv"
   | "shelter"
+  | "ai"
   | "rnu";
 
 type ModuleConfig = {
@@ -120,6 +121,17 @@ export const MODULES: Record<AppModule, ModuleConfig> = {
     homePath: "/dashboard/refugio",
     subtitle: "Módulo de Refugio",
   },
+
+
+  ai: {
+    key: "ai",
+    label: "Asistente IA Integral",
+    shortLabel: "Asistente IA",
+    basePath: "/dashboard/ai",
+    homePath: "/dashboard/ai",
+    subtitle: "Inteligencia Artificial y Análisis de Gestión",
+  },
+
 
   rnu: {
     key: "rnu",

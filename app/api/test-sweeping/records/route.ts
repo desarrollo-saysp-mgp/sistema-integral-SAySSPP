@@ -28,6 +28,12 @@ type CreateSweepingRecordBody = {
 
   status?: string | null;
 
+  action?: "mark_completed" | "mark_batch_completed" | null;
+
+  planned_record_id?: string | null;
+
+  batch_id?: string | null;
+
 };
 
 type UpdateSweepingRecordBody = CreateSweepingRecordBody & {
@@ -128,7 +134,7 @@ function normalizeStatus(
 
  * Traer barridos guardados por rango.
 
- * Máximo permitido: 31 días.
+ * Planificación: máximo 180 días. Realizados: máximo 31 días.
 
  * ============================================================ */
 
@@ -267,6 +273,28 @@ export async function GET(request: Request) {
 
     const toDate = parseDate(toString);
 
+    const statusParam =
+      url.searchParams
+        .get("status")
+        ?.trim()
+        .toUpperCase() ?? null;
+
+    if (
+      statusParam !== null &&
+      statusParam !== "PLANIFICADO" &&
+      statusParam !== "COMPLETADO"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El estado de filtro no es válido.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
     if (!fromDate || !toDate) {
 
       return NextResponse.json(
@@ -317,6 +345,11 @@ export async function GET(request: Request) {
 
     }
 
+    const maxDays =
+      statusParam === "PLANIFICADO"
+        ? 180
+        : 31;
+
     if (
 
       daysBetween(
@@ -325,7 +358,7 @@ export async function GET(request: Request) {
 
         toDate
 
-      ) > 30
+      ) > maxDays - 1
 
     ) {
 
@@ -335,7 +368,11 @@ export async function GET(request: Request) {
 
           error:
 
-            "El rango máximo permitido es de 31 días.",
+            `El rango máximo permitido para ${
+              statusParam === "PLANIFICADO"
+                ? "Planificación"
+                : "Barrido realizado"
+            } es de ${maxDays} días.`,
 
         },
 
@@ -349,64 +386,96 @@ export async function GET(request: Request) {
 
     }
 
-    const {
+    /*
+     * --------------------------------------------------------
+     * PAGINACIÓN INTERNA
+     *
+     * Supabase/PostgREST puede limitar una respuesta a 1.000
+     * filas. Traemos el RPC por páginas y unimos todo antes
+     * de responder al frontend.
+     * --------------------------------------------------------
+     */
 
-      data,
+    const pageSize = 1000;
+    let offset = 0;
+    const records: any[] = [];
 
-      error,
+    while (true) {
+      const {
+        data,
+        error,
+      } = await supabase
+        .rpc(
+          "test_get_sweeping_records_filtered_v2",
+          {
+            p_from_date: fromString,
+            p_to_date: toString,
+          }
+        )
+        .range(
+          offset,
+          offset + pageSize - 1
+        );
 
-    } = await supabase.rpc(
+      if (error) {
+        console.error(
+          "Error obteniendo barridos guardados:",
+          error
+        );
 
-      "test_get_sweeping_records_filtered",
-
-      {
-
-        p_from_date:
-
-          fromString,
-
-        p_to_date:
-
-          toString,
-
+        return NextResponse.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 500,
+          }
+        );
       }
 
-    );
+      const pageRecords =
+        Array.isArray(data)
+          ? data
+          : [];
 
-    if (error) {
-
-      console.error(
-
-        "Error obteniendo barridos guardados:",
-
-        error
-
+      records.push(
+        ...pageRecords
       );
 
-      return NextResponse.json(
+      if (
+        pageRecords.length <
+        pageSize
+      ) {
+        break;
+      }
 
-        {
-
-          error:
-
-            error.message,
-
-        },
-
-        {
-
-          status: 500,
-
-        }
-
-      );
-
+      offset += pageSize;
     }
 
+    const filteredRecords =
+      statusParam === null
+        ? records
+        : records.filter(
+            (record) => {
+              const currentStatus =
+                String(
+                  record?.status ??
+                    "COMPLETADO"
+                )
+                  .trim()
+                  .toUpperCase();
+
+              return statusParam ===
+                "PLANIFICADO"
+                ? currentStatus ===
+                    "PLANIFICADO"
+                : currentStatus !==
+                    "PLANIFICADO";
+            }
+          );
+
     return NextResponse.json(
-
-      data ?? []
-
+      filteredRecords
     );
 
   } catch (error) {
@@ -483,6 +552,195 @@ export async function POST(
     const body =
 
       (await request.json()) as CreateSweepingRecordBody;
+
+    /*
+     * --------------------------------------------------------
+     * PLANIFICADO -> REALIZADO
+     *
+     * Crea un NUEVO registro COMPLETADO relacionado al
+     * planificado. El planificado original queda intacto.
+     * --------------------------------------------------------
+     */
+
+    if (body.action === "mark_completed") {
+
+      const plannedRecordId =
+        body.planned_record_id?.trim() ?? "";
+
+      if (!plannedRecordId) {
+
+        return NextResponse.json(
+          {
+            error:
+              "Falta el ID del tramo planificado.",
+          },
+          {
+            status: 400,
+          }
+        );
+
+      }
+
+      if (
+        body.work_date &&
+        !parseDate(
+          body.work_date
+        )
+      ) {
+
+        return NextResponse.json(
+          {
+            error:
+              "La fecha de realización no es válida.",
+          },
+          {
+            status: 400,
+          }
+        );
+
+      }
+
+      const {
+        data: completedRecordId,
+        error: markError,
+      } = await supabase.rpc(
+        "test_mark_sweeping_record_completed",
+        {
+          p_planned_id:
+            plannedRecordId,
+          p_work_date:
+            body.work_date ??
+            null,
+        }
+      );
+
+      if (markError) {
+
+        console.error(
+          "Error marcando planificado como realizado:",
+          markError
+        );
+
+        const alreadyCompleted =
+          markError.message
+            ?.toLowerCase()
+            .includes(
+              "ya fue registrado como realizado"
+            );
+
+        return NextResponse.json(
+          {
+            error:
+              markError.message,
+          },
+          {
+            status:
+              alreadyCompleted
+                ? 409
+                : 500,
+          }
+        );
+
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          record_id:
+            completedRecordId,
+        },
+        {
+          status: 201,
+        }
+      );
+
+    }
+
+    /*
+     * --------------------------------------------------------
+     * PLANIFICACIÓN POR ZONA -> REALIZAR PENDIENTES DEL GRUPO
+     *
+     * Solo procesa tramos PLANIFICADOS del batch que todavía
+     * no tienen un registro COMPLETADO relacionado.
+     * --------------------------------------------------------
+     */
+    if (body.action === "mark_batch_completed") {
+      const batchId =
+        body.batch_id?.trim() ?? "";
+
+      if (!batchId) {
+        return NextResponse.json(
+          {
+            error:
+              "Falta el ID del grupo de planificación.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        body.work_date &&
+        !parseDate(
+          body.work_date
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "La fecha de realización no es válida.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const {
+        data: completedCount,
+        error: batchError,
+      } = await supabase.rpc(
+        "test_mark_sweeping_batch_completed",
+        {
+          p_batch_id:
+            batchId,
+          p_work_date:
+            body.work_date ??
+            null,
+        }
+      );
+
+      if (batchError) {
+        console.error(
+          "Error marcando grupo como realizado:",
+          batchError
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              batchError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          completed_count:
+            Number(completedCount ?? 0),
+          batch_id:
+            batchId,
+        },
+        {
+          status: 201,
+        }
+      );
+    }
 
     const mainStreet =
 
@@ -658,62 +916,71 @@ export async function POST(
 
     }
 
+    const batchId =
+      body.batch_id?.trim() || null;
+
+    const rpcName =
+      batchId
+        ? "test_create_sweeping_record_grouped"
+        : "test_create_sweeping_record";
+
+    const rpcParams =
+      batchId
+        ? {
+            p_main_street:
+              mainStreet,
+            p_from_street:
+              fromStreet,
+            p_to_street:
+              toStreet,
+            p_geometry_geojson:
+              JSON.stringify(
+                geometry
+              ),
+            p_work_date:
+              body.work_date ??
+              null,
+            p_zone:
+              body.zone?.trim() ||
+              null,
+            p_observations:
+              body.observations?.trim() ||
+              null,
+            p_status:
+              status,
+            p_batch_id:
+              batchId,
+          }
+        : {
+            p_main_street:
+              mainStreet,
+            p_from_street:
+              fromStreet,
+            p_to_street:
+              toStreet,
+            p_geometry_geojson:
+              JSON.stringify(
+                geometry
+              ),
+            p_work_date:
+              body.work_date ??
+              null,
+            p_zone:
+              body.zone?.trim() ||
+              null,
+            p_observations:
+              body.observations?.trim() ||
+              null,
+            p_status:
+              status,
+          };
+
     const {
-
       data,
-
       error,
-
     } = await supabase.rpc(
-
-      "test_create_sweeping_record",
-
-      {
-
-        p_main_street:
-
-          mainStreet,
-
-        p_from_street:
-
-          fromStreet,
-
-        p_to_street:
-
-          toStreet,
-
-        p_geometry_geojson:
-
-          JSON.stringify(
-
-            geometry
-
-          ),
-
-        p_work_date:
-
-          body.work_date ??
-
-          null,
-
-        p_zone:
-
-          body.zone?.trim() ||
-
-          null,
-
-        p_observations:
-
-          body.observations?.trim() ||
-
-          null,
-
-        p_status:
-
-          status,
-
-      }
-
+      rpcName,
+      rpcParams
     );
 
     if (error) {
@@ -1240,54 +1507,80 @@ export async function DELETE(
 
       );
 
-    const id =
-
+    const batchId =
       url.searchParams
+        .get("batch_id")
+        ?.trim() ?? "";
 
+    /*
+     * Eliminación agrupada:
+     * borra únicamente PLANIFICADOS pendientes del grupo.
+     * Los que ya tienen un COMPLETADO relacionado se conservan.
+     */
+    if (batchId) {
+      const {
+        data: deletedCount,
+        error: batchDeleteError,
+      } = await supabase.rpc(
+        "test_delete_sweeping_batch_pending",
+        {
+          p_batch_id:
+            batchId,
+        }
+      );
+
+      if (batchDeleteError) {
+        console.error(
+          "Error eliminando grupo de planificación:",
+          batchDeleteError
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              batchDeleteError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        deleted_count:
+          Number(deletedCount ?? 0),
+        batch_id:
+          batchId,
+      });
+    }
+
+    const id =
+      url.searchParams
         .get("id")
-
         ?.trim() ?? "";
 
     if (!id) {
-
       return NextResponse.json(
-
         {
-
           error:
-
             "Falta el ID del tramo.",
-
         },
-
         {
-
           status: 400,
-
         }
-
       );
-
     }
 
     const {
-
       data,
-
       error,
-
     } = await supabase.rpc(
-
       "test_delete_sweeping_record",
-
       {
-
         p_id:
-
           id,
-
       }
-
     );
 
     if (error) {
