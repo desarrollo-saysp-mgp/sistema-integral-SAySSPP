@@ -98,6 +98,10 @@ type SweepingRecordApi = {
 
   work_date: string;
 
+  planned_from?: string | null;
+
+  planned_to?: string | null;
+
   main_street: string;
 
   from_street: string;
@@ -125,6 +129,9 @@ type SweepingRecordApi = {
   batch_id?: string | null;
 
   sweeping_type?: "MANUAL" | "MECANICO" | null;
+  result_status?: "REALIZADO" | "NO_REALIZADO" | null;
+  result_observation?: string | null;
+  result_date?: string | null;
 
 };
 
@@ -187,6 +194,8 @@ type AreaStreetsResponse = {
 type SweepingAreaBatch = {
   batch_id: string;
   work_date: string;
+  planned_from?: string | null;
+  planned_to?: string | null;
   observations: string | null;
   color?: string | null;
   geometry: GeoJsonPolygon;
@@ -198,6 +207,13 @@ type SweepingAreaBatch = {
 type MechanicalMapPoint = {
   lat: number;
   lng: number;
+};
+
+type WorkOrderMapView = {
+  center: [number, number];
+  zoom: number;
+  width: number;
+  height: number;
 };
 
 type MechanicalCorridorPreview = {
@@ -224,6 +240,12 @@ type ConfirmDialogConfig = {
   detail?: string;
   confirmLabel?: string;
   variant?: "danger" | "success";
+};
+
+type NotCompletedDialogState = {
+  record: MapRoute;
+  observation: string;
+  error: string | null;
 };
 
 type SweepingComplaint = {
@@ -380,15 +402,15 @@ const GENERAL_PICO_CENTER: LatLngExpression = [
 
 const WEEK_COLORS = [
 
-  "#2563eb",
+  "#14b8a6",
 
   "#f97316",
 
   "#8b5cf6",
 
-  "#ef4444",
+  "#db2777",
 
-  "#14b8a6",
+  "#22c55e",
 
 ];
 
@@ -696,6 +718,36 @@ const AREA_COLOR_OPTIONS = [
   { value: "#2563eb", label: "Azul" },
 ];
 
+function hexToRgb(
+  hex: string
+) {
+  const normalized =
+    hex.replace("#", "").trim();
+
+  if (
+    !/^[0-9a-fA-F]{6}$/.test(
+      normalized
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    r: Number.parseInt(
+      normalized.slice(0, 2),
+      16
+    ),
+    g: Number.parseInt(
+      normalized.slice(2, 4),
+      16
+    ),
+    b: Number.parseInt(
+      normalized.slice(4, 6),
+      16
+    ),
+  };
+}
+
 function normalizeAreaColor(
   value?: string | null
 ) {
@@ -817,6 +869,45 @@ function areaPolygonCenter(
 
   return [
     center.lat,
+    center.lng,
+  ];
+}
+
+function areaPolygonLabelPoint(
+  geometry?: GeoJsonPolygon | null
+): [number, number] | null {
+  const positions =
+    areaPolygonToLeaflet(
+      geometry
+    );
+
+  if (positions.length < 3) {
+    return null;
+  }
+
+  const bounds =
+    L.latLngBounds(
+      positions
+    );
+
+  const north =
+    bounds.getNorth();
+  const south =
+    bounds.getSouth();
+  const center =
+    bounds.getCenter();
+
+  /*
+   * La etiqueta se ubica cerca del borde superior de la zona
+   * para no tapar las calles que se deben barrer.
+   */
+  const lat =
+    north -
+    (north - south) *
+      0.08;
+
+  return [
+    lat,
     center.lng,
   ];
 }
@@ -1131,6 +1222,8 @@ type ShownRoutesPanelProps = {
     records: MapRoute[]
   ) => void;
   onMarkCompleted?: (record: MapRoute) => void;
+  onMarkNotCompleted?: (record: MapRoute) => void;
+  onUndoNotCompleted?: (record: MapRoute) => void;
   onMarkBatchCompleted?: (
     batchId: string,
     records: MapRoute[]
@@ -1166,6 +1259,8 @@ function ShownRoutesPanel({
   onSelectRoute,
   onSelectBatch,
   onMarkCompleted,
+  onMarkNotCompleted,
+  onUndoNotCompleted,
   onMarkBatchCompleted,
   onDeleteBatch,
   onDeleteCompletedBatch,
@@ -1400,7 +1495,7 @@ function ShownRoutesPanel({
     isPlanned
       ? routes.filter(
           (record) =>
-            !record.realized_record_id
+            !record.realized_record_id && record.result_status !== "NO_REALIZADO"
         ).length
       : 0;
 
@@ -1667,11 +1762,11 @@ function ShownRoutesPanel({
                         ).length
                       : groupRecords.length;
 
+                  const notCompletedCount = isPlanned
+                    ? groupRecords.filter((record) => record.result_status === "NO_REALIZADO").length
+                    : 0;
                   const pendingCount =
-                    isPlanned
-                      ? groupRecords.length -
-                        realizedCount
-                      : 0;
+                    isPlanned ? groupRecords.length - realizedCount - notCompletedCount : 0;
 
                   const firstRecord =
                     groupRecords[0];
@@ -1780,6 +1875,7 @@ function ShownRoutesPanel({
                                 {pendingCount} pendientes
                                 {" · "}
                                 {realizedCount} realizados
+                                {notCompletedCount > 0 && ` · ${notCompletedCount} no realizados`}
                               </>
                             ) : (
                               <>
@@ -1822,7 +1918,7 @@ function ShownRoutesPanel({
                             ? `${groupRecords.length} realizados`
                             : pendingCount > 0
                               ? `${pendingCount} pendientes`
-                              : "✓ Grupo completo"}
+                              : notCompletedCount > 0 ? `${notCompletedCount} no realizados` : "✓ Grupo completo"}
                         </span>
                       </div>
 
@@ -1911,7 +2007,7 @@ function ShownRoutesPanel({
                             </>
                           ) : (
                             <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-                              ✓ Todos los tramos fueron realizados
+                              {notCompletedCount > 0 ? `${notCompletedCount} no realizados · sin pendientes` : "✓ Todos los tramos fueron realizados"}
                             </span>
                           )
                         ) : (
@@ -2017,7 +2113,7 @@ function ShownRoutesPanel({
                                       <span className="mt-0.5 block text-[10px] text-muted-foreground">
                                         {isAlreadyRealized
                                           ? "Ya realizado"
-                                          : "Pendiente"}
+                                          : record.result_status === "NO_REALIZADO" ? "No realizado" : "Pendiente"}
                                       </span>
                                     </span>
                                   </div>
@@ -2037,7 +2133,7 @@ function ShownRoutesPanel({
                                       }
                                     >
                                       {isPlanned &&
-                                        !isAlreadyRealized && (
+                                        !isAlreadyRealized && record.result_status !== "NO_REALIZADO" && (
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -2057,6 +2153,14 @@ function ShownRoutesPanel({
                                         </button>
                                       )}
 
+                                      {isPlanned && !isAlreadyRealized && (
+                                        <button type="button" disabled={actionsDisabled}
+                                          onClick={() => record.result_status === "NO_REALIZADO"
+                                            ? onUndoNotCompleted?.(record) : onMarkNotCompleted?.(record)}
+                                          className="rounded-md border border-red-300 px-2 py-1 text-[10px] font-semibold text-red-700 disabled:opacity-50">
+                                          {record.result_status === "NO_REALIZADO" ? "Deshacer no realizado" : "✕ No realizado"}
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -2154,7 +2258,7 @@ function ShownRoutesPanel({
                     {isPlanned ? (
                       <span
                         className={`mt-1 h-3 w-3 shrink-0 rounded-full ${
-                          record.sweeping_type === "MECANICO"
+                          record.result_status === "NO_REALIZADO" ? "bg-red-600" : record.sweeping_type === "MECANICO"
                             ? "bg-orange-500"
                             : "bg-blue-600"
                         }`}
@@ -2221,6 +2325,12 @@ function ShownRoutesPanel({
                             : ""}
                       </p>
 
+                      {isPlanned && record.result_status === "NO_REALIZADO" && (
+                        <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] text-red-700">
+                          <strong>Motivo de no realización:</strong> {record.result_observation || "Sin motivo registrado"}
+                          {record.result_date && ` · ${formatDateAr(record.result_date)}`}
+                        </div>
+                      )}
                       {record.observations?.trim() && (
                         <div className="mt-2 rounded-md border bg-muted/30 px-2.5 py-2 text-[11px] leading-relaxed">
                           <span className="font-semibold">
@@ -2250,6 +2360,8 @@ function ShownRoutesPanel({
                             >
                               ✓ Ya realizado
                             </button>
+                          ) : record.result_status === "NO_REALIZADO" ? (
+                            <span className="rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">✕ No realizado</span>
                           ) : (
                             <button
                               type="button"
@@ -2270,6 +2382,14 @@ function ShownRoutesPanel({
                             </button>
                           ))}
 
+                        {isPlanned && !record.realized_record_id && (
+                          <button type="button" disabled={actionsDisabled}
+                            onClick={() => record.result_status === "NO_REALIZADO"
+                              ? onUndoNotCompleted?.(record) : onMarkNotCompleted?.(record)}
+                            className="rounded-md border border-red-300 px-2.5 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50">
+                            {record.result_status === "NO_REALIZADO" ? "Deshacer no realizado" : "✕ No realizado"}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() =>
@@ -2940,6 +3060,139 @@ function FitRoutes({
 
   return null;
 
+}
+
+function WorkOrderPreviewController({
+  routes,
+  savedView,
+  fitToken,
+  viewKey,
+  onViewChange,
+}: {
+  routes: MapRoute[];
+  savedView: WorkOrderMapView | null;
+  fitToken: number;
+  viewKey: string;
+  onViewChange: (view: WorkOrderMapView) => void;
+}) {
+  const map = useMap();
+  const previousFitTokenRef =
+    useRef(fitToken);
+  const previousViewKeyRef =
+    useRef("");
+
+  const reportView = () => {
+    const center = map.getCenter();
+    const size = map.getSize();
+
+    onViewChange({
+      center: [
+        center.lat,
+        center.lng,
+      ],
+      zoom: map.getZoom(),
+      width: Math.max(
+        1,
+        size.x
+      ),
+      height: Math.max(
+        1,
+        size.y
+      ),
+    });
+  };
+
+  useMapEvents({
+    moveend: reportView,
+    zoomend: reportView,
+  });
+
+  useEffect(() => {
+    const allPositions =
+      routes.flatMap(
+        (record) =>
+          record.positions
+      );
+
+    if (
+      allPositions.length === 0
+    ) {
+      return;
+    }
+
+    const forceFit =
+      previousFitTokenRef.current !==
+      fitToken;
+
+    const changedView =
+      previousViewKeyRef.current !==
+      viewKey;
+
+    previousFitTokenRef.current =
+      fitToken;
+
+    previousViewKeyRef.current =
+      viewKey;
+
+    if (
+      !forceFit &&
+      changedView &&
+      savedView
+    ) {
+      map.setView(
+        savedView.center,
+        savedView.zoom,
+        {
+          animate: false,
+        }
+      );
+
+      window.setTimeout(
+        reportView,
+        0
+      );
+
+      return;
+    }
+
+    if (
+      !forceFit &&
+      !changedView
+    ) {
+      return;
+    }
+
+    const bounds =
+      L.latLngBounds(
+        allPositions as L.LatLngExpression[]
+      );
+
+    if (!bounds.isValid()) {
+      return;
+    }
+
+    map.fitBounds(
+      bounds as LatLngBoundsExpression,
+      {
+        padding: [64, 48],
+        maxZoom: 16,
+        animate: false,
+      }
+    );
+
+    window.setTimeout(
+      reportView,
+      0
+    );
+  }, [
+    map,
+    routes,
+    savedView,
+    fitToken,
+    viewKey,
+  ]);
+
+  return null;
 }
 
 function FitComplaintPoints({
@@ -3928,8 +4181,15 @@ export default function TestSweepingMap({
   const [selectedAreaStreetKeys, setSelectedAreaStreetKeys] =
     useState<Set<string>>(new Set());
 
-  const [areaWorkDate, setAreaWorkDate] =
-    useState(getTodayYmd());
+  const [
+    planningFrom,
+    setPlanningFrom,
+  ] = useState(getTodayYmd());
+
+  const [
+    planningTo,
+    setPlanningTo,
+  ] = useState(getTodayYmd());
 
   const [areaColor, setAreaColor] =
     useState("#f97316");
@@ -3970,10 +4230,3027 @@ export default function TestSweepingMap({
     setMechanicalSaving,
   ] = useState(false);
 
+  /*
+   * ==========================================================
+   * ORDEN DE TRABAJO / PDF
+   * ==========================================================
+   */
+
   const [
-    mechanicalWorkDate,
-    setMechanicalWorkDate,
+    workOrderOpen,
+    setWorkOrderOpen,
+  ] = useState(false);
+
+  const [
+    workOrderDate,
+    setWorkOrderDate,
   ] = useState(getTodayYmd());
+
+  const [
+    workOrderType,
+    setWorkOrderType,
+  ] = useState<
+    "ALL" | "MANUAL" | "MECANICO"
+  >("ALL");
+
+  const [
+    workOrderRoutes,
+    setWorkOrderRoutes,
+  ] = useState<MapRoute[]>([]);
+
+  const [
+    workOrderAreaBatches,
+    setWorkOrderAreaBatches,
+  ] = useState<SweepingAreaBatch[]>([]);
+
+  const [
+    workOrderLoading,
+    setWorkOrderLoading,
+  ] = useState(false);
+
+  const [
+    workOrderGenerating,
+    setWorkOrderGenerating,
+  ] = useState(false);
+
+  const workOrderMapRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const [
+    workOrderPreviewKind,
+    setWorkOrderPreviewKind,
+  ] = useState<
+    "MANUAL" | "MECANICO"
+  >("MANUAL");
+
+  const [
+    workOrderManualView,
+    setWorkOrderManualView,
+  ] =
+    useState<WorkOrderMapView | null>(
+      null
+    );
+
+  const [
+    workOrderMechanicalView,
+    setWorkOrderMechanicalView,
+  ] =
+    useState<WorkOrderMapView | null>(
+      null
+    );
+
+  const [
+    workOrderFitToken,
+    setWorkOrderFitToken,
+  ] = useState(0);
+
+  const [
+    selectedWorkOrderBatchIds,
+    setSelectedWorkOrderBatchIds,
+  ] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  const filteredWorkOrderRoutes =
+    useMemo(() => {
+      if (
+        workOrderType === "ALL"
+      ) {
+        return workOrderRoutes;
+      }
+
+      return workOrderRoutes.filter(
+        (record) =>
+          record.sweeping_type ===
+          workOrderType
+      );
+    }, [
+      workOrderRoutes,
+      workOrderType,
+    ]);
+
+  const filteredWorkOrderAreas =
+    useMemo(() => {
+      if (
+        workOrderType === "MECANICO"
+      ) {
+        return [];
+      }
+
+      return workOrderAreaBatches;
+    }, [
+      workOrderAreaBatches,
+      workOrderType,
+    ]);
+
+  const workOrderManualCount =
+    useMemo(
+      () =>
+        workOrderRoutes.filter(
+          (record) =>
+            record.sweeping_type ===
+            "MANUAL"
+        ).length,
+      [workOrderRoutes]
+    );
+
+  const workOrderMechanicalCount =
+    useMemo(
+      () =>
+        workOrderRoutes.filter(
+          (record) =>
+            record.sweeping_type ===
+            "MECANICO"
+        ).length,
+      [workOrderRoutes]
+    );
+
+  const selectedWorkOrderManualRoutes =
+    useMemo(
+      () =>
+        workOrderRoutes.filter(
+          (record) => {
+            if (
+              record.sweeping_type !==
+              "MANUAL"
+            ) {
+              return false;
+            }
+
+            const batchId =
+              record.batch_id?.trim();
+
+            /*
+             * Los tramos manuales individuales que no pertenecen a
+             * una zona se mantienen siempre. La selección controla
+             * únicamente las planificaciones agrupadas por zona.
+             */
+            if (!batchId) {
+              return true;
+            }
+
+            return selectedWorkOrderBatchIds.has(
+              batchId
+            );
+          }
+        ),
+      [
+        workOrderRoutes,
+        selectedWorkOrderBatchIds,
+      ]
+    );
+
+  const selectedWorkOrderAreas =
+    useMemo(
+      () =>
+        workOrderAreaBatches.filter(
+          (batch) =>
+            selectedWorkOrderBatchIds.has(
+              batch.batch_id
+            )
+        ),
+      [
+        workOrderAreaBatches,
+        selectedWorkOrderBatchIds,
+      ]
+    );
+
+  const workOrderPreviewRoutes =
+    useMemo(
+      () =>
+        workOrderPreviewKind ===
+        "MANUAL"
+          ? selectedWorkOrderManualRoutes
+          : workOrderRoutes.filter(
+              (record) =>
+                record.sweeping_type ===
+                "MECANICO"
+            ),
+      [
+        workOrderRoutes,
+        workOrderPreviewKind,
+        selectedWorkOrderManualRoutes,
+      ]
+    );
+
+  const workOrderPreviewAreas =
+    useMemo(
+      () =>
+        workOrderPreviewKind ===
+        "MANUAL"
+          ? selectedWorkOrderAreas
+          : [],
+      [
+        workOrderPreviewKind,
+        selectedWorkOrderAreas,
+      ]
+    );
+
+  const workOrderPreviewView =
+    workOrderPreviewKind === "MANUAL"
+      ? workOrderManualView
+      : workOrderMechanicalView;
+
+  /*
+   * La orden de trabajo se carga sola:
+   * - al abrir el modal;
+   * - al cambiar la fecha.
+   *
+   * El selector Manual / Mecánico NO vuelve a consultar la API:
+   * filtra instantáneamente lo que ya se cargó.
+   */
+  useEffect(() => {
+    if (
+      !workOrderOpen ||
+      !workOrderDate
+    ) {
+      return;
+    }
+
+    setWorkOrderRoutes([]);
+    setWorkOrderAreaBatches([]);
+
+    const timer =
+      window.setTimeout(() => {
+        void loadWorkOrderData(
+          workOrderDate
+        );
+      }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    workOrderOpen,
+    workOrderDate,
+  ]);
+
+  useEffect(() => {
+    if (
+      workOrderType === "MANUAL"
+    ) {
+      setWorkOrderPreviewKind(
+        "MANUAL"
+      );
+      return;
+    }
+
+    if (
+      workOrderType === "MECANICO"
+    ) {
+      setWorkOrderPreviewKind(
+        "MECANICO"
+      );
+      return;
+    }
+
+    if (
+      workOrderPreviewKind ===
+        "MANUAL" &&
+      workOrderManualCount === 0 &&
+      workOrderMechanicalCount > 0
+    ) {
+      setWorkOrderPreviewKind(
+        "MECANICO"
+      );
+    }
+
+    if (
+      workOrderPreviewKind ===
+        "MECANICO" &&
+      workOrderMechanicalCount === 0 &&
+      workOrderManualCount > 0
+    ) {
+      setWorkOrderPreviewKind(
+        "MANUAL"
+      );
+    }
+  }, [
+    workOrderType,
+    workOrderPreviewKind,
+    workOrderManualCount,
+    workOrderMechanicalCount,
+  ]);
+
+  async function loadWorkOrderData(
+    dateValue = workOrderDate
+  ) {
+    if (!dateValue) {
+      setError(
+        "Seleccioná una fecha para generar la orden de trabajo."
+      );
+      return false;
+    }
+
+    try {
+      setWorkOrderLoading(true);
+      setError(null);
+
+      const [
+        routes,
+        areas,
+      ] = await Promise.all([
+        fetchRecordsForStatus(
+          dateValue,
+          dateValue,
+          "PLANIFICADO"
+        ),
+        fetchPlannedAreaBatches(
+          dateValue,
+          dateValue
+        ),
+      ]);
+
+      setWorkOrderRoutes(
+        routes
+      );
+
+      setWorkOrderAreaBatches(
+        areas
+      );
+
+      setSelectedWorkOrderBatchIds(
+        new Set(
+          areas.map(
+            (batch) =>
+              batch.batch_id
+          )
+        )
+      );
+
+      setWorkOrderManualView(null);
+      setWorkOrderMechanicalView(null);
+      setWorkOrderFitToken(
+        (value) => value + 1
+      );
+
+      const hasManual =
+        routes.some(
+          (record) =>
+            record.sweeping_type ===
+            "MANUAL"
+        );
+
+      const hasMechanical =
+        routes.some(
+          (record) =>
+            record.sweeping_type ===
+            "MECANICO"
+        );
+
+      if (
+        hasManual
+      ) {
+        setWorkOrderPreviewKind(
+          "MANUAL"
+        );
+      } else if (
+        hasMechanical
+      ) {
+        setWorkOrderPreviewKind(
+          "MECANICO"
+        );
+      }
+
+      return true;
+    } catch (err) {
+      console.error(
+        "Error cargando orden de trabajo:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo cargar la planificación para la orden de trabajo."
+      );
+
+      return false;
+    } finally {
+      setWorkOrderLoading(false);
+    }
+  }
+
+  function openWorkOrderDialog() {
+    setWorkOrderType("ALL");
+    setWorkOrderOpen(true);
+  }
+
+  async function generateWorkOrderPdf() {
+    const routes =
+      filteredWorkOrderRoutes;
+
+    if (
+      routes.length === 0
+    ) {
+      setError(
+        "No hay tramos planificados para generar la orden de trabajo con los filtros seleccionados."
+      );
+      return;
+    }
+
+    try {
+      setWorkOrderGenerating(
+        true
+      );
+      setError(null);
+
+      const jsPdfModule =
+        await import("jspdf");
+
+      const jsPDF =
+        jsPdfModule.jsPDF;
+
+      const pdfSafeText = (
+        value?: string | null
+      ) => {
+        const raw =
+          String(value ?? "")
+            .normalize("NFC")
+            .replace(
+              /[\u2010-\u2015\u2212]/g,
+              "-"
+            )
+            .replace(
+              /\u2192/g,
+              " a "
+            )
+            .replace(
+              /[\u2018\u2019\u201B\u2032\u00B4`]/g,
+              "'"
+            )
+            .replace(
+              /\u00A0/g,
+              " "
+            )
+            .replace(
+              /[^\x20-\x7E\u00C0-\u00FF]/g,
+              " "
+            )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        /*
+         * Si algún dato vino guardado como "C a l l e",
+         * recomponemos palabras de 3 o más letras.
+         */
+        return raw.replace(
+          /\b(?:[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\s+){2,}[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\b/g,
+          (match) =>
+            match.replace(
+              /\s+/g,
+              ""
+            )
+        );
+      };
+
+      const cleanEndpoint = (
+        value?: string | null
+      ) =>
+        pdfSafeText(value)
+          .replace(
+            /^Punto\s+A\s*[-:|/.]*\s*/i,
+            ""
+          )
+          .replace(
+            /^Punto\s+B\s*[-:|/.]*\s*/i,
+            ""
+          )
+          .replace(
+            /^Limite de zona$/i,
+            "Límite de zona"
+          );
+
+      const cleanStreet = (
+        value?: string | null
+      ) =>
+        pdfSafeText(value)
+          .replace(
+            /\s*[|]\s*/g,
+            " / "
+          )
+          .replace(
+            /\s+\/\s+/g,
+            " / "
+          );
+
+      const routePoints = (
+        record: MapRoute
+      ) =>
+        Array.isArray(
+          record.geometry
+            ?.coordinates
+        )
+          ? record.geometry.coordinates
+              .filter(
+                (point) =>
+                  Array.isArray(
+                    point
+                  ) &&
+                  point.length >= 2 &&
+                  Number.isFinite(
+                    Number(point[0])
+                  ) &&
+                  Number.isFinite(
+                    Number(point[1])
+                  )
+              )
+              .map(
+                ([lng, lat]) => ({
+                  lat: Number(lat),
+                  lng: Number(lng),
+                })
+              )
+          : [];
+
+      const areaPoints = (
+        batch: SweepingAreaBatch
+      ) =>
+        Array.isArray(
+          batch.geometry
+            ?.coordinates?.[0]
+        )
+          ? batch.geometry.coordinates[0]
+              .filter(
+                (point) =>
+                  Array.isArray(
+                    point
+                  ) &&
+                  point.length >= 2 &&
+                  Number.isFinite(
+                    Number(point[0])
+                  ) &&
+                  Number.isFinite(
+                    Number(point[1])
+                  )
+              )
+              .map(
+                ([lng, lat]) => ({
+                  lat: Number(lat),
+                  lng: Number(lng),
+                })
+              )
+          : [];
+
+      const projectOsmPoint = (
+        lat: number,
+        lng: number,
+        zoom: number
+      ) => {
+        const tileSize = 256;
+        const scale =
+          tileSize *
+          Math.pow(
+            2,
+            zoom
+          );
+
+        const boundedLat =
+          Math.max(
+            -85.05112878,
+            Math.min(
+              85.05112878,
+              lat
+            )
+          );
+
+        const sin =
+          Math.sin(
+            (
+              boundedLat *
+              Math.PI
+            ) /
+              180
+          );
+
+        return {
+          x:
+            (
+              (lng + 180) /
+              360
+            ) *
+            scale,
+          y:
+            (
+              0.5 -
+              Math.log(
+                (1 + sin) /
+                  (1 - sin)
+              ) /
+                (
+                  4 *
+                  Math.PI
+                )
+            ) *
+            scale,
+        };
+      };
+
+      const loadCorsImage = (
+        src: string
+      ): Promise<HTMLImageElement> =>
+        new Promise(
+          (
+            resolve,
+            reject
+          ) => {
+            const image =
+              new Image();
+
+            image.crossOrigin =
+              "anonymous";
+
+            image.onload =
+              () =>
+                resolve(
+                  image
+                );
+
+            image.onerror =
+              () =>
+                reject(
+                  new Error(
+                    `No se pudo cargar ${src}`
+                  )
+                );
+
+            image.src = src;
+          }
+        );
+
+      const renderPlanningMap =
+        async (
+          mapRoutes: MapRoute[],
+          mapAreas: SweepingAreaBatch[],
+          kind:
+            | "MANUAL"
+            | "MECANICO",
+          customView?:
+            | WorkOrderMapView
+            | null
+        ) => {
+          /*
+           * PDF: raster ancho y de alta definición.
+           *
+           * MUY IMPORTANTE:
+           * el encuadre se calcula SOLO con las calles/tramos que
+           * realmente se deben barrer. El polígono de zona se dibuja
+           * después como referencia, pero NO participa del zoom.
+           *
+           * Esto evita que un vértice alejado del polígono achique
+           * innecesariamente todas las calles en el PDF.
+           */
+          /*
+           * La relación 3000 / 1800 = 1.667 coincide casi exactamente
+           * con el rectángulo útil del mapa en la hoja A4 horizontal.
+           * Así evitamos comprimir/estirar la captura al insertarla.
+           */
+          const width = 3000;
+          const height = 1800;
+
+          /*
+           * Margen geográfico mínimo: queremos que el trabajo ocupe
+           * la mayor parte posible de la hoja sin cortar ningún tramo.
+           */
+          const paddingX = 72;
+          const paddingY = 42;
+
+          const routeFitPoints =
+            mapRoutes.flatMap(
+              routePoints
+            );
+
+          const areaFitPoints =
+            kind === "MANUAL"
+              ? mapAreas.flatMap(
+                  areaPoints
+                )
+              : [];
+
+          const allPoints =
+            routeFitPoints.length >= 2
+              ? routeFitPoints
+              : areaFitPoints;
+
+          if (
+            allPoints.length <
+            2
+          ) {
+            return null;
+          }
+
+          let zoom = 11;
+          let originX = 0;
+          let originY = 0;
+
+          /*
+           * Escala de render:
+           *
+           * Leaflet define la vista usando el zoom + el tamaño del
+           * viewport en píxeles CSS. El PDF usa un canvas mucho más
+           * grande (3000x1800) sólo para ganar nitidez.
+           *
+           * Si usáramos el mismo zoom directamente sobre 3000 px,
+           * el PDF mostraría mucho más territorio que el preview.
+           *
+           * Por eso, cuando existe una vista elegida por el usuario:
+           * 1) calculamos el origen usando el tamaño REAL del preview;
+           * 2) luego ampliamos ese mismo encuadre al canvas del PDF.
+           *
+           * Resultado: mismo centro + mismo zoom + mismo campo visual.
+           */
+          let renderScale = 1;
+
+          if (customView) {
+            zoom = Math.max(
+              10,
+              Math.min(
+                19,
+                Math.round(
+                  customView.zoom
+                )
+              )
+            );
+
+            const viewportWidth =
+              Math.max(
+                1,
+                Number(
+                  customView.width
+                ) || width
+              );
+
+            const viewportHeight =
+              Math.max(
+                1,
+                Number(
+                  customView.height
+                ) || height
+              );
+
+            const scaleX =
+              width /
+              viewportWidth;
+
+            const scaleY =
+              height /
+              viewportHeight;
+
+            /*
+             * El preview y el raster usan relación 5:3, por lo que
+             * ambas escalas deberían ser prácticamente iguales.
+             * Elegimos la menor para no recortar por diferencias de
+             * 1-2 píxeles causadas por bordes/redondeos del navegador.
+             */
+            renderScale =
+              Math.min(
+                scaleX,
+                scaleY
+              );
+
+            const sourceWidth =
+              width /
+              renderScale;
+
+            const sourceHeight =
+              height /
+              renderScale;
+
+            const projectedCenter =
+              projectOsmPoint(
+                customView.center[0],
+                customView.center[1],
+                zoom
+              );
+
+            originX =
+              projectedCenter.x -
+              sourceWidth / 2;
+
+            originY =
+              projectedCenter.y -
+              sourceHeight / 2;
+          } else {
+            /*
+             * Fallback automático si el usuario todavía no acomodó
+             * manualmente esta vista.
+             */
+            for (
+              let candidate = 19;
+              candidate >= 10;
+              candidate -= 1
+            ) {
+              const projected =
+                allPoints.map(
+                  (point) =>
+                    projectOsmPoint(
+                      point.lat,
+                      point.lng,
+                      candidate
+                    )
+                );
+
+              const xs =
+                projected.map(
+                  (point) =>
+                    point.x
+                );
+
+              const ys =
+                projected.map(
+                  (point) =>
+                    point.y
+                );
+
+              const occupiedWidth =
+                Math.max(...xs) -
+                Math.min(...xs);
+
+              const occupiedHeight =
+                Math.max(...ys) -
+                Math.min(...ys);
+
+              if (
+                occupiedWidth <=
+                  width -
+                    paddingX * 2 &&
+                occupiedHeight <=
+                  height -
+                    paddingY * 2
+              ) {
+                zoom = candidate;
+                break;
+              }
+            }
+
+            const projectedAll =
+              allPoints.map(
+                (point) =>
+                  projectOsmPoint(
+                    point.lat,
+                    point.lng,
+                    zoom
+                  )
+              );
+
+            const xs =
+              projectedAll.map(
+                (point) =>
+                  point.x
+              );
+
+            const ys =
+              projectedAll.map(
+                (point) =>
+                  point.y
+              );
+
+            const centerX =
+              (
+                Math.min(...xs) +
+                Math.max(...xs)
+              ) /
+              2;
+
+            const centerY =
+              (
+                Math.min(...ys) +
+                Math.max(...ys)
+              ) /
+              2;
+
+            originX =
+              centerX -
+              width / 2;
+
+            originY =
+              centerY -
+              height / 2;
+          }
+
+          const canvas =
+            document.createElement(
+              "canvas"
+            );
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const context =
+            canvas.getContext(
+              "2d"
+            );
+
+          if (!context) {
+            return null;
+          }
+
+          context.fillStyle =
+            "#f8fafc";
+
+          context.fillRect(
+            0,
+            0,
+            width,
+            height
+          );
+
+          const tileSize = 256;
+          const tileCount =
+            Math.pow(
+              2,
+              zoom
+            );
+
+          const sourceWidth =
+            width /
+            renderScale;
+
+          const sourceHeight =
+            height /
+            renderScale;
+
+          const startTileX =
+            Math.floor(
+              originX /
+                tileSize
+            );
+
+          const endTileX =
+            Math.floor(
+              (
+                originX +
+                sourceWidth
+              ) /
+                tileSize
+            );
+
+          const startTileY =
+            Math.floor(
+              originY /
+                tileSize
+            );
+
+          const endTileY =
+            Math.floor(
+              (
+                originY +
+                sourceHeight
+              ) /
+                tileSize
+            );
+
+          const tileJobs: Array<
+            Promise<void>
+          > = [];
+
+          for (
+            let tileX =
+              startTileX;
+            tileX <=
+            endTileX;
+            tileX += 1
+          ) {
+            for (
+              let tileY =
+                startTileY;
+              tileY <=
+              endTileY;
+              tileY += 1
+            ) {
+              if (
+                tileY < 0 ||
+                tileY >=
+                  tileCount
+              ) {
+                continue;
+              }
+
+              const wrappedX =
+                (
+                  (
+                    tileX %
+                    tileCount
+                  ) +
+                  tileCount
+                ) %
+                tileCount;
+
+              const tileUrl =
+                `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`;
+
+              tileJobs.push(
+                loadCorsImage(
+                  tileUrl
+                )
+                  .then(
+                    (image) => {
+                      context.drawImage(
+                        image,
+                        (
+                          tileX *
+                            tileSize -
+                          originX
+                        ) *
+                          renderScale,
+                        (
+                          tileY *
+                            tileSize -
+                          originY
+                        ) *
+                          renderScale,
+                        tileSize *
+                          renderScale,
+                        tileSize *
+                          renderScale
+                      );
+                    }
+                  )
+                  .catch(
+                    () => {
+                      // Si falla un tile puntual dejamos el fondo claro.
+                    }
+                  )
+              );
+            }
+          }
+
+          await Promise.all(
+            tileJobs
+          );
+
+          /*
+           * Zonas manuales: primero el polígono,
+           * después las calles, para que la red quede bien visible.
+           */
+          if (
+            kind === "MANUAL"
+          ) {
+            for (
+              const batch of
+              mapAreas
+            ) {
+              const points =
+                areaPoints(
+                  batch
+                );
+
+              if (
+                points.length <
+                3
+              ) {
+                continue;
+              }
+
+              const projected =
+                points.map(
+                  (point) => {
+                    const value =
+                      projectOsmPoint(
+                        point.lat,
+                        point.lng,
+                        zoom
+                      );
+
+                    return {
+                      x:
+                        (
+                          value.x -
+                          originX
+                        ) *
+                        renderScale,
+                      y:
+                        (
+                          value.y -
+                          originY
+                        ) *
+                        renderScale,
+                    };
+                  }
+                );
+
+              const fillColor =
+                normalizeAreaColor(
+                  batch.color
+                );
+
+              context.save();
+              context.beginPath();
+
+              projected.forEach(
+                (
+                  point,
+                  index
+                ) => {
+                  if (
+                    index === 0
+                  ) {
+                    context.moveTo(
+                      point.x,
+                      point.y
+                    );
+                  } else {
+                    context.lineTo(
+                      point.x,
+                      point.y
+                    );
+                  }
+                }
+              );
+
+              context.closePath();
+
+              /*
+               * El polígono queda sólo como referencia visual.
+               * No debe competir con los nombres de calles ni con
+               * los trazados que realmente hay que barrer.
+               */
+              context.globalAlpha =
+                0.04;
+              context.fillStyle =
+                fillColor;
+              context.fill();
+
+              context.globalAlpha =
+                0.5;
+              context.strokeStyle =
+                fillColor;
+              context.lineWidth =
+                2 * renderScale;
+              context.setLineDash([
+                14 * renderScale,
+                10 * renderScale,
+              ]);
+              context.stroke();
+              context.restore();
+
+              const projectedXs =
+                projected.map(
+                  (point) => point.x
+                );
+
+              const projectedYs =
+                projected.map(
+                  (point) => point.y
+                );
+
+              const minProjectedX =
+                Math.min(
+                  ...projectedXs
+                );
+              const maxProjectedX =
+                Math.max(
+                  ...projectedXs
+                );
+              const minProjectedY =
+                Math.min(
+                  ...projectedYs
+                );
+              const maxProjectedY =
+                Math.max(
+                  ...projectedYs
+                );
+
+              /*
+               * No dibujamos etiquetas dentro del mapa.
+               * Los nombres de las zonas se muestran en una leyenda
+               * fuera del área cartográfica para no tapar calles.
+               */
+            }
+          }
+
+          context.save();
+          context.lineJoin =
+            "round";
+          context.lineCap =
+            "round";
+
+          for (
+            const route of
+            mapRoutes
+          ) {
+            const points =
+              routePoints(
+                route
+              );
+
+            if (
+              points.length <
+              2
+            ) {
+              continue;
+            }
+
+            const projected =
+              points.map(
+                (point) => {
+                  const value =
+                    projectOsmPoint(
+                      point.lat,
+                      point.lng,
+                      zoom
+                    );
+
+                  return {
+                    x:
+                      (
+                        value.x -
+                        originX
+                      ) *
+                      renderScale,
+                    y:
+                      (
+                        value.y -
+                        originY
+                      ) *
+                      renderScale,
+                  };
+                }
+              );
+
+            /*
+             * Halo blanco muy fino para despegar el recorrido
+             * del mapa base.
+             */
+            context.beginPath();
+
+            projected.forEach(
+              (
+                point,
+                index
+              ) => {
+                if (
+                  index === 0
+                ) {
+                  context.moveTo(
+                    point.x,
+                    point.y
+                  );
+                } else {
+                  context.lineTo(
+                    point.x,
+                    point.y
+                  );
+                }
+              }
+            );
+
+            context.strokeStyle =
+              "#ffffff";
+            context.lineWidth =
+              (
+                kind ===
+                "MECANICO"
+                  ? 9
+                  : 7
+              ) *
+              renderScale;
+            context.globalAlpha =
+              0.82;
+            context.setLineDash([]);
+            context.stroke();
+
+            context.beginPath();
+
+            projected.forEach(
+              (
+                point,
+                index
+              ) => {
+                if (
+                  index === 0
+                ) {
+                  context.moveTo(
+                    point.x,
+                    point.y
+                  );
+                } else {
+                  context.lineTo(
+                    point.x,
+                    point.y
+                  );
+                }
+              }
+            );
+
+            context.strokeStyle =
+              kind ===
+              "MECANICO"
+                ? "#f97316"
+                : "#2563eb";
+
+            context.lineWidth =
+              (
+                kind ===
+                "MECANICO"
+                  ? 6
+                  : 4
+              ) *
+              renderScale;
+
+            context.globalAlpha =
+              0.96;
+
+            context.setLineDash(
+              kind ===
+              "MECANICO"
+                ? [
+                    18 * renderScale,
+                    12 * renderScale,
+                  ]
+                : []
+            );
+
+            context.stroke();
+          }
+
+          context.restore();
+
+          context.fillStyle =
+            "rgba(255,255,255,0.9)";
+
+          context.fillRect(
+            14 * renderScale,
+            height -
+              38 * renderScale,
+            305 * renderScale,
+            26 * renderScale
+          );
+
+          context.fillStyle =
+            "#475569";
+          context.font =
+            `${16 * renderScale}px Arial`;
+
+          context.fillText(
+            "© OpenStreetMap contributors",
+            22 * renderScale,
+            height -
+              20 * renderScale
+          );
+
+          return canvas.toDataURL(
+            "image/jpeg",
+            0.84
+          );
+        };
+
+      const loadLogo =
+        async () => {
+          try {
+            const image =
+              await loadCorsImage(
+                "/logo-general-pico-horizontal.png"
+              );
+
+            const originalWidth =
+              image.naturalWidth ||
+              image.width;
+
+            const originalHeight =
+              image.naturalHeight ||
+              image.height;
+
+            const targetWidth =
+              Math.min(
+                520,
+                originalWidth
+              );
+
+            const scale =
+              originalWidth > 0
+                ? targetWidth /
+                  originalWidth
+                : 1;
+
+            const targetHeight =
+              Math.max(
+                1,
+                Math.round(
+                  originalHeight *
+                    scale
+                )
+              );
+
+            const canvas =
+              document.createElement(
+                "canvas"
+              );
+
+            canvas.width =
+              Math.max(
+                1,
+                Math.round(
+                  targetWidth
+                )
+              );
+
+            canvas.height =
+              targetHeight;
+
+            const context =
+              canvas.getContext(
+                "2d"
+              );
+
+            if (!context) {
+              return null;
+            }
+
+            context.fillStyle =
+              "#ffffff";
+
+            context.fillRect(
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            context.drawImage(
+              image,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            return canvas.toDataURL(
+              "image/jpeg",
+              0.72
+            );
+          } catch {
+            return null;
+          }
+        };
+
+      const manualRoutes =
+        routes.filter(
+          (record) => {
+            if (
+              record.sweeping_type !==
+              "MANUAL"
+            ) {
+              return false;
+            }
+
+            const batchId =
+              record.batch_id?.trim();
+
+            if (!batchId) {
+              return true;
+            }
+
+            return selectedWorkOrderBatchIds.has(
+              batchId
+            );
+          }
+        );
+
+      const mechanicalRoutes =
+        routes.filter(
+          (record) =>
+            record.sweeping_type ===
+            "MECANICO"
+        );
+
+      const unknownRoutes =
+        routes.filter(
+          (record) =>
+            !record.sweeping_type
+        );
+
+      const manualBatchIds =
+        new Set(
+          manualRoutes
+            .map(
+              (record) =>
+                record.batch_id
+            )
+            .filter(
+              (
+                value
+              ): value is string =>
+                Boolean(value)
+            )
+        );
+
+      const manualAreas =
+        workOrderAreaBatches.filter(
+          (batch) =>
+            selectedWorkOrderBatchIds.has(
+              batch.batch_id
+            ) &&
+            manualBatchIds.has(
+              batch.batch_id
+            )
+        );
+
+      const [
+        logoDataUrl,
+        manualMapImage,
+        mechanicalMapImage,
+      ] = await Promise.all([
+        loadLogo(),
+        manualRoutes.length > 0
+          ? renderPlanningMap(
+              manualRoutes,
+              manualAreas,
+              "MANUAL",
+              workOrderManualView
+            )
+          : Promise.resolve(
+              null
+            ),
+        mechanicalRoutes.length >
+        0
+          ? renderPlanningMap(
+              mechanicalRoutes,
+              [],
+              "MECANICO",
+              workOrderMechanicalView
+            )
+          : Promise.resolve(
+              null
+            ),
+      ]);
+
+      const pdf =
+        new jsPDF({
+          orientation:
+            "landscape",
+          unit: "mm",
+          format: "a4",
+          compress: true,
+        });
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      const marginX = 14;
+      const contentWidth =
+        pageWidth -
+        marginX * 2;
+
+      const addHeader = (
+        title: string,
+        subtitle: string
+      ) => {
+        if (logoDataUrl) {
+          pdf.addImage(
+            logoDataUrl,
+            "JPEG",
+            marginX,
+            7,
+            31,
+            11,
+            undefined,
+            "FAST"
+          );
+        }
+
+        pdf.setFont(
+          "helvetica",
+          "bold"
+        );
+        pdf.setFontSize(13.5);
+        pdf.setTextColor(
+          30,
+          41,
+          59
+        );
+
+        pdf.text(
+          pdfSafeText(title),
+          logoDataUrl
+            ? 50
+            : marginX,
+          12.5
+        );
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(
+          71,
+          85,
+          105
+        );
+
+        pdf.text(
+          pdfSafeText(subtitle),
+          logoDataUrl
+            ? 50
+            : marginX,
+          18
+        );
+
+        pdf.setDrawColor(
+          226,
+          232,
+          240
+        );
+
+        pdf.line(
+          marginX,
+          24,
+          pageWidth -
+            marginX,
+          24
+        );
+      };
+
+      const drawSummaryCards = (
+        kind:
+          | "MANUAL"
+          | "MECANICO",
+        count: number,
+        zoneCount = 0
+      ) => {
+        const y = 30;
+        const gap = 4;
+        const cardWidth =
+          (
+            contentWidth -
+            gap * 2
+          ) /
+          3;
+
+        const cards =
+          kind === "MANUAL"
+            ? [
+                {
+                  label:
+                    "FECHA DE TRABAJO",
+                  value:
+                    formatDateAr(
+                      workOrderDate
+                    ),
+                },
+                {
+                  label:
+                    "TRAMOS MANUALES",
+                  value:
+                    String(count),
+                },
+                {
+                  label:
+                    "ZONAS PLANIFICADAS",
+                  value:
+                    String(
+                      zoneCount
+                    ),
+                },
+              ]
+            : [
+                {
+                  label:
+                    "FECHA DE TRABAJO",
+                  value:
+                    formatDateAr(
+                      workOrderDate
+                    ),
+                },
+                {
+                  label:
+                    "CORREDORES MECÁNICOS",
+                  value:
+                    String(count),
+                },
+                {
+                  label:
+                    "EQUIPO",
+                  value:
+                    "Barredora",
+                },
+              ];
+
+        cards.forEach(
+          (
+            card,
+            index
+          ) => {
+            const x =
+              marginX +
+              index *
+                (
+                  cardWidth +
+                  gap
+                );
+
+            pdf.setFillColor(
+              248,
+              250,
+              252
+            );
+
+            pdf.setDrawColor(
+              226,
+              232,
+              240
+            );
+
+            pdf.roundedRect(
+              x,
+              y,
+              cardWidth,
+              15,
+              2,
+              2,
+              "FD"
+            );
+
+            pdf.setFont(
+              "helvetica",
+              "normal"
+            );
+
+            pdf.setFontSize(
+              6.8
+            );
+
+            pdf.setTextColor(
+              100,
+              116,
+              139
+            );
+
+            pdf.text(
+              card.label,
+              x + 3,
+              y + 5
+            );
+
+            pdf.setFont(
+              "helvetica",
+              "bold"
+            );
+
+            pdf.setFontSize(
+              9.5
+            );
+
+            pdf.setTextColor(
+              15,
+              23,
+              42
+            );
+
+            pdf.text(
+              pdfSafeText(
+                card.value
+              ),
+              x + 3,
+              y + 11.5
+            );
+          }
+        );
+      };
+
+      const drawMapPage = (
+        kind:
+          | "MANUAL"
+          | "MECANICO",
+        image: string,
+        count: number,
+        zoneCount = 0,
+        areas: SweepingAreaBatch[] = []
+      ) => {
+        const isManual =
+          kind === "MANUAL";
+
+        /*
+         * MAPA PROTAGONISTA:
+         * usamos casi toda la hoja A4 horizontal.
+         * Dejamos únicamente una cabecera institucional muy compacta.
+         */
+        const outerMargin = 2.8;
+        const headerY = 3.8;
+        const headerBottom = 17.5;
+        const hasZoneLegend =
+          isManual &&
+          areas.length > 0;
+        const legendY = 20;
+        const mapY =
+          hasZoneLegend
+            ? 25
+            : 19;
+        const footerHeight = 2.8;
+        const mapWidth =
+          pageWidth -
+          outerMargin * 2;
+        const mapHeight =
+          pageHeight -
+          mapY -
+          footerHeight -
+          2;
+
+        if (logoDataUrl) {
+          pdf.addImage(
+            logoDataUrl,
+            "JPEG",
+            outerMargin,
+            headerY,
+            20,
+            7,
+            undefined,
+            "FAST"
+          );
+        }
+
+        pdf.setFont(
+          "helvetica",
+          "bold"
+        );
+        pdf.setFontSize(15);
+        pdf.setTextColor(
+          15,
+          23,
+          42
+        );
+
+        pdf.text(
+          pdfSafeText(
+            isManual
+              ? "ORDEN DE TRABAJO - BARRIDO MANUAL"
+              : "ORDEN DE TRABAJO - BARRIDO MECANICO"
+          ),
+          logoDataUrl
+            ? 25
+            : outerMargin,
+          8.3
+        );
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+        pdf.setFontSize(8);
+        pdf.setTextColor(
+          71,
+          85,
+          105
+        );
+
+        pdf.text(
+          pdfSafeText(
+            `Fecha: ${formatDateAr(
+              workOrderDate
+            )}`
+          ),
+          logoDataUrl
+            ? 25
+            : outerMargin,
+          11.4
+        );
+
+        pdf.text(
+          pdfSafeText(
+            isManual
+              ? `${count} tramos manuales - ${zoneCount} ${
+                  zoneCount === 1
+                    ? "zona planificada"
+                    : "zonas planificadas"
+                }`
+              : `${count} corredores mecanicos - Equipo: Barredora`
+          ),
+          logoDataUrl
+            ? 25
+            : outerMargin,
+          14.7
+        );
+
+        /*
+         * Referencia mínima en la derecha, sin robar altura al mapa.
+         */
+        pdf.setFont(
+          "helvetica",
+          "bold"
+        );
+        pdf.setFontSize(9);
+
+        if (isManual) {
+          pdf.setTextColor(
+            37,
+            99,
+            235
+          );
+          pdf.text(
+            "AZUL = CALLES A BARRER",
+            pageWidth -
+              outerMargin,
+            8.3,
+            {
+              align: "right",
+            }
+          );
+        } else {
+          /*
+           * La referencia mecánica va en la línea superior,
+           * separada del texto institucional que se imprime abajo.
+           */
+          pdf.setFontSize(8.4);
+          pdf.setTextColor(
+            234,
+            88,
+            12
+          );
+          pdf.text(
+            "NARANJA = RECORRIDO BARREDORA",
+            pageWidth -
+              outerMargin,
+            8.3,
+            {
+              align: "right",
+            }
+          );
+        }
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+        pdf.setFontSize(7.2);
+        pdf.setTextColor(
+          100,
+          116,
+          139
+        );
+
+        pdf.text(
+          pdfSafeText(
+            "Sistema Integral SAySSPP - Secretaria de Ambiente y Servicios Publicos"
+          ),
+          pageWidth -
+            outerMargin,
+          11.4,
+          {
+            align: "right",
+          }
+        );
+
+        pdf.setDrawColor(
+          203,
+          213,
+          225
+        );
+
+        pdf.line(
+          outerMargin,
+          headerBottom,
+          pageWidth -
+            outerMargin,
+          headerBottom
+        );
+
+        if (hasZoneLegend) {
+          let cursorX =
+            outerMargin;
+
+          pdf.setFont(
+            "helvetica",
+            "bold"
+          );
+          pdf.setFontSize(7.5);
+
+          for (
+            const area of areas
+          ) {
+            const color =
+              normalizeAreaColor(
+                area.color
+              );
+
+            const label =
+              pdfSafeText(
+                area.observations?.trim() ||
+                  "Zona planificada"
+              );
+
+            const rgb =
+              hexToRgb(color) ?? {
+                r: 37,
+                g: 99,
+                b: 235,
+              };
+
+            const textWidth =
+              pdf.getTextWidth(
+                label
+              );
+
+            const itemWidth =
+              5.5 +
+              textWidth +
+              4;
+
+            if (
+              cursorX +
+                itemWidth >
+              pageWidth -
+                outerMargin
+            ) {
+              break;
+            }
+
+            pdf.setFillColor(
+              rgb.r,
+              rgb.g,
+              rgb.b
+            );
+
+            pdf.circle(
+              cursorX + 1.8,
+              legendY - 0.7,
+              1.4,
+              "F"
+            );
+
+            pdf.setTextColor(
+              51,
+              65,
+              85
+            );
+
+            pdf.text(
+              label,
+              cursorX + 4.2,
+              legendY
+            );
+
+            cursorX +=
+              itemWidth;
+          }
+        }
+
+        /*
+         * El mapa ocupa prácticamente TODO el ancho y alto útil.
+         */
+        pdf.setDrawColor(
+          148,
+          163,
+          184
+        );
+        pdf.setLineWidth(0.35);
+
+        pdf.roundedRect(
+          outerMargin,
+          mapY,
+          mapWidth,
+          mapHeight,
+          1.5,
+          1.5,
+          "S"
+        );
+
+        pdf.addImage(
+          image,
+          "JPEG",
+          outerMargin + 0.7,
+          mapY + 0.7,
+          mapWidth - 1.4,
+          mapHeight - 1.4,
+          undefined,
+          "FAST"
+        );
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(
+          100,
+          116,
+          139
+        );
+
+        pdf.text(
+          "OpenStreetMap - Mapa de trabajo",
+          outerMargin,
+          pageHeight - 2.5
+        );
+      };
+
+      const areaByBatch =
+        new Map<
+          string,
+          SweepingAreaBatch
+        >(
+          manualAreas.map(
+            (batch) => [
+              batch.batch_id,
+              batch,
+            ]
+          )
+        );
+
+      const manualGroups =
+        new Map<
+          string,
+          MapRoute[]
+        >();
+
+      for (
+        const route of
+        manualRoutes
+      ) {
+        const key =
+          route.batch_id ||
+          `route-${route.id}`;
+
+        const current =
+          manualGroups.get(key) ||
+          [];
+
+        current.push(route);
+
+        manualGroups.set(
+          key,
+          current
+        );
+      }
+
+      const addManualDetailPages =
+        () => {
+          if (
+            manualRoutes.length ===
+            0
+          ) {
+            return;
+          }
+
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          addHeader(
+            "Detalle de trabajo - Barrido manual",
+            `Planificación del ${formatDateAr(
+              workOrderDate
+            )}`
+          );
+
+          let x = marginX;
+          let y = 31;
+          const columnGap = 8;
+          const columnWidth =
+            (
+              contentWidth -
+              columnGap
+            ) /
+            2;
+
+          const moveColumnOrPage =
+            () => {
+              if (
+                x === marginX
+              ) {
+                x =
+                  marginX +
+                  columnWidth +
+                  columnGap;
+                y = 31;
+                return;
+              }
+
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+
+              addHeader(
+                "Detalle de trabajo - Barrido manual",
+                `Planificación del ${formatDateAr(
+                  workOrderDate
+                )}`
+              );
+
+              x = marginX;
+              y = 31;
+            };
+
+          const ensureManualSpace =
+            (
+              needed: number
+            ) => {
+              if (
+                y + needed >
+                pageHeight - 46
+              ) {
+                moveColumnOrPage();
+              }
+            };
+
+          let groupIndex = 1;
+
+          for (
+            const [
+              groupKey,
+              groupRoutes,
+            ] of manualGroups
+          ) {
+            const area =
+              areaByBatch.get(
+                groupKey
+              );
+
+            const title =
+              pdfSafeText(
+                area?.observations ||
+                  groupRoutes[0]
+                    ?.observations ||
+                  (
+                    groupRoutes[0]
+                      ?.batch_id
+                      ? `Zona ${groupIndex}`
+                      : `Tramo manual ${groupIndex}`
+                  )
+              );
+
+            const streetNames =
+              Array.from(
+                new Set(
+                  groupRoutes
+                    .map(
+                      (route) =>
+                        cleanStreet(
+                          route.main_street
+                        )
+                    )
+                    .filter(
+                      Boolean
+                    )
+                )
+              ).sort(
+                (
+                  a,
+                  b
+                ) =>
+                  a.localeCompare(
+                    b,
+                    "es",
+                    {
+                      numeric: true,
+                    }
+                  )
+              );
+
+            const drawGroupHeader =
+              (
+                continued =
+                  false
+              ) => {
+                ensureManualSpace(
+                  15
+                );
+
+                pdf.setFillColor(
+                  239,
+                  246,
+                  255
+                );
+
+                pdf.setDrawColor(
+                  191,
+                  219,
+                  254
+                );
+
+                pdf.roundedRect(
+                  x,
+                  y,
+                  columnWidth,
+                  13,
+                  2,
+                  2,
+                  "FD"
+                );
+
+                pdf.setFont(
+                  "helvetica",
+                  "bold"
+                );
+
+                pdf.setFontSize(
+                  9
+                );
+
+                pdf.setTextColor(
+                  37,
+                  99,
+                  235
+                );
+
+                const headerText =
+                  `${groupIndex}. ${title}${
+                    continued
+                      ? " (continuación)"
+                      : ""
+                  }`;
+
+                const headerLines =
+                  pdf.splitTextToSize(
+                    headerText,
+                    columnWidth - 8
+                  ) as string[];
+
+                pdf.text(
+                  headerLines.slice(
+                    0,
+                    2
+                  ),
+                  x + 4,
+                  y + 5
+                );
+
+                pdf.setFont(
+                  "helvetica",
+                  "normal"
+                );
+
+                pdf.setFontSize(
+                  7.2
+                );
+
+                pdf.setTextColor(
+                  71,
+                  85,
+                  105
+                );
+
+                pdf.text(
+                  `${groupRoutes.length} tramos - ${streetNames.length} calles`,
+                  x + 4,
+                  y + 10.5
+                );
+
+                y += 17;
+              };
+
+            drawGroupHeader();
+
+            pdf.setFont(
+              "helvetica",
+              "normal"
+            );
+
+            pdf.setFontSize(
+              8
+            );
+
+            pdf.setTextColor(
+              15,
+              23,
+              42
+            );
+
+            for (
+              const street of
+              streetNames
+            ) {
+              const lines =
+                pdf.splitTextToSize(
+                  `- ${street}`,
+                  columnWidth - 8
+                ) as string[];
+
+              const needed =
+                Math.max(
+                  4,
+                  lines.length *
+                    4
+                );
+
+              if (
+                y + needed >
+                pageHeight - 16
+              ) {
+                moveColumnOrPage();
+                drawGroupHeader(
+                  true
+                );
+
+                pdf.setFont(
+                  "helvetica",
+                  "normal"
+                );
+
+                pdf.setFontSize(
+                  8
+                );
+
+                pdf.setTextColor(
+                  15,
+                  23,
+                  42
+                );
+              }
+
+              lines.forEach(
+                (line) => {
+                  pdf.text(
+                    line,
+                    x + 4,
+                    y
+                  );
+
+                  y += 4;
+                }
+              );
+            }
+
+            y += 5;
+            groupIndex += 1;
+          }
+        };
+
+      const addMechanicalDetailPages =
+        () => {
+          if (
+            mechanicalRoutes.length ===
+            0
+          ) {
+            return;
+          }
+
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          addHeader(
+            "Detalle de trabajo - Barrido mecánico",
+            `Planificación del ${formatDateAr(
+              workOrderDate
+            )} - Barredora`
+          );
+
+          let x = marginX;
+          let y = 31;
+          const gap = 8;
+          const columnWidth =
+            (
+              contentWidth -
+              gap
+            ) /
+            2;
+
+          const nextColumnOrPage =
+            () => {
+              if (
+                x === marginX
+              ) {
+                x =
+                  marginX +
+                  columnWidth +
+                  gap;
+                y = 31;
+                return;
+              }
+
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+
+              addHeader(
+                "Detalle de trabajo - Barrido mecánico",
+                `Planificación del ${formatDateAr(
+                  workOrderDate
+                )} - Barredora`
+              );
+
+              x = marginX;
+              y = 31;
+            };
+
+          mechanicalRoutes.forEach(
+            (
+              route,
+              index
+            ) => {
+              const mainStreet =
+                cleanStreet(
+                  route.main_street
+                );
+
+              const from =
+                cleanEndpoint(
+                  route.from_street
+                );
+
+              const to =
+                cleanEndpoint(
+                  route.to_street
+                );
+
+              const observation =
+                pdfSafeText(
+                  route.observations
+                );
+
+              const titleLines =
+                pdf.splitTextToSize(
+                  `${index + 1}. ${mainStreet}`,
+                  columnWidth - 8
+                ) as string[];
+
+              const endpointLines =
+                pdf.splitTextToSize(
+                  `Desde: ${from || "-"}    Hasta: ${to || "-"}`,
+                  columnWidth - 10
+                ) as string[];
+
+              const observationLines =
+                observation
+                  ? (
+                      pdf.splitTextToSize(
+                        `Observación: ${observation}`,
+                        columnWidth - 10
+                      ) as string[]
+                    )
+                  : [];
+
+              const boxHeight =
+                12 +
+                titleLines.length *
+                  4.2 +
+                endpointLines.length *
+                  4 +
+                observationLines.length *
+                  4 +
+                4;
+
+              if (
+                y + boxHeight >
+                pageHeight - 46
+              ) {
+                nextColumnOrPage();
+              }
+
+              pdf.setFillColor(
+                255,
+                251,
+                235
+              );
+
+              pdf.setDrawColor(
+                253,
+                186,
+                116
+              );
+
+              pdf.roundedRect(
+                x,
+                y,
+                columnWidth,
+                boxHeight,
+                2,
+                2,
+                "FD"
+              );
+
+              let localY =
+                y + 6;
+
+              pdf.setFont(
+                "helvetica",
+                "bold"
+              );
+
+              pdf.setFontSize(
+                9.5
+              );
+
+              pdf.setTextColor(
+                194,
+                65,
+                12
+              );
+
+              titleLines.forEach(
+                (line) => {
+                  pdf.text(
+                    line,
+                    x + 4,
+                    localY
+                  );
+
+                  localY += 4.2;
+                }
+              );
+
+              pdf.setFont(
+                "helvetica",
+                "normal"
+              );
+
+              pdf.setFontSize(
+                8
+              );
+
+              pdf.setTextColor(
+                15,
+                23,
+                42
+              );
+
+              endpointLines.forEach(
+                (line) => {
+                  pdf.text(
+                    line,
+                    x + 6,
+                    localY
+                  );
+
+                  localY += 4;
+                }
+              );
+
+              if (
+                observationLines.length >
+                0
+              ) {
+                pdf.setTextColor(
+                  71,
+                  85,
+                  105
+                );
+
+                observationLines.forEach(
+                  (line) => {
+                    pdf.text(
+                      line,
+                      x + 6,
+                      localY
+                    );
+
+                    localY += 4;
+                  }
+                );
+              }
+
+              y +=
+                boxHeight +
+                5;
+            }
+          );
+        };
+
+      let hasPage = false;
+
+      if (
+        manualRoutes.length >
+          0 &&
+        manualMapImage
+      ) {
+        drawMapPage(
+          "MANUAL",
+          manualMapImage,
+          manualRoutes.length,
+          manualAreas.length,
+          manualAreas
+        );
+
+        hasPage = true;
+      }
+
+      if (
+        mechanicalRoutes.length >
+          0 &&
+        mechanicalMapImage
+      ) {
+        if (hasPage) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+        }
+
+        drawMapPage(
+          "MECANICO",
+          mechanicalMapImage,
+          mechanicalRoutes.length
+        );
+
+        hasPage = true;
+      }
+
+      if (
+        !hasPage
+      ) {
+        throw new Error(
+          "No se pudo preparar ningún mapa para la orden de trabajo."
+        );
+      }
+
+      addManualDetailPages();
+      addMechanicalDetailPages();
+
+      if (
+        unknownRoutes.length >
+        0
+      ) {
+        pdf.addPage(
+          "a4",
+          "landscape"
+        );
+
+        addHeader(
+          "Otros tramos planificados",
+          `Planificación del ${formatDateAr(
+            workOrderDate
+          )}`
+        );
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+
+        pdf.setFontSize(9);
+        pdf.setTextColor(
+          15,
+          23,
+          42
+        );
+
+        let y = 34;
+
+        unknownRoutes.forEach(
+          (
+            route,
+            index
+          ) => {
+            const line =
+              `${index + 1}. ${cleanStreet(
+                route.main_street
+              )} - ${cleanEndpoint(
+                route.from_street
+              )} a ${cleanEndpoint(
+                route.to_street
+              )}`;
+
+            const lines =
+              pdf.splitTextToSize(
+                line,
+                contentWidth
+              ) as string[];
+
+            if (
+              y +
+                lines.length *
+                  4.5 >
+              pageHeight - 46
+            ) {
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+
+              addHeader(
+                "Otros tramos planificados",
+                `Planificación del ${formatDateAr(
+                  workOrderDate
+                )}`
+              );
+
+              y = 34;
+            }
+
+            lines.forEach(
+              (item) => {
+                pdf.text(
+                  item,
+                  marginX,
+                  y
+                );
+
+                y += 4.5;
+              }
+            );
+
+            y += 2;
+          }
+        );
+      }
+
+      /*
+       * ==========================================================
+       * FIRMA DEL CAPATAZ
+       * ==========================================================
+       *
+       * Se imprime una sola vez, al pie de la última página,
+       * dejando espacio suficiente durante la generación de los
+       * detalles para que nunca se superponga con el contenido.
+       */
+      const lastContentPage =
+        pdf.getNumberOfPages();
+
+      pdf.setPage(
+        lastContentPage
+      );
+
+      const signatureTop =
+        pageHeight - 39;
+
+      pdf.setDrawColor(
+        203,
+        213,
+        225
+      );
+
+      pdf.setFillColor(
+        248,
+        250,
+        252
+      );
+
+      pdf.roundedRect(
+        marginX,
+        signatureTop,
+        contentWidth,
+        25,
+        2,
+        2,
+        "FD"
+      );
+
+      pdf.setFont(
+        "helvetica",
+        "bold"
+      );
+
+      pdf.setFontSize(8.5);
+
+      pdf.setTextColor(
+        51,
+        65,
+        85
+      );
+
+      pdf.text(
+        "CAPATAZ RESPONSABLE",
+        marginX + 4,
+        signatureTop + 6
+      );
+
+      pdf.setFont(
+        "helvetica",
+        "normal"
+      );
+
+      pdf.setFontSize(8);
+
+      pdf.setTextColor(
+        71,
+        85,
+        105
+      );
+
+      const signatureLineY =
+        signatureTop + 15;
+
+      const firstColumnX =
+        marginX + 4;
+
+      const secondColumnX =
+        marginX +
+        contentWidth * 0.52;
+
+      pdf.text(
+        "Firma:",
+        firstColumnX,
+        signatureLineY
+      );
+
+      pdf.line(
+        firstColumnX + 13,
+        signatureLineY + 0.5,
+        firstColumnX + 76,
+        signatureLineY + 0.5
+      );
+
+      pdf.text(
+        "Aclaración:",
+        secondColumnX,
+        signatureLineY
+      );
+
+      pdf.line(
+        secondColumnX + 20,
+        signatureLineY + 0.5,
+        pageWidth -
+          marginX -
+          4,
+        signatureLineY + 0.5
+      );
+
+      pdf.text(
+        "Fecha:",
+        firstColumnX,
+        signatureTop + 22
+      );
+
+      pdf.text(
+        "____ / ____ / ______",
+        firstColumnX + 13,
+        signatureTop + 22
+      );
+
+      const totalPages =
+        pdf.getNumberOfPages();
+
+      for (
+        let page = 1;
+        page <= totalPages;
+        page += 1
+      ) {
+        pdf.setPage(page);
+
+        pdf.setDrawColor(
+          226,
+          232,
+          240
+        );
+
+        pdf.line(
+          marginX,
+          pageHeight - 11,
+          pageWidth -
+            marginX,
+          pageHeight - 11
+        );
+
+        pdf.setFont(
+          "helvetica",
+          "normal"
+        );
+
+        pdf.setFontSize(7);
+        pdf.setTextColor(
+          100,
+          116,
+          139
+        );
+
+        pdf.text(
+          "Sistema Integral SAySSPP - Orden de trabajo de barrido",
+          marginX,
+          pageHeight - 6
+        );
+
+        pdf.text(
+          `Página ${page} de ${totalPages}`,
+          pageWidth -
+            marginX,
+          pageHeight - 6,
+          {
+            align:
+              "right",
+          }
+        );
+      }
+
+      const fileType =
+        workOrderType === "ALL"
+          ? "completa"
+          : workOrderType.toLowerCase();
+
+      pdf.save(
+        `orden-trabajo-barrido-${workOrderDate}-${fileType}.pdf`
+      );
+
+      setSuccess(
+        "La orden de trabajo fue generada correctamente."
+      );
+    } catch (err) {
+      console.error(
+        "Error generando orden de trabajo PDF:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo generar el PDF de la orden de trabajo."
+      );
+    } finally {
+      setWorkOrderGenerating(
+        false
+      );
+    }
+  }
 
   /*
    * ==========================================================
@@ -4698,6 +7975,13 @@ export default function TestSweepingMap({
     setConfirmDialog,
   ] = useState<
     ConfirmDialogConfig | null
+  >(null);
+
+  const [
+    notCompletedDialog,
+    setNotCompletedDialog,
+  ] = useState<
+    NotCompletedDialogState | null
   >(null);
 
   const confirmResolverRef =
@@ -6002,6 +9286,50 @@ export default function TestSweepingMap({
 
    */
 
+  function validatePlanningPeriod() {
+    if (!planningFrom || !planningTo) {
+      setError(
+        "Seleccioná las fechas Desde y Hasta de la planificación."
+      );
+      return false;
+    }
+
+    const from = dateFromYmd(
+      planningFrom
+    );
+    const to = dateFromYmd(
+      planningTo
+    );
+
+    if (!from || !to) {
+      setError(
+        "El período de planificación no es válido."
+      );
+      return false;
+    }
+
+    if (to.getTime() < from.getTime()) {
+      setError(
+        "La fecha Hasta no puede ser anterior a la fecha Desde."
+      );
+      return false;
+    }
+
+    const diffDays = Math.floor(
+      (to.getTime() - from.getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays > 179) {
+      setError(
+        "El período máximo de planificación es de 180 días."
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   async function saveGeometry(
 
     geometry: GeoJsonLineString,
@@ -6016,9 +9344,22 @@ export default function TestSweepingMap({
 
   ) {
 
-    const workDate =
+    const isPlanned =
+      status === "PLANIFICADO";
 
-      getTodayYmd();
+    if (
+      isPlanned &&
+      !validatePlanningPeriod()
+    ) {
+      throw new Error(
+        "Revisá el período de planificación."
+      );
+    }
+
+    const workDate =
+      isPlanned
+        ? planningFrom
+        : getTodayYmd();
 
     const saveResponse =
 
@@ -6061,6 +9402,16 @@ export default function TestSweepingMap({
               work_date:
 
                 workDate,
+
+              planned_from:
+                isPlanned
+                  ? planningFrom
+                  : null,
+
+              planned_to:
+                isPlanned
+                  ? planningTo
+                  : null,
 
               status,
 
@@ -6700,10 +10051,7 @@ export default function TestSweepingMap({
 
 
   async function saveAreaPlanning() {
-    if (!areaWorkDate) {
-      setError(
-        "Seleccioná la fecha de planificación."
-      );
+    if (!validatePlanningPeriod()) {
       return;
     }
 
@@ -6795,7 +10143,11 @@ export default function TestSweepingMap({
               batch_id:
                 areaBatchId,
               work_date:
-                areaWorkDate,
+                planningFrom,
+              planned_from:
+                planningFrom,
+              planned_to:
+                planningTo,
               observations:
                 areaObservation,
               color:
@@ -6845,7 +10197,11 @@ export default function TestSweepingMap({
             batch_id:
               areaBatchId,
             work_date:
-              areaWorkDate,
+              planningFrom,
+            planned_from:
+              planningFrom,
+            planned_to:
+              planningTo,
             observations:
               areaObservation,
             color:
@@ -7025,10 +10381,7 @@ export default function TestSweepingMap({
       return;
     }
 
-    if (!mechanicalWorkDate) {
-      setError(
-        "Seleccioná la fecha de planificación."
-      );
+    if (!validatePlanningPeriod()) {
       return;
     }
 
@@ -7048,7 +10401,9 @@ export default function TestSweepingMap({
             action: "save",
             start: mechanicalStartPoint,
             end: mechanicalEndPoint,
-            work_date: mechanicalWorkDate,
+            work_date: planningFrom,
+            planned_from: planningFrom,
+            planned_to: planningTo,
             observations:
               observations.trim() || null,
           }),
@@ -7529,6 +10884,10 @@ export default function TestSweepingMap({
   async function markPlannedAsCompleted(
     record: MapRoute
   ) {
+    if (record.result_status === "NO_REALIZADO") {
+      setError("Primero deshacé el resultado NO REALIZADO.");
+      return;
+    }
     if (record.realized_record_id) {
       setSuccess(
         "Este tramo ya está registrado como realizado."
@@ -7688,6 +11047,133 @@ export default function TestSweepingMap({
     }
   }
 
+  function openNotCompletedDialog(record: MapRoute) {
+    if (readOnly || record.realized_record_id) return;
+
+    if (record.result_status === "REALIZADO") {
+      setError("Este tramo tiene una marca histórica REALIZADO. No se modifica automáticamente.");
+      return;
+    }
+
+    setNotCompletedDialog({
+      record,
+      observation: record.result_observation ?? "",
+      error: null,
+    });
+  }
+
+  async function submitNotCompletedDialog() {
+    if (!notCompletedDialog) return;
+
+    const observation = notCompletedDialog.observation.trim();
+
+    if (!observation || observation.length > 500) {
+      setNotCompletedDialog((current) =>
+        current
+          ? {
+              ...current,
+              error: "Ingresá un motivo de entre 1 y 500 caracteres.",
+            }
+          : current
+      );
+      return;
+    }
+
+    const record = notCompletedDialog.record;
+
+    try {
+      setMarkingRealizedId(record.id);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch("/api/test-sweeping/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_not_completed",
+          planned_record_id: record.id,
+          result_observation: observation,
+          result_date: getTodayYmd(),
+        }),
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "No se pudo actualizar el resultado."
+        );
+      }
+
+      setNotCompletedDialog(null);
+      await loadPlannedRecords(
+        plannedAppliedFrom,
+        plannedAppliedTo
+      );
+      setSuccess(
+        "Tramo registrado como NO REALIZADO."
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar el resultado.";
+
+      setNotCompletedDialog((current) =>
+        current
+          ? {
+              ...current,
+              error: message,
+            }
+          : current
+      );
+    } finally {
+      setMarkingRealizedId(null);
+    }
+  }
+
+  async function changeNotCompleted(record: MapRoute, undo = false) {
+    if (readOnly || record.realized_record_id) return;
+
+    if (!undo) {
+      openNotCompletedDialog(record);
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: "Deshacer no realizado",
+      message: `${record.main_street} — ${record.from_street} → ${record.to_street}`,
+      detail: "Se quitará el motivo registrado y el tramo volverá a estar pendiente.",
+      confirmLabel: "Deshacer no realizado",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setMarkingRealizedId(record.id);
+      setError(null);
+      setSuccess(null);
+      const response = await fetch("/api/test-sweeping/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "undo_not_completed",
+          planned_record_id: record.id,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json?.error || "No se pudo actualizar el resultado.");
+      await loadPlannedRecords(plannedAppliedFrom, plannedAppliedTo);
+      setSuccess("El tramo volvió a pendiente.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el resultado.");
+    } finally {
+      setMarkingRealizedId(null);
+    }
+  }
+
   async function markBatchAsCompleted(
     batchId: string,
     records: MapRoute[]
@@ -7695,7 +11181,7 @@ export default function TestSweepingMap({
     const pendingRecords =
       records.filter(
         (record) =>
-          !record.realized_record_id
+          !record.realized_record_id && record.result_status !== "NO_REALIZADO"
       );
 
     if (pendingRecords.length === 0) {
@@ -7844,7 +11330,7 @@ export default function TestSweepingMap({
     const pendingRecords =
       records.filter(
         (record) =>
-          !record.realized_record_id
+          !record.realized_record_id && record.result_status !== "NO_REALIZADO"
       );
 
     const realizedCount =
@@ -8015,7 +11501,7 @@ export default function TestSweepingMap({
     const pendingRecords =
       plannedRoutes.filter(
         (record) =>
-          !record.realized_record_id
+          !record.realized_record_id && record.result_status !== "NO_REALIZADO"
       );
 
     if (
@@ -8583,7 +12069,8 @@ export default function TestSweepingMap({
                         smoothFactor={2}
                         pathOptions={{
                           color:
-                            record.sweeping_type === "MECANICO"
+                            record.result_status === "NO_REALIZADO"
+                              ? "#dc2626" : record.sweeping_type === "MECANICO"
                               ? "#f97316"
                               : "#2563eb",
                           weight: 3,
@@ -9175,6 +12662,110 @@ export default function TestSweepingMap({
         </div>
       )}
 
+
+      {notCompletedDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[2px]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="not-completed-title"
+            className="w-full max-w-lg overflow-hidden rounded-2xl border bg-background shadow-2xl"
+          >
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">
+                    Barrido no realizado
+                  </p>
+                  <h3 id="not-completed-title" className="mt-1 text-base font-semibold">
+                    Registrar motivo
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setNotCompletedDialog(null)}
+                  className="rounded-lg border bg-background px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50/70 p-3 dark:border-red-900 dark:bg-red-950/30">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                  {notCompletedDialog.record.main_street}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {notCompletedDialog.record.from_street} → {notCompletedDialog.record.to_street}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Fecha planificada: {formatDateAr(notCompletedDialog.record.work_date)}
+                </p>
+              </div>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="not-completed-observation"
+                  className="text-sm font-medium"
+                >
+                  Motivo / observación
+                </label>
+
+                <textarea
+                  id="not-completed-observation"
+                  value={notCompletedDialog.observation}
+                  onChange={(event) =>
+                    setNotCompletedDialog((current) =>
+                      current
+                        ? {
+                            ...current,
+                            observation: event.target.value.slice(0, 500),
+                            error: null,
+                          }
+                        : current
+                    )
+                  }
+                  rows={4}
+                  maxLength={500}
+                  className="mt-2 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  placeholder="Ej.: No se pudo realizar por vehículos estacionados."
+                />
+
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>La observación es obligatoria.</span>
+                  <span>{notCompletedDialog.observation.trim().length}/500</span>
+                </div>
+
+                {notCompletedDialog.error && (
+                  <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-300">
+                    {notCompletedDialog.error}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t bg-muted/20 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setNotCompletedDialog(null)}
+                className="rounded-lg border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void submitNotCompletedDialog()}
+                disabled={markingRealizedId !== null}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {markingRealizedId === notCompletedDialog.record.id ? "Guardando..." : "Guardar como no realizado"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =====================================================
           PANTALLA DE CARGA
       ===================================================== */}
@@ -9435,6 +13026,67 @@ export default function TestSweepingMap({
           </p>
 
         </div>
+
+        {recordStatus === "PLANIFICADO" && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                  Período de planificación
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este período se aplicará a cualquier modalidad: por calles, dibujo manual, zona o corredor mecánico. Si es para un solo día, usá la misma fecha en Desde y Hasta.
+                </p>
+              </div>
+
+              <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto lg:min-w-[420px]">
+                <label className="text-xs font-medium">
+                  Desde
+                  <input
+                    type="date"
+                    value={planningFrom}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setPlanningFrom(next);
+
+                      if (
+                        planningTo &&
+                        next &&
+                        planningTo < next
+                      ) {
+                        setPlanningTo(next);
+                      }
+                    }}
+                    className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </label>
+
+                <label className="text-xs font-medium">
+                  Hasta
+                  <input
+                    type="date"
+                    value={planningTo}
+                    min={planningFrom || undefined}
+                    onChange={(event) =>
+                      setPlanningTo(
+                        event.target.value
+                      )
+                    }
+                    className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-2 rounded-md border border-blue-100 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground dark:border-blue-900">
+              {planningFrom && planningTo
+                ? planningFrom === planningTo
+                  ? `Planificado para el ${formatDateAr(planningFrom)}.`
+                  : `Planificado del ${formatDateAr(planningFrom)} al ${formatDateAr(planningTo)}.`
+                : "Completá ambas fechas antes de guardar la planificación."}
+            </div>
+          </div>
+        )}
 
         {/* ===================================================
 
@@ -10108,15 +13760,7 @@ export default function TestSweepingMap({
                     </div>
                   </div>
 
-                  <label className="min-w-[190px] text-xs font-medium">
-                    Fecha de planificación
-                    <input
-                      type="date"
-                      value={areaWorkDate}
-                      onChange={(event) => setAreaWorkDate(event.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-xs"
-                    />
-                  </label>
+
                 </div>
 
                 <div className="mt-3 max-h-[300px] overflow-y-auto rounded-md border bg-background">
@@ -10290,20 +13934,6 @@ export default function TestSweepingMap({
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-end justify-end gap-2">
-                    <label className="min-w-[190px] text-xs font-medium">
-                      Fecha de planificación
-                      <input
-                        type="date"
-                        value={mechanicalWorkDate}
-                        onChange={(event) =>
-                          setMechanicalWorkDate(
-                            event.target.value
-                          )
-                        }
-                        className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-xs"
-                      />
-                    </label>
-
                     <button
                       type="button"
                       onClick={() =>
@@ -10328,7 +13958,18 @@ export default function TestSweepingMap({
 
       )}
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={openWorkOrderDialog}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 dark:border-emerald-800"
+        >
+          <span aria-hidden="true">
+            📄
+          </span>
+          Generar orden de trabajo
+        </button>
+
         <button
           type="button"
           onClick={() =>
@@ -10345,6 +13986,628 @@ export default function TestSweepingMap({
           Centro de monitoreo
         </button>
       </div>
+
+      {workOrderOpen && (
+        <div className="fixed inset-0 z-[19000] flex items-center justify-center bg-black/55 p-3 backdrop-blur-[1px]">
+          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold">
+                  Orden de trabajo de barrido
+                </h2>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Elegí la fecha y el tipo de barrido. El PDF incluye únicamente la planificación correspondiente a ese día.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setWorkOrderOpen(false)
+                }
+                className="rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:bg-muted"
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[220px_1fr] md:items-end">
+                <label className="text-xs font-semibold">
+                  Fecha de trabajo
+                  <input
+                    type="date"
+                    value={workOrderDate}
+                    onChange={(event) =>
+                      setWorkOrderDate(
+                        event.target.value
+                      )
+                    }
+                    className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </label>
+
+                <div>
+                  <p className="mb-1 text-xs font-semibold">
+                    Tipo de barrido
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      ["ALL", "Todos"],
+                      ["MANUAL", "👥 Manual"],
+                      ["MECANICO", "🚛 Mecánico"],
+                    ] as const).map(
+                      ([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            setWorkOrderType(
+                              value
+                            )
+                          }
+                          className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${
+                            workOrderType === value
+                              ? value === "MECANICO"
+                                ? "border-orange-500 bg-orange-500 text-white"
+                                : value === "MANUAL"
+                                  ? "border-blue-600 bg-blue-600 text-white"
+                                  : "border-slate-700 bg-slate-800 text-white"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  {workOrderLoading ? (
+                    <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                      Cargando planificación del día...
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      La vista previa se actualiza automáticamente al cambiar la fecha. Manual / Mecánico filtra al instante.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Mostrados
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {workOrderType === "MECANICO"
+                      ? filteredWorkOrderRoutes.length
+                      : workOrderType === "MANUAL"
+                        ? selectedWorkOrderManualRoutes.length
+                        : selectedWorkOrderManualRoutes.length +
+                          workOrderMechanicalCount}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+                  <p className="text-[10px] uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                    Manual del día
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-300">
+                    {workOrderManualCount}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-3 dark:border-orange-900 dark:bg-orange-950/20">
+                  <p className="text-[10px] uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                    Mecánico del día
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-300">
+                    {workOrderMechanicalCount}
+                  </p>
+                </div>
+              </div>
+
+              {workOrderType !== "MECANICO" &&
+                workOrderAreaBatches.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                          Zonas a incluir en el PDF
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Desmarcá las zonas que no querés imprimir. El preview, el mapa y el detalle respetan esta selección.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedWorkOrderBatchIds(
+                              new Set(
+                                workOrderAreaBatches.map(
+                                  (batch) => batch.batch_id
+                                )
+                              )
+                            );
+                            setWorkOrderManualView(null);
+                            setWorkOrderFitToken(
+                              (value) => value + 1
+                            );
+                          }}
+                          className="rounded-md border bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 dark:bg-slate-950 dark:text-slate-200"
+                        >
+                          Seleccionar todas
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedWorkOrderBatchIds(
+                              new Set()
+                            );
+                            setWorkOrderManualView(null);
+                            setWorkOrderFitToken(
+                              (value) => value + 1
+                            );
+                          }}
+                          className="rounded-md border bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 dark:bg-slate-950 dark:text-slate-200"
+                        >
+                          Desmarcar todas
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {workOrderAreaBatches.map(
+                        (batch) => {
+                          const selected =
+                            selectedWorkOrderBatchIds.has(
+                              batch.batch_id
+                            );
+                          const color =
+                            normalizeAreaColor(
+                              batch.color
+                            );
+                          const label =
+                            batch.observations?.trim() ||
+                            "Zona planificada";
+
+                          return (
+                            <label
+                              key={`work-order-zone-selector-${batch.batch_id}`}
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                selected
+                                  ? "border-blue-400 bg-white shadow-sm dark:bg-slate-950"
+                                  : "border-slate-200 bg-slate-100/70 text-slate-500 dark:border-slate-800 dark:bg-slate-900/60"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => {
+                                  setSelectedWorkOrderBatchIds(
+                                    (current) => {
+                                      const next =
+                                        new Set(current);
+
+                                      if (
+                                        next.has(
+                                          batch.batch_id
+                                        )
+                                      ) {
+                                        next.delete(
+                                          batch.batch_id
+                                        );
+                                      } else {
+                                        next.add(
+                                          batch.batch_id
+                                        );
+                                      }
+
+                                      return next;
+                                    }
+                                  );
+
+                                  setWorkOrderManualView(null);
+                                  setWorkOrderFitToken(
+                                    (value) => value + 1
+                                  );
+                                }}
+                                className="h-4 w-4"
+                              />
+
+                              <span
+                                className="h-3 w-3 rounded-full border border-white shadow-sm"
+                                style={{
+                                  backgroundColor: color,
+                                }}
+                              />
+
+                              <span>{label}</span>
+                            </label>
+                          );
+                        }
+                      )}
+                    </div>
+
+                    <p className="mt-3 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                      {selectedWorkOrderBatchIds.size} de {workOrderAreaBatches.length} zonas seleccionadas
+                    </p>
+                  </div>
+                )}
+
+              <div className="mt-4 overflow-hidden rounded-xl border bg-white">
+                <div className="border-b bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Vista del PDF
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Mové el mapa y usá + / - hasta dejarlo exactamente como querés que salga exportado.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                        Zoom{" "}
+                        {workOrderPreviewView
+                          ? workOrderPreviewView.zoom.toFixed(0)
+                          : "-"}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setWorkOrderFitToken(
+                            (value) =>
+                              value + 1
+                          )
+                        }
+                        disabled={
+                          workOrderPreviewRoutes.length === 0
+                        }
+                        className="rounded-md border bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        ⛶ Ajustar al trabajo
+                      </button>
+
+                      <span className="rounded-full border bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                        {formatDateAr(workOrderDate)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {workOrderType === "ALL" &&
+                    workOrderManualCount > 0 &&
+                    workOrderMechanicalCount > 0 && (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWorkOrderPreviewKind(
+                              "MANUAL"
+                            )
+                          }
+                          className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold transition ${
+                            workOrderPreviewKind === "MANUAL"
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "bg-white text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          👥 Vista Manual
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWorkOrderPreviewKind(
+                              "MECANICO"
+                            )
+                          }
+                          className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold transition ${
+                            workOrderPreviewKind === "MECANICO"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "bg-white text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          🚛 Vista Mecánico
+                        </button>
+                      </div>
+                    )}
+
+                  {workOrderPreviewKind === "MANUAL" &&
+                    workOrderPreviewAreas.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          Zonas mostradas
+                        </span>
+
+                        {workOrderPreviewAreas.map(
+                          (batch) => {
+                            const color =
+                              normalizeAreaColor(
+                                batch.color
+                              );
+
+                            const label =
+                              batch.observations?.trim() ||
+                              "Zona planificada";
+
+                            return (
+                              <div
+                                key={`work-order-preview-legend-${batch.batch_id}`}
+                                className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"
+                              >
+                                <span
+                                  className="h-3 w-3 rounded-full border border-white shadow-sm"
+                                  style={{
+                                    backgroundColor:
+                                      color,
+                                  }}
+                                />
+                                <span>
+                                  {label}
+                                </span>
+                              </div>
+                            );
+                          }
+                        )}
+                      </div>
+                    )}
+                </div>
+
+                <div
+                  ref={workOrderMapRef}
+                  className="relative w-full bg-white"
+                  style={{
+                    aspectRatio: "5 / 3",
+                  }}
+                >
+                  {workOrderLoading && (
+                    <div className="absolute inset-0 z-[1500] flex items-center justify-center bg-white/80 backdrop-blur-[1px]">
+                      <div className="flex items-center gap-2 rounded-lg border bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                        Cargando mapa del día...
+                      </div>
+                    </div>
+                  )}
+
+                  <MapContainer
+                    center={GENERAL_PICO_CENTER}
+                    zoom={13}
+                    scrollWheelZoom
+                    preferCanvas
+                    className="h-full w-full"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      crossOrigin="anonymous"
+                    />
+
+                    {workOrderPreviewAreas.flatMap(
+                      (batch) => {
+                        const positions =
+                          areaPolygonToLeaflet(
+                            batch.geometry
+                          );
+
+                        if (positions.length < 3) {
+                          return [];
+                        }
+
+                        const color =
+                          normalizeAreaColor(
+                            batch.color
+                          );
+
+                        return [
+                          <Polygon
+                            key={`work-order-area-${batch.batch_id}`}
+                            positions={positions}
+                            interactive={false}
+                            pathOptions={{
+                              color,
+                              weight: 4,
+                              opacity: 0.95,
+                              fillColor: color,
+                              fillOpacity: 0.22,
+                            }}
+                          />,
+                        ];
+                      }
+                    )}
+
+                    {workOrderPreviewRoutes.map(
+                      (record) => (
+                        <Polyline
+                          key={`work-order-route-${record.id}`}
+                          positions={record.positions}
+                          interactive={false}
+                          pathOptions={{
+                            color:
+                              record.sweeping_type === "MECANICO"
+                                ? "#f97316"
+                                : "#2563eb",
+                            weight:
+                              record.sweeping_type === "MECANICO"
+                                ? 6
+                                : 4,
+                            opacity: 0.95,
+                            dashArray:
+                              record.sweeping_type === "MECANICO"
+                                ? "14 9"
+                                : undefined,
+                            lineCap: "round",
+                            lineJoin: "round",
+                          }}
+                        />
+                      )
+                    )}
+
+                    <WorkOrderPreviewController
+                      routes={workOrderPreviewRoutes}
+                      savedView={workOrderPreviewView}
+                      fitToken={workOrderFitToken}
+                      viewKey={`${workOrderDate}-${workOrderPreviewKind}`}
+                      onViewChange={(view) => {
+                        if (
+                          workOrderPreviewKind ===
+                          "MANUAL"
+                        ) {
+                          setWorkOrderManualView(
+                            view
+                          );
+                        } else {
+                          setWorkOrderMechanicalView(
+                            view
+                          );
+                        }
+                      }}
+                    />
+                  </MapContainer>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-slate-50 px-4 py-2.5">
+                  <p className="text-[11px] text-slate-600">
+                    La posición, el zoom y el encuadre exacto que dejás acá se usan en el PDF.
+                  </p>
+
+                  <p className="text-[11px] font-semibold text-slate-700">
+                    {workOrderPreviewKind === "MANUAL"
+                      ? "👥 Vista manual guardada"
+                      : "🚛 Vista mecánica guardada"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold">
+                      Tareas incluidas
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Este listado será incorporado a la orden de trabajo.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold">
+                    {filteredWorkOrderRoutes.length}{" "}
+                    {filteredWorkOrderRoutes.length === 1
+                      ? "tramo"
+                      : "tramos"}
+                  </span>
+                </div>
+
+                {filteredWorkOrderRoutes.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    {workOrderType === "MECANICO"
+                      ? "No hay barridos mecánicos planificados para esta fecha."
+                      : workOrderType === "MANUAL"
+                        ? "No hay barridos manuales planificados para esta fecha."
+                        : "No hay barridos planificados para esta fecha."}
+                  </div>
+                ) : (
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {filteredWorkOrderRoutes.map(
+                      (record, index) => (
+                        <div
+                          key={`work-order-list-${record.id}`}
+                          className={`rounded-lg border px-3 py-2 ${
+                            record.sweeping_type === "MECANICO"
+                              ? "border-orange-200 bg-orange-50/40 dark:border-orange-900 dark:bg-orange-950/20"
+                              : "border-blue-100 bg-blue-50/30 dark:border-blue-950 dark:bg-blue-950/10"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold">
+                              {index + 1}.{" "}
+                              {record.main_street}
+                            </span>
+
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                                record.sweeping_type === "MECANICO"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {record.sweeping_type === "MECANICO"
+                                ? "🚛 Mecánico"
+                                : "👥 Manual"}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {record.from_street} →{" "}
+                            {record.to_street}
+                          </p>
+
+                          {record.observations?.trim() && (
+                            <p className="mt-1 text-[11px]">
+                              <strong>Observación:</strong>{" "}
+                              {record.observations.trim()}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/20 px-5 py-4">
+              <p className="text-[11px] text-muted-foreground">
+                El PDF se genera con la planificación guardada para la fecha seleccionada.
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setWorkOrderOpen(false)
+                  }
+                  className="rounded-md border bg-background px-4 py-2 text-xs font-semibold transition hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void generateWorkOrderPdf()
+                  }
+                  disabled={
+                    workOrderGenerating ||
+                    workOrderLoading ||
+                    filteredWorkOrderRoutes.length === 0
+                  }
+                  className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {workOrderGenerating
+                    ? "Generando PDF..."
+                    : "📄 Generar PDF"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================
 
@@ -10779,7 +15042,8 @@ export default function TestSweepingMap({
                 pathOptions={{
 
                   color:
-                    record.sweeping_type === "MECANICO"
+                    record.result_status === "NO_REALIZADO"
+                      ? "#dc2626" : record.sweeping_type === "MECANICO"
                       ? "#f97316"
                       : "#2563eb",
 
@@ -10867,7 +15131,8 @@ export default function TestSweepingMap({
 
                     <p className="mt-2 text-sm"><strong>Fecha:</strong> {formatDateAr(record.work_date)}</p>
 
-                    <p className="text-sm"><strong>Estado:</strong> PLANIFICADO</p>
+                    <p className="text-sm"><strong>Estado:</strong> {record.result_status === "NO_REALIZADO" ? "NO REALIZADO" : "PLANIFICADO"}</p>
+                    {record.result_status === "NO_REALIZADO" && <p className="mt-2 text-sm text-red-700"><strong>Motivo:</strong> {record.result_observation}</p>}
 
                     {record.observations && (
 
@@ -10880,7 +15145,7 @@ export default function TestSweepingMap({
 
                     {!readOnly && (
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button
+                        {record.result_status !== "NO_REALIZADO" && <button
                           type="button"
                           onClick={() =>
                             void markPlannedAsCompleted(
@@ -10899,6 +15164,10 @@ export default function TestSweepingMap({
                           record.id
                             ? "Marcando..."
                             : "✓ Marcar como realizado"}
+                        </button>}
+                        <button type="button" onClick={() => void changeNotCompleted(record, record.result_status === "NO_REALIZADO")}
+                          className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700">
+                          {record.result_status === "NO_REALIZADO" ? "Deshacer no realizado" : "✕ No realizado"}
                         </button>
 
                         <button
@@ -10957,6 +15226,27 @@ export default function TestSweepingMap({
 
             </MapContainer>
 
+          </div>
+
+          {/* Referencias exclusivas del mapa de planificación. */}
+          <div className="border-t bg-blue-50/30 px-4 py-3 dark:bg-blue-950/10">
+            <p className="mb-2 text-xs font-semibold text-blue-800 dark:text-blue-300">
+              Referencias · Barridos planificados
+            </p>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-1 w-7 shrink-0 rounded-full bg-blue-600" />
+                <span>Planificado</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-7 shrink-0 border-t-[3px] border-dashed border-orange-500" />
+                <span>Barredora mecánica</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-1 w-7 shrink-0 rounded-full bg-red-600" />
+                <span>No realizado</span>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -11337,6 +15627,28 @@ export default function TestSweepingMap({
             </MapContainer>
 
           </div>
+
+          {weekLegend.length > 0 && (
+            <div className="border-t bg-emerald-50/30 px-4 py-3 dark:bg-emerald-950/10">
+              <p className="mb-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                Referencias por semana · Barridos realizados
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {weekLegend.map((week) => (
+                  <div key={week.index} className="flex items-center gap-2 text-xs">
+                    <span
+                      className="inline-block h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: week.color }}
+                    />
+                    <span className="font-medium">{week.label}</span>
+                    <span className="text-muted-foreground">
+                      {formatDateAr(week.from)} - {formatDateAr(week.to)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </div>
 
@@ -12398,96 +16710,6 @@ export default function TestSweepingMap({
 
       {/* =====================================================
 
-          LEYENDA
-
-      ===================================================== */}
-
-      {weekLegend.length >
-
-        0 && (
-
-        <div className="rounded-xl border bg-background p-4 shadow-sm">
-
-          <p className="mb-3 text-sm font-semibold">
-
-            Referencias por semana
-
-          </p>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-
-            {weekLegend.map(
-
-              (week) => (
-
-                <div
-
-                  key={
-
-                    week.index
-
-                  }
-
-                  className="flex items-center gap-2 text-sm"
-
-                >
-
-                  <span
-
-                    className="inline-block h-3 w-3 rounded-full"
-
-                    style={{
-
-                      backgroundColor:
-
-                        week.color,
-
-                    }}
-
-                  />
-
-                  <span className="font-medium">
-
-                    {
-
-                      week.label
-
-                    }
-
-                  </span>
-
-                  <span className="text-muted-foreground">
-
-                    {formatDateAr(
-
-                      week.from
-
-                    )}{" "}
-
-                    -{" "}
-
-                    {formatDateAr(
-
-                      week.to
-
-                    )}
-
-                  </span>
-
-                </div>
-
-              )
-
-            )}
-
-          </div>
-
-        </div>
-
-      )}
-
-      {/* =====================================================
-
           BARRIDOS MOSTRADOS
 
       ===================================================== */}
@@ -12503,7 +16725,7 @@ export default function TestSweepingMap({
             <p className="mt-1 text-sm text-muted-foreground">
               {loadingPlanned || loadingCompleted
                 ? "Actualizando información..."
-                : `${plannedRoutes.length} planificados · ${completedRoutes.length} realizados`}
+                : `${plannedRoutes.length} planificados · ${completedRoutes.length} realizados · ${plannedRoutes.filter(r => r.result_status === "NO_REALIZADO").length} no realizados`}
             </p>
 
             <p className="mt-1 text-xs text-muted-foreground">
@@ -12571,6 +16793,8 @@ export default function TestSweepingMap({
                   record
                 )
               }
+              onMarkNotCompleted={(record) => void changeNotCompleted(record)}
+              onUndoNotCompleted={(record) => void changeNotCompleted(record, true)}
               onMarkBatchCompleted={(
                 batchId,
                 records
@@ -12634,6 +16858,27 @@ export default function TestSweepingMap({
               }
             />
 
+
+            <div className="rounded-lg border border-red-200 bg-red-50/40 p-3 dark:border-red-900 dark:bg-red-950/20 lg:col-span-2">
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">No realizados · {plannedRoutes.filter(r => r.result_status === "NO_REALIZADO").length}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Tramos planificados que no pudieron ejecutarse. Hacé clic en un tramo para ubicarlo en el mapa.</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {plannedRoutes.filter(r => r.result_status === "NO_REALIZADO").map(record => (
+                  <div key={record.id} className="rounded-md border border-red-200 bg-background p-3 text-xs">
+                    <button type="button" className="text-left font-semibold text-red-700 hover:underline"
+                      onClick={() => selectRouteFromList("planned", record)}>
+                      {record.main_street} — {record.from_street} → {record.to_street}
+                    </button>
+                    <p className="mt-1 text-muted-foreground">Planificado: {formatDateAr(record.work_date)} · Resultado: {record.result_date ? formatDateAr(record.result_date) : "Sin fecha"}</p>
+                    <p className="mt-2">Motivo: {record.result_observation || "Sin observación"}</p>
+                    {!readOnly && <button type="button" disabled={markingRealizedId !== null}
+                      onClick={() => void changeNotCompleted(record, true)}
+                      className="mt-2 rounded-md border border-red-300 px-2 py-1 text-red-700 disabled:opacity-50">Deshacer no realizado</button>}
+                  </div>
+                ))}
+                {plannedRoutes.every(r => r.result_status !== "NO_REALIZADO") && <p className="text-xs text-muted-foreground">No hay tramos no realizados en el período.</p>}
+              </div>
+            </div>
           </div>
 
         )}

@@ -461,6 +461,10 @@ export default function StatsPage() {
     );
   }, [profile, currentUser]);
 
+  const effectiveDirection = isArboladoAccount
+    ? "Arbolado y Parques Urbanos"
+    : direction;
+
   const isZyvAccount = useMemo(() => {
     const role = normalizeText(profile?.role || currentUser?.role);
     const defaultModule = normalizeText(currentUser?.default_module);
@@ -633,7 +637,7 @@ export default function StatsPage() {
     status,
     serviceName: selectedServiceName,
     zone,
-    direction,
+    direction: effectiveDirection,
   });
 
   const mainStat = stats?.byStreet?.[0];
@@ -740,12 +744,14 @@ export default function StatsPage() {
         "service_ids",
         girsuServices.map((service) => service.id).join(","),
       );
-    } else if (effectiveServiceId !== "all") {
+    } else if (!isArboladoAccount && effectiveServiceId !== "all") {
+      // La API ya restringe Arbolado por rol (variante O servicio).
+      // Enviar service_id excluiría reclamos Arbolado con service_id=null.
       params.append("service_id", effectiveServiceId);
     }
 
     if (zone !== "all") params.append("zone", zone);
-    if (direction !== "all") params.append("direction", direction);
+    if (effectiveDirection !== "all") params.append("direction", effectiveDirection);
 
     if (
       detailGroupParam &&
@@ -1293,7 +1299,7 @@ export default function StatsPage() {
     dateFrom,
     dateTo,
     status,
-    direction,
+    effectiveDirection,
     serviceId,
     zone,
     effectiveServiceId,
@@ -1329,7 +1335,7 @@ export default function StatsPage() {
     setDateFrom("");
     setDateTo("");
     setStatus("all");
-    setDirection("all");
+    setDirection(isArboladoAccount ? "Arbolado y Parques Urbanos" : "all");
     setZone("all");
 
     if (isArboladoAccount && arboladoService) {
@@ -1648,8 +1654,10 @@ export default function StatsPage() {
                   Dirección
                 </label>
                 <Select
-                  value={direction}
+                  value={effectiveDirection}
+                  disabled={isArboladoAccount}
                   onValueChange={(value) => {
+                    if (isArboladoAccount) return;
                     setDirection(value);
                     setServiceId("all");
                   }}
@@ -1658,12 +1666,20 @@ export default function StatsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {DIRECTION_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
+                    {isArboladoAccount ? (
+                      <SelectItem value="Arbolado y Parques Urbanos">
+                        Arbolado y Parques Urbanos
                       </SelectItem>
-                    ))}
+                    ) : (
+                      <>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {DIRECTION_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

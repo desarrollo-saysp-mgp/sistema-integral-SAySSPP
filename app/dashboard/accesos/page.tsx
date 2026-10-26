@@ -615,7 +615,7 @@ export default async function AccesosPage() {
                     ? {
                         ...item,
                         title:
-                          "Reclamos Arbolado",
+                          "Reclamos Dirección de Arbolado y Parques Urbanos",
                         description:
                           "Seguimiento de reclamos correspondientes al área de Arbolado.",
                       }

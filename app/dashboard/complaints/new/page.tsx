@@ -124,7 +124,7 @@ export default function NewComplaintPage() {
       : "Nuevo Reclamo";
 
   const description = isArboladoUser
-    ? "Complete el formulario para registrar un nuevo reclamo de Arbolado"
+    ? "Complete el formulario para registrar un nuevo reclamo de APU"
     : isZyvUser
       ? "Complete el formulario para registrar un nuevo reclamo de Zoonosis y Vectores"
       : "Complete el formulario para registrar un nuevo reclamo";
