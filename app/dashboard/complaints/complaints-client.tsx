@@ -48,6 +48,31 @@ const VALID_STATUSES = ["En proceso", "Resuelto", "No resuelto"] as const;
 
 const ZONE_OPTIONS = Array.from({ length: 16 }, (_, i) => String(i + 1));
 
+// Mismo catálogo que el formulario Nuevo Reclamo de Arbolado.
+// No generar opciones desde extra_data: allí existen observaciones importadas.
+const ARBOLADO_DESCRIPTION_OPTIONS = [
+  "Rama colgada",
+  "Ramas sobre viviendas",
+  "Bolsas/Basura",
+  "Plazoleta, ramas bajas",
+  "Árbol caído",
+  "Ramas tapan luminarias",
+  "Elevación de copa",
+  "Plazoleta, ramas sobre cables",
+  "Ramas sobre techo",
+  "Ramas sobre cables",
+  "Ramas secas",
+  "Terreno con renuevos y malezas",
+  "Levantamiento de vereda",
+  "Árbol inclinado por tormenta",
+  "Rama caída sobre calle",
+  "Ramas se quiebran",
+  "Árbol decrépito",
+  "Evaluar árbol",
+  "Raices",
+] as const;
+
+
 
 
 const SERVICIOS_PUBLICOS_EMAILS = [
@@ -587,6 +612,14 @@ export default function ComplaintsClient() {
   );
 
 
+
+  useEffect(() => {
+    if (descriptionFilter !== "all" &&
+        !ARBOLADO_DESCRIPTION_OPTIONS.some((option) =>
+          normalizeText(option) === normalizeText(descriptionFilter))) {
+      setDescriptionFilter("all");
+    }
+  }, [descriptionFilter]);
 
   const updateUrlFilters = useCallback(() => {
 
@@ -1224,7 +1257,7 @@ export default function ComplaintsClient() {
 
         descriptionFilter === "all" ||
 
-        arboladoDescriptionValue === descriptionFilter;
+        normalizeText(arboladoDescriptionValue) === normalizeText(descriptionFilter);
 
 
 
@@ -1314,22 +1347,8 @@ export default function ComplaintsClient() {
 
 
 
-  const arboladoDescriptions = useMemo(() => {
-
-    const values = complaints
-
-      .filter(isArboladoComplaint)
-
-      .map((complaint) => getArboladoDescription(getExtraData(complaint)))
-
-      .filter((value): value is string => !!value);
-
-
-
-    return [...new Set(values)].sort();
-
-  }, [complaints]);
-
+  // Catálogo cerrado: evita descripciones libres provenientes de importaciones.
+  const arboladoDescriptions = ARBOLADO_DESCRIPTION_OPTIONS;
 
 
   const handleStatusChange = async (

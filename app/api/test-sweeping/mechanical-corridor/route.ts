@@ -1956,6 +1956,29 @@ function chooseMechanicalTitle(
   );
 }
 
+function parsePlanningDate(
+  value?: string | null
+) {
+  if (
+    !value ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
+    return null;
+  }
+
+  const date = new Date(
+    `${value}T00:00:00`
+  );
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? null
+    : date;
+}
+
 type MechanicalBody = {
   action?: "detect" | "save";
   start?: {
@@ -1967,6 +1990,8 @@ type MechanicalBody = {
     lng?: number;
   };
   work_date?: string | null;
+  planned_from?: string | null;
+  planned_to?: string | null;
   observations?: string | null;
 };
 
@@ -2220,6 +2245,71 @@ export async function POST(
       );
     }
 
+    const plannedFrom =
+      body.planned_from ??
+      body.work_date ??
+      null;
+
+    const plannedTo =
+      body.planned_to ??
+      body.work_date ??
+      null;
+
+    const plannedFromDate =
+      parsePlanningDate(
+        plannedFrom
+      );
+
+    const plannedToDate =
+      parsePlanningDate(
+        plannedTo
+      );
+
+    if (
+      !plannedFromDate ||
+      !plannedToDate
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El período de planificación no es válido.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      plannedToDate.getTime() <
+      plannedFromDate.getTime()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La fecha Hasta no puede ser anterior a la fecha Desde.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const planningDays =
+      Math.floor(
+        (
+          plannedToDate.getTime() -
+          plannedFromDate.getTime()
+        ) /
+          (1000 * 60 * 60 * 24)
+      );
+
+    if (planningDays > 179) {
+      return NextResponse.json(
+        {
+          error:
+            "El período máximo de planificación es de 180 días.",
+        },
+        { status: 400 }
+      );
+    }
+
     const {
       data: savedId,
       error: saveError,
@@ -2256,6 +2346,42 @@ export async function POST(
           status: 500,
         }
       );
+    }
+
+    const createdId =
+      typeof savedId === "string"
+        ? savedId
+        : String(
+            (savedId as any)?.id ??
+              ""
+          ).trim();
+
+    if (createdId) {
+      const {
+        error: periodError,
+      } = await access.supabase.rpc(
+        "test_set_sweeping_record_planning_period",
+        {
+          p_record_id:
+            createdId,
+          p_planned_from:
+            plannedFrom,
+          p_planned_to:
+            plannedTo,
+        }
+      );
+
+      if (periodError) {
+        console.error(
+          "Error guardando período del corredor mecánico:",
+          periodError
+        );
+
+        return NextResponse.json(
+          { error: periodError.message },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json(

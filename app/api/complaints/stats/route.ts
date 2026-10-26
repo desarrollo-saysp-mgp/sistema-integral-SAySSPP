@@ -805,14 +805,15 @@ export async function GET(request: NextRequest) {
 
 
 
-      if (serviceId && serviceId !== "all") {
-
-        query = query.eq("service_id", Number(serviceId));
-
-      } else if (serviceIds.length > 0) {
-
-        query = query.in("service_id", serviceIds);
-
+      // Arbolado se define por form_variant O por un servicio de Arbolado.
+      // No aplicar otro service_id porque los formularios de Arbolado
+      // se almacenan legítimamente con service_id = null.
+      if (currentUser.role !== "ReclamosArbolado") {
+        if (serviceId && serviceId !== "all") {
+          query = query.eq("service_id", Number(serviceId));
+        } else if (serviceIds.length > 0) {
+          query = query.in("service_id", serviceIds);
+        }
       }
 
 
@@ -871,20 +872,19 @@ export async function GET(request: NextRequest) {
 
 
 
+    // El servidor impone la dirección según el rol, incluso si el cliente
+    // omite el filtro o intenta solicitar otra dirección.
+    const effectiveDirection =
+      currentUser.role === "ReclamosArbolado"
+        ? "Arbolado y Parques Urbanos"
+        : direction;
+
     const filteredComplaints =
-
-      direction && direction !== "all"
-
+      effectiveDirection && effectiveDirection !== "all"
         ? allComplaints.filter(
-
             (complaint) =>
-
-              getComplaintDirection(complaint) ===
-
-              normalizeValue(direction),
-
+              getComplaintDirection(complaint) === effectiveDirection,
           )
-
         : allComplaints;
 
 
@@ -899,7 +899,7 @@ export async function GET(request: NextRequest) {
 
 
 
-    const openCount = allComplaints.filter(
+    const openCount = filteredComplaints.filter(
 
       (complaint) =>
 

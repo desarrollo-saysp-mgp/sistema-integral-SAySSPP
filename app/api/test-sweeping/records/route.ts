@@ -22,17 +22,24 @@ type CreateSweepingRecordBody = {
 
   work_date?: string | null;
 
+  planned_from?: string | null;
+
+  planned_to?: string | null;
+
   zone?: string | null;
 
   observations?: string | null;
 
   status?: string | null;
 
-  action?: "mark_completed" | "mark_batch_completed" | null;
+  action?: "mark_completed" | "mark_batch_completed" | "mark_not_completed" | "undo_not_completed" | null;
+
 
   planned_record_id?: string | null;
 
   batch_id?: string | null;
+  result_observation?: string | null;
+  result_date?: string | null;
 
 };
 
@@ -78,6 +85,33 @@ function daysBetween(from: Date, to: Date) {
 
   );
 
+}
+
+function ymdFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function shiftYmd(value: string, days: number) {
+  const date = parseDate(value);
+
+  if (!date) {
+    return value;
+  }
+
+  date.setDate(date.getDate() + days);
+  return ymdFromDate(date);
+}
+
+function rangesOverlap(
+  fromA: string,
+  toA: string,
+  fromB: string,
+  toB: string
+) {
+  return fromA <= toB && toA >= fromB;
 }
 
 function isValidGeometry(
@@ -396,6 +430,11 @@ export async function GET(request: Request) {
      * --------------------------------------------------------
      */
 
+    const rpcFromString =
+      statusParam === "PLANIFICADO"
+        ? shiftYmd(fromString, -179)
+        : fromString;
+
     const pageSize = 1000;
     let offset = 0;
     const records: any[] = [];
@@ -408,7 +447,7 @@ export async function GET(request: Request) {
         .rpc(
           "test_get_sweeping_records_filtered_v2",
           {
-            p_from_date: fromString,
+            p_from_date: rpcFromString,
             p_to_date: toString,
           }
         )
@@ -452,31 +491,175 @@ export async function GET(request: Request) {
       offset += pageSize;
     }
 
-    const filteredRecords =
-      statusParam === null
-        ? records
-        : records.filter(
-            (record) => {
-              const currentStatus =
-                String(
-                  record?.status ??
-                    "COMPLETADO"
-                )
-                  .trim()
-                  .toUpperCase();
+    const recordIds = records
+      .map((record) =>
+        String(record?.id ?? "").trim()
+      )
+      .filter(Boolean);
 
-              return statusParam ===
-                "PLANIFICADO"
-                ? currentStatus ===
-                    "PLANIFICADO"
-                : currentStatus !==
-                    "PLANIFICADO";
-            }
+    const periodById =
+      new Map<
+        string,
+        {
+          planned_from: string | null;
+          planned_to: string | null;
+        }
+      >();
+
+    if (recordIds.length > 0) {
+      const chunkSize = 500;
+
+      for (
+        let index = 0;
+        index < recordIds.length;
+        index += chunkSize
+      ) {
+        const chunk = recordIds.slice(
+          index,
+          index + chunkSize
+        );
+
+        const {
+          data: periodRows,
+          error: periodError,
+        } = await supabase.rpc(
+          "test_get_sweeping_record_periods",
+          {
+            p_ids: chunk,
+          }
+        );
+
+        if (periodError) {
+          console.error(
+            "Error obteniendo períodos de planificación:",
+            periodError
           );
 
-    return NextResponse.json(
-      filteredRecords
-    );
+          return NextResponse.json(
+            { error: periodError.message },
+            { status: 500 }
+          );
+        }
+
+        for (const row of periodRows ?? []) {
+          periodById.set(
+            String(row.id),
+            {
+              planned_from:
+                row.planned_from ?? null,
+              planned_to:
+                row.planned_to ?? null,
+            }
+          );
+        }
+      }
+    }
+
+    const recordsWithPeriods =
+      records.map((record) => {
+        const period = periodById.get(
+          String(record?.id ?? "")
+        );
+
+        return {
+          ...record,
+          planned_from:
+            period?.planned_from ??
+            record?.planned_from ??
+            null,
+          planned_to:
+            period?.planned_to ??
+            record?.planned_to ??
+            null,
+        };
+      });
+
+    const filteredRecords =
+      recordsWithPeriods.filter(
+        (record) => {
+          const currentStatus =
+            String(
+              record?.status ??
+                "COMPLETADO"
+            )
+              .trim()
+              .toUpperCase();
+
+          if (
+            statusParam === "PLANIFICADO"
+          ) {
+            if (
+              currentStatus !==
+              "PLANIFICADO"
+            ) {
+              return false;
+            }
+
+            const periodFrom =
+              String(
+                record?.planned_from ??
+                  record?.work_date ??
+                  ""
+              );
+
+            const periodTo =
+              String(
+                record?.planned_to ??
+                  record?.work_date ??
+                  ""
+              );
+
+            return Boolean(
+              periodFrom &&
+                periodTo &&
+                rangesOverlap(
+                  periodFrom,
+                  periodTo,
+                  fromString,
+                  toString
+                )
+            );
+          }
+
+          if (
+            statusParam === "COMPLETADO"
+          ) {
+            return (
+              currentStatus !==
+              "PLANIFICADO"
+            );
+          }
+
+          return true;
+        }
+      );
+
+    // Sólo enriquecemos los planificados; no cambiamos los RPC de lectura actuales.
+    if (statusParam === "PLANIFICADO" && filteredRecords.length > 0) {
+      const resultIds = filteredRecords.map((item) => String(item.id));
+      const resultsById = new Map<string, any>();
+      for (let i = 0; i < resultIds.length; i += 500) {
+        const { data: details, error: detailsError } = await supabase.rpc(
+          "test_get_sweeping_result_details",
+          { p_ids: resultIds.slice(i, i + 500) }
+        );
+        if (detailsError) {
+          console.error("Error consultando resultados de barrido:", detailsError);
+          return NextResponse.json({ error: detailsError.message }, { status: 500 });
+        }
+        for (const detail of details ?? []) {
+          resultsById.set(String(detail.id), detail);
+        }
+      }
+      return NextResponse.json(filteredRecords.map((item) => ({
+        ...item,
+        result_status: resultsById.get(String(item.id))?.result_status ?? null,
+        result_observation: resultsById.get(String(item.id))?.result_observation ?? null,
+        result_date: resultsById.get(String(item.id))?.result_date ?? null,
+      })));
+    }
+
+    return NextResponse.json(filteredRecords);
 
   } catch (error) {
 
@@ -553,6 +736,35 @@ export async function POST(
 
       (await request.json()) as CreateSweepingRecordBody;
 
+    // Acciones independientes; el flujo de realización existente queda intacto.
+    if (body.action === "mark_not_completed" || body.action === "undo_not_completed") {
+      const plannedId = body.planned_record_id?.trim() ?? "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(plannedId)) {
+        return NextResponse.json({ error: "ID de planificación inválido." }, { status: 400 });
+      }
+      if (body.action === "mark_not_completed") {
+        const observation = body.result_observation?.trim() ?? "";
+        if (!observation || observation.length > 500) {
+          return NextResponse.json({ error: "Escribí una observación de entre 1 y 500 caracteres." }, { status: 400 });
+        }
+        if (body.result_date && !parseDate(body.result_date)) {
+          return NextResponse.json({ error: "Fecha de resultado inválida." }, { status: 400 });
+        }
+        const { data, error } = await supabase.rpc("test_mark_sweeping_record_not_completed", {
+          p_planned_id: plannedId,
+          p_observation: observation,
+          p_result_date: body.result_date ?? null,
+        });
+        if (error) return NextResponse.json({ error: error.message }, { status: 409 });
+        return NextResponse.json({ success: true, record_id: data });
+      }
+      const { data, error } = await supabase.rpc("test_undo_sweeping_record_not_completed", {
+        p_planned_id: plannedId,
+      });
+      if (error) return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json({ success: true, record_id: data });
+    }
+
     /*
      * --------------------------------------------------------
      * PLANIFICADO -> REALIZADO
@@ -600,7 +812,7 @@ export async function POST(
 
       }
 
-      const {
+      let {
         data: completedRecordId,
         error: markError,
       } = await supabase.rpc(
@@ -613,6 +825,43 @@ export async function POST(
             null,
         }
       );
+
+      /*
+       * Compatibilidad:
+       * si en la base quedó solamente la firma de 3 parámetros,
+       * repetimos la llamada enviando observación null.
+       * Este TestSweeping estable NO usa observación de resultado.
+       */
+      if (
+        markError &&
+        (
+          markError.code === "PGRST202" ||
+          markError.message
+            ?.toLowerCase()
+            .includes(
+              "could not find the function"
+            )
+        )
+      ) {
+        const fallback =
+          await supabase.rpc(
+            "test_mark_sweeping_record_completed",
+            {
+              p_planned_id:
+                plannedRecordId,
+              p_work_date:
+                body.work_date ??
+                null,
+              p_result_observation:
+                null,
+            }
+          );
+
+        completedRecordId =
+          fallback.data;
+        markError =
+          fallback.error;
+      }
 
       if (markError) {
 
@@ -697,6 +946,11 @@ export async function POST(
         );
       }
 
+      /*
+       * VERSIÓN ESTABLE:
+       * una sola operación SQL para todo el batch.
+       * No manda IDs individuales ni hace 38 RPC.
+       */
       const {
         data: completedCount,
         error: batchError,
@@ -732,7 +986,9 @@ export async function POST(
         {
           success: true,
           completed_count:
-            Number(completedCount ?? 0),
+            Number(
+              completedCount ?? 0
+            ),
           batch_id:
             batchId,
         },
@@ -916,6 +1172,67 @@ export async function POST(
 
     }
 
+    const plannedFrom =
+      status === "PLANIFICADO"
+        ? body.planned_from ??
+          body.work_date ??
+          null
+        : null;
+
+    const plannedTo =
+      status === "PLANIFICADO"
+        ? body.planned_to ??
+          body.work_date ??
+          null
+        : null;
+
+    if (status === "PLANIFICADO") {
+      const fromDate = parseDate(
+        plannedFrom
+      );
+      const toDate = parseDate(
+        plannedTo
+      );
+
+      if (!fromDate || !toDate) {
+        return NextResponse.json(
+          {
+            error:
+              "El período de planificación no es válido.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (
+        toDate.getTime() <
+        fromDate.getTime()
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "La fecha Hasta no puede ser anterior a la fecha Desde.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (
+        daysBetween(
+          fromDate,
+          toDate
+        ) > 179
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "El período máximo de planificación es de 180 días.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const batchId =
       body.batch_id?.trim() || null;
 
@@ -1011,6 +1328,50 @@ export async function POST(
 
       );
 
+    }
+
+    if (
+      status === "PLANIFICADO" &&
+      plannedFrom &&
+      plannedTo
+    ) {
+      const createdId =
+        typeof data === "string"
+          ? data
+          : String(
+              (data as any)?.id ??
+                ""
+            ).trim();
+
+      if (createdId) {
+        const { error: periodError } =
+          await supabase.rpc(
+            "test_set_sweeping_record_planning_period",
+            {
+              p_record_id:
+                createdId,
+              p_planned_from:
+                plannedFrom,
+              p_planned_to:
+                plannedTo,
+            }
+          );
+
+        if (periodError) {
+          console.error(
+            "Error guardando período de planificación:",
+            periodError
+          );
+
+          return NextResponse.json(
+            {
+              error:
+                periodError.message,
+            },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     return NextResponse.json(

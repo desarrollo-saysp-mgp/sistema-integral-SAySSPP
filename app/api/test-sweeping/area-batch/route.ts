@@ -22,6 +22,8 @@ type AreaBatchRecord = {
 type CreateAreaBatchBody = {
   batch_id?: string;
   work_date?: string | null;
+  planned_from?: string | null;
+  planned_to?: string | null;
   observations?: string | null;
   color?: string | null;
   geometry?: GeoJsonPolygon;
@@ -79,6 +81,32 @@ function daysBetween(
         24
       )
   );
+}
+
+function ymdFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function shiftYmd(
+  value: string,
+  days: number
+) {
+  const date = parseDate(value);
+  if (!date) return value;
+  date.setDate(date.getDate() + days);
+  return ymdFromDate(date);
+}
+
+function rangesOverlap(
+  fromA: string,
+  toA: string,
+  fromB: string,
+  toB: string
+) {
+  return fromA <= toB && toA >= fromB;
 }
 
 function isUuid(
@@ -330,6 +358,12 @@ export async function GET(
       );
     }
 
+    const rpcFromString =
+      shiftYmd(
+        fromString,
+        -179
+      );
+
     const {
       data,
       error,
@@ -338,7 +372,7 @@ export async function GET(
         "test_get_sweeping_area_batches_filtered",
         {
           p_from_date:
-            fromString,
+            rpcFromString,
           p_to_date:
             toString,
         }
@@ -361,8 +395,117 @@ export async function GET(
       );
     }
 
+    const batches =
+      Array.isArray(data)
+        ? data
+        : [];
+
+    const batchIds = batches
+      .map((item: any) =>
+        String(
+          item?.batch_id ?? ""
+        ).trim()
+      )
+      .filter(Boolean);
+
+    const periodByBatch =
+      new Map<
+        string,
+        {
+          planned_from: string | null;
+          planned_to: string | null;
+        }
+      >();
+
+    if (batchIds.length > 0) {
+      const {
+        data: periodRows,
+        error: periodError,
+      } = await access.supabase.rpc(
+        "test_get_sweeping_area_batch_periods",
+        {
+          p_batch_ids:
+            batchIds,
+        }
+      );
+
+      if (periodError) {
+        console.error(
+          "Error obteniendo períodos de zonas:",
+          periodError
+        );
+
+        return NextResponse.json(
+          { error: periodError.message },
+          { status: 500 }
+        );
+      }
+
+      for (
+        const row of
+          periodRows ?? []
+      ) {
+        periodByBatch.set(
+          String(row.batch_id),
+          {
+            planned_from:
+              row.planned_from ?? null,
+            planned_to:
+              row.planned_to ?? null,
+          }
+        );
+      }
+    }
+
+    const result = batches
+      .map((item: any) => {
+        const period =
+          periodByBatch.get(
+            String(
+              item?.batch_id ?? ""
+            )
+          );
+
+        return {
+          ...item,
+          planned_from:
+            period?.planned_from ??
+            item?.planned_from ??
+            null,
+          planned_to:
+            period?.planned_to ??
+            item?.planned_to ??
+            null,
+        };
+      })
+      .filter((item: any) => {
+        const periodFrom =
+          String(
+            item?.planned_from ??
+              item?.work_date ??
+              ""
+          );
+        const periodTo =
+          String(
+            item?.planned_to ??
+              item?.work_date ??
+              ""
+          );
+
+        return Boolean(
+          periodFrom &&
+            periodTo &&
+            rangesOverlap(
+              periodFrom,
+              periodTo,
+              fromString,
+              toString
+            )
+        );
+      });
+
     return NextResponse.json(
-      data ?? []
+      result
     );
   } catch (error) {
     console.error(
@@ -443,6 +586,62 @@ export async function POST(
         {
           status: 400,
         }
+      );
+    }
+
+    const plannedFrom =
+      body.planned_from ??
+      body.work_date ??
+      null;
+
+    const plannedTo =
+      body.planned_to ??
+      body.work_date ??
+      null;
+
+    const plannedFromDate =
+      parseDate(plannedFrom);
+    const plannedToDate =
+      parseDate(plannedTo);
+
+    if (
+      !plannedFromDate ||
+      !plannedToDate
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El período de planificación no es válido.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      plannedToDate.getTime() <
+      plannedFromDate.getTime()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La fecha Hasta no puede ser anterior a la fecha Desde.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      daysBetween(
+        plannedFromDate,
+        plannedToDate
+      ) > 179
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El período máximo de planificación es de 180 días.",
+        },
+        { status: 400 }
       );
     }
 
@@ -564,6 +763,32 @@ export async function POST(
       );
     }
 
+    const {
+      error: periodError,
+    } = await access.supabase.rpc(
+      "test_set_sweeping_batch_planning_period",
+      {
+        p_batch_id:
+          batchId,
+        p_planned_from:
+          plannedFrom,
+        p_planned_to:
+          plannedTo,
+      }
+    );
+
+    if (periodError) {
+      console.error(
+        "Error guardando período de planificación por zona:",
+        periodError
+      );
+
+      return NextResponse.json(
+        { error: periodError.message },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -586,6 +811,131 @@ export async function POST(
       {
         error:
           "Error interno guardando la zona de barrido.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+export async function PATCH(
+  request: Request
+) {
+  try {
+    const access =
+      await getSweepingAccess();
+
+    if (!access.authenticated) {
+      return NextResponse.json(
+        {
+          error:
+            "No autenticado.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    if (!access.canView) {
+      return unauthorizedResponse();
+    }
+
+    if (!access.canEdit) {
+      return readOnlyResponse();
+    }
+
+    const body =
+      (await request.json()) as {
+        batch_id?: string;
+        observations?: string | null;
+      };
+
+    const batchId =
+      body.batch_id?.trim() ??
+      "";
+
+    if (!isUuid(batchId)) {
+      return NextResponse.json(
+        {
+          error:
+            "El identificador de la zona no es válido.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const observations =
+      body.observations?.trim() ||
+      null;
+
+    if (
+      observations &&
+      observations.length > 500
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La observación no puede superar los 500 caracteres.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const {
+      data,
+      error,
+    } =
+      await access.supabase.rpc(
+        "test_update_sweeping_batch_observation",
+        {
+          p_batch_id:
+            batchId,
+          p_observations:
+            observations,
+        }
+      );
+
+    if (error) {
+      console.error(
+        "Error actualizando observación de zona:",
+        error
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            error.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      batch_id:
+        batchId,
+      updated_records:
+        Number(data) || 0,
+      observations,
+    });
+  } catch (error) {
+    console.error(
+      "Error interno actualizando observación de zona:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Error interno actualizando la observación de la zona.",
       },
       {
         status: 500,
