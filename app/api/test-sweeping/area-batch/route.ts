@@ -33,6 +33,7 @@ type CreateAreaBatchBody = {
 const SWEEPING_EDITOR_EMAILS = [
   "waldaquin84@gmail.com",
   "adm.serviciospublicos.mgp@gmail.com",
+  "martincornejo.gp@gmail.com",
 ];
 
 function normalizeAccessValue(

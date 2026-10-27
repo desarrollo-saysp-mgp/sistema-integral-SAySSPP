@@ -5717,6 +5717,132 @@ export default function TestSweepingMap({
             "MECANICO"
         );
 
+      // Nombres de calles transversales para el PDF MECÁNICO solamente.
+      // Se consultan las geometrías cercanas a los extremos A/B del recorrido;
+      // no se modifican los registros, el dibujo ni las órdenes manuales.
+      const mechanicalEndpointNames = new Map<string, {from: string; to: string}>();
+
+      const normalizedRoadName = (value: string) =>
+        value.toLocaleLowerCase("es")
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ").trim();
+
+      type NearbyRoad = {
+        street_name?: string;
+        geometry?: AreaStreetGeometry;
+      };
+      type RoadPoint = [number, number]; // [longitud, latitud]
+
+      const roadParts = (geometry?: AreaStreetGeometry): number[][][] => {
+        if (!geometry) return [];
+        return geometry.type === "LineString"
+          ? [geometry.coordinates]
+          : geometry.coordinates;
+      };
+
+      const distanceAndDirection = (
+        point: RoadPoint,
+        start: RoadPoint,
+        end: RoadPoint
+      ) => {
+        // Aproximación métrica local, suficiente para comparar cruces cercanos.
+        const scale = Math.cos(point[1] * Math.PI / 180);
+        const ax = (start[0] - point[0]) * 111320 * scale;
+        const ay = (start[1] - point[1]) * 111320;
+        const bx = (end[0] - point[0]) * 111320 * scale;
+        const by = (end[1] - point[1]) * 111320;
+        const vx = bx - ax;
+        const vy = by - ay;
+        const lengthSquared = vx * vx + vy * vy;
+        if (lengthSquared < 0.1) return null;
+        const fraction = Math.max(0, Math.min(1,
+          -(ax * vx + ay * vy) / lengthSquared));
+        return {
+          distance: Math.hypot(ax + fraction * vx, ay + fraction * vy),
+          vx, vy,
+        };
+      };
+
+      const findTransverseStreet = async (
+        point: RoadPoint,
+        tangentStart: RoadPoint,
+        tangentEnd: RoadPoint,
+        mainStreet: string
+      ): Promise<string | null> => {
+        // Cuadrado pequeño alrededor de A/B; la API existente aplica
+        // además su margen espacial de búsqueda.
+        const radiusMeters = 22;
+        const latitudeOffset = radiusMeters / 111320;
+        const longitudeOffset = radiusMeters /
+          (111320 * Math.max(0.1, Math.cos(point[1] * Math.PI / 180)));
+        const [lon, lat] = point;
+        const area = {
+          type: "Polygon" as const,
+          coordinates: [[
+            [lon - longitudeOffset, lat - latitudeOffset],
+            [lon + longitudeOffset, lat - latitudeOffset],
+            [lon + longitudeOffset, lat + latitudeOffset],
+            [lon - longitudeOffset, lat + latitudeOffset],
+            [lon - longitudeOffset, lat - latitudeOffset],
+          ]],
+        };
+        try {
+          const response = await fetch("/api/test-sweeping/area-streets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({geometry: area, min_length_meters: 0}),
+          });
+          if (!response.ok) return null;
+          const data = await response.json();
+          const candidates = (data?.streets ?? []) as NearbyRoad[];
+          let best: {name: string; distance: number} | null = null;
+          const direction = distanceAndDirection(point, tangentStart, tangentEnd);
+          if (!direction) return null;
+
+          for (const candidate of candidates) {
+            const name = String(candidate.street_name ?? "").trim();
+            if (!name || normalizedRoadName(name) === normalizedRoadName(mainStreet)) continue;
+            for (const part of roadParts(candidate.geometry)) {
+              for (let i = 1; i < part.length; i++) {
+                const a = part[i - 1] as RoadPoint;
+                const b = part[i] as RoadPoint;
+                const hit = distanceAndDirection(point, a, b);
+                if (!hit || hit.distance > 18) continue;
+                const cosine = Math.abs(
+                  (hit.vx * direction.vx + hit.vy * direction.vy) /
+                  (Math.hypot(hit.vx, hit.vy) * Math.hypot(direction.vx, direction.vy))
+                );
+                // Solo calles transversales: por lo menos 35° de diferencia.
+                if (cosine > 0.82) continue;
+                if (!best || hit.distance < best.distance) best = {name, distance: hit.distance};
+              }
+            }
+          }
+          return best?.name ?? null;
+        } catch {
+          // Un fallo de búsqueda no debe impedir emitir la orden.
+          return null;
+        }
+      };
+
+      // Consultas solo para corredores mecánicos incluidos en la orden.
+      await Promise.all(mechanicalRoutes.map(async (record) => {
+        const coordinates = record.geometry?.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+        const first = coordinates[0] as RoadPoint;
+        const second = coordinates[1] as RoadPoint;
+        const last = coordinates[coordinates.length - 1] as RoadPoint;
+        const beforeLast = coordinates[coordinates.length - 2] as RoadPoint;
+        const [from, to] = await Promise.all([
+          findTransverseStreet(first, first, second, record.main_street),
+          findTransverseStreet(last, beforeLast, last, record.main_street),
+        ]);
+        mechanicalEndpointNames.set(record.id, {
+          from: from ?? "inicio sin identificar",
+          to: to ?? "final sin identificar",
+        });
+      }));
+
       const unknownRoutes =
         routes.filter(
           (record) =>
@@ -6676,235 +6802,105 @@ export default function TestSweepingMap({
 
       const addMechanicalDetailPages =
         () => {
-          if (
-            mechanicalRoutes.length ===
-            0
-          ) {
+          if (mechanicalRoutes.length === 0) {
             return;
           }
 
-          pdf.addPage(
-            "a4",
-            "landscape"
-          );
-
+          pdf.addPage("a4", "landscape");
           addHeader(
             "Detalle de trabajo - Barrido mecánico",
-            `Planificación del ${formatDateAr(
-              workOrderDate
-            )} - Barredora`
+            `Planificación del ${formatDateAr(workOrderDate)} - Barredora`
           );
 
           let x = marginX;
           let y = 31;
           const gap = 8;
-          const columnWidth =
-            (
-              contentWidth -
-              gap
-            ) /
-            2;
+          const columnWidth = (contentWidth - gap) / 2;
 
-          const nextColumnOrPage =
-            () => {
-              if (
-                x === marginX
-              ) {
-                x =
-                  marginX +
-                  columnWidth +
-                  gap;
-                y = 31;
-                return;
-              }
-
-              pdf.addPage(
-                "a4",
-                "landscape"
-              );
-
-              addHeader(
-                "Detalle de trabajo - Barrido mecánico",
-                `Planificación del ${formatDateAr(
-                  workOrderDate
-                )} - Barredora`
-              );
-
-              x = marginX;
+          const nextColumnOrPage = () => {
+            if (x === marginX) {
+              x = marginX + columnWidth + gap;
               y = 31;
-            };
-
-          mechanicalRoutes.forEach(
-            (
-              route,
-              index
-            ) => {
-              const mainStreet =
-                cleanStreet(
-                  route.main_street
-                );
-
-              const from =
-                cleanEndpoint(
-                  route.from_street
-                );
-
-              const to =
-                cleanEndpoint(
-                  route.to_street
-                );
-
-              const observation =
-                pdfSafeText(
-                  route.observations
-                );
-
-              const titleLines =
-                pdf.splitTextToSize(
-                  `${index + 1}. ${mainStreet}`,
-                  columnWidth - 8
-                ) as string[];
-
-              const endpointLines =
-                pdf.splitTextToSize(
-                  `Desde: ${from || "-"}    Hasta: ${to || "-"}`,
-                  columnWidth - 10
-                ) as string[];
-
-              const observationLines =
-                observation
-                  ? (
-                      pdf.splitTextToSize(
-                        `Observación: ${observation}`,
-                        columnWidth - 10
-                      ) as string[]
-                    )
-                  : [];
-
-              const boxHeight =
-                12 +
-                titleLines.length *
-                  4.2 +
-                endpointLines.length *
-                  4 +
-                observationLines.length *
-                  4 +
-                4;
-
-              if (
-                y + boxHeight >
-                pageHeight - 46
-              ) {
-                nextColumnOrPage();
-              }
-
-              pdf.setFillColor(
-                255,
-                251,
-                235
-              );
-
-              pdf.setDrawColor(
-                253,
-                186,
-                116
-              );
-
-              pdf.roundedRect(
-                x,
-                y,
-                columnWidth,
-                boxHeight,
-                2,
-                2,
-                "FD"
-              );
-
-              let localY =
-                y + 6;
-
-              pdf.setFont(
-                "helvetica",
-                "bold"
-              );
-
-              pdf.setFontSize(
-                9.5
-              );
-
-              pdf.setTextColor(
-                194,
-                65,
-                12
-              );
-
-              titleLines.forEach(
-                (line) => {
-                  pdf.text(
-                    line,
-                    x + 4,
-                    localY
-                  );
-
-                  localY += 4.2;
-                }
-              );
-
-              pdf.setFont(
-                "helvetica",
-                "normal"
-              );
-
-              pdf.setFontSize(
-                8
-              );
-
-              pdf.setTextColor(
-                15,
-                23,
-                42
-              );
-
-              endpointLines.forEach(
-                (line) => {
-                  pdf.text(
-                    line,
-                    x + 6,
-                    localY
-                  );
-
-                  localY += 4;
-                }
-              );
-
-              if (
-                observationLines.length >
-                0
-              ) {
-                pdf.setTextColor(
-                  71,
-                  85,
-                  105
-                );
-
-                observationLines.forEach(
-                  (line) => {
-                    pdf.text(
-                      line,
-                      x + 6,
-                      localY
-                    );
-
-                    localY += 4;
-                  }
-                );
-              }
-
-              y +=
-                boxHeight +
-                5;
+              return;
             }
-          );
+
+            pdf.addPage("a4", "landscape");
+            addHeader(
+              "Detalle de trabajo - Barrido mecánico",
+              `Planificación del ${formatDateAr(workOrderDate)} - Barredora`
+            );
+            x = marginX;
+            y = 31;
+          };
+
+          mechanicalRoutes.forEach((route, index) => {
+            const mainStreet = cleanStreet(route.main_street);
+            const detectedEnds = mechanicalEndpointNames.get(route.id);
+            const from = detectedEnds?.from ? cleanEndpoint(detectedEnds.from) : "";
+            const to = detectedEnds?.to ? cleanEndpoint(detectedEnds.to) : "";
+            const observation = pdfSafeText(route.observations);
+
+            // Solo en el detalle mecánico del PDF: si ambos cruces son
+            // confiables se muestran; de lo contrario solo la calle principal.
+            // No se cambian los recorridos, geometrías ni datos guardados.
+            const hasVerifiedEnds =
+              Boolean(from && to) &&
+              !/sin identificar|sin especificar/i.test(from) &&
+              !/sin identificar|sin especificar/i.test(to) &&
+              normalizedRoadName(from) !== normalizedRoadName(mainStreet) &&
+              normalizedRoadName(to) !== normalizedRoadName(mainStreet);
+            const description = hasVerifiedEnds
+              ? `${index + 1}. ${mainStreet}, desde ${from} hasta ${to}.`
+              : `${index + 1}. ${mainStreet}.`;
+
+            const descriptionLines = pdf.splitTextToSize(
+              description,
+              columnWidth - 9
+            ) as string[];
+
+            const observationLines = observation
+              ? (pdf.splitTextToSize(
+                  `Observación: ${observation}`,
+                  columnWidth - 9
+                ) as string[])
+              : [];
+
+            const boxHeight =
+              8 + descriptionLines.length * 4.3 +
+              observationLines.length * 3.6;
+
+            if (y + boxHeight > pageHeight - 46) {
+              nextColumnOrPage();
+            }
+
+            pdf.setFillColor(255, 251, 235);
+            pdf.setDrawColor(253, 186, 116);
+            pdf.roundedRect(
+              x, y, columnWidth, boxHeight, 2, 2, "FD"
+            );
+
+            let localY = y + 6;
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(9);
+            pdf.setTextColor(194, 65, 12);
+
+            descriptionLines.forEach((line) => {
+              pdf.text(line, x + 4, localY);
+              localY += 4.3;
+            });
+
+            if (observationLines.length > 0) {
+              pdf.setFont("helvetica", "normal");
+              pdf.setFontSize(7.5);
+              pdf.setTextColor(71, 85, 105);
+              observationLines.forEach((line) => {
+                pdf.text(line, x + 4, localY);
+                localY += 3.6;
+              });
+            }
+
+            y += boxHeight + 4;
+          });
         };
 
       let hasPage = false;
@@ -10050,6 +10046,71 @@ export default function TestSweepingMap({
 
 
 
+  // Busca una calle transversal en el extremo real del trazado.
+  // No altera las geometrías ni consulta otra API: usa las calles
+  // que ya devolvió el análisis de la zona.
+  function findAreaCrossStreet(
+    street: AreaStreet,
+    endpoint: L.LatLng,
+    adjacentPoint: L.LatLng
+  ): string {
+    const latRadians = endpoint.lat * Math.PI / 180;
+    const metersLon = 111320 * Math.cos(latRadians);
+    const metersLat = 110540;
+    const dx = (adjacentPoint.lng - endpoint.lng) * metersLon;
+    const dy = (adjacentPoint.lat - endpoint.lat) * metersLat;
+    const directionSize = Math.hypot(dx, dy);
+    if (directionSize < 0.5) return "Límite de zona";
+
+    let best: { name: string; distance: number } | null = null;
+    const candidates = areaStreets.filter(
+      (candidate) =>
+        candidate.corridor_key !== street.corridor_key &&
+        candidate.street_name.trim() !== "" &&
+        candidate.street_name.trim().toLocaleLowerCase("es") !==
+          street.street_name.trim().toLocaleLowerCase("es")
+    );
+
+    for (const candidate of candidates) {
+      for (const path of areaStreetToLeafletPaths(candidate.geometry)) {
+        const points = path.map((point) => L.latLng(point));
+        for (let i = 1; i < points.length; i++) {
+          const a = points[i - 1];
+          const b = points[i];
+          const ax = (a.lng - endpoint.lng) * metersLon;
+          const ay = (a.lat - endpoint.lat) * metersLat;
+          const bx = (b.lng - endpoint.lng) * metersLon;
+          const by = (b.lat - endpoint.lat) * metersLat;
+          const vx = bx - ax;
+          const vy = by - ay;
+          const lengthSquared = vx * vx + vy * vy;
+          if (lengthSquared < 0.25) continue;
+
+          // Evita confundir calles paralelas o fragmentos de la misma vía.
+          const sineAngle =
+            Math.abs(dx * vy - dy * vx) /
+            (directionSize * Math.sqrt(lengthSquared));
+          if (sineAngle < 0.5) continue;
+
+          const projection = -(ax * vx + ay * vy) / lengthSquared;
+          // El cruce debe caer dentro del segmento transversal (con
+          // una tolerancia pequeña para extremos OSM no conectados).
+          const tolerance = 4 / Math.sqrt(lengthSquared);
+          if (projection < -tolerance || projection > 1 + tolerance) continue;
+          const t = Math.max(0, Math.min(1, projection));
+          const distance = Math.hypot(ax + t * vx, ay + t * vy);
+          if (distance > 8) continue;
+
+          if (!best || distance < best.distance) {
+            best = { name: candidate.street_name.trim(), distance };
+          }
+        }
+      }
+    }
+
+    return best?.name ?? "Límite de zona";
+  }
+
   async function saveAreaPlanning() {
     if (!validatePlanningPeriod()) {
       return;
@@ -10078,33 +10139,22 @@ export default function TestSweepingMap({
 
     const recordsToSave =
       selectedStreets.flatMap((item) =>
-        areaStreetToLeafletPaths(
-          item.geometry
-        ).map((path) => ({
-          main_street:
-            item.street_name,
-          from_street:
-            "Límite de zona",
-          to_street:
-            "Límite de zona",
-          geometry: {
-            type: "LineString" as const,
-            coordinates:
-              path.map(
-                (position) => {
-                  const point =
-                    L.latLng(
-                      position as L.LatLngExpression
-                    );
-
-                  return [
-                    point.lng,
-                    point.lat,
-                  ];
-                }
-              ),
-          },
-        }))
+        areaStreetToLeafletPaths(item.geometry).map((path) => {
+          const points = path.map((position) =>
+            L.latLng(position as L.LatLngExpression)
+          );
+          const start = points[0];
+          const end = points[points.length - 1];
+          return {
+            main_street: item.street_name,
+            from_street: findAreaCrossStreet(item, start, points[1]),
+            to_street: findAreaCrossStreet(item, end, points[points.length - 2]),
+            geometry: {
+              type: "LineString" as const,
+              coordinates: points.map((point) => [point.lng, point.lat]),
+            },
+          };
+        })
       );
 
     if (recordsToSave.length === 0) {
@@ -12274,6 +12324,7 @@ export default function TestSweepingMap({
                           "B.P2",
                           "B.P3",
                           "B.P4",
+                          "S.P.10",
                         ].map((code) => {
                           const vehicle =
                             alltrackVehicles.find(
@@ -16189,6 +16240,7 @@ export default function TestSweepingMap({
                           "B.P2",
                           "B.P3",
                           "B.P4",
+                          "S.P.10",
                         ].map((code) => {
                           const vehicle =
                             alltrackVehicles.find(
@@ -16262,7 +16314,7 @@ export default function TestSweepingMap({
                 {alltrackViewMode === "current" ? (
                   <>
                     <p className="mt-3 text-xs text-muted-foreground">
-                      A.7 · B.4 · B.5 · B.6 · B.7 · B.P2 · B.P3 · B.P4
+                      A.7 · B.4 · B.5 · B.6 · B.7 · B.P2 · B.P3 · B.P4 · S.P.10
                     </p>
 
                     {alltrackUpdatedAt && (

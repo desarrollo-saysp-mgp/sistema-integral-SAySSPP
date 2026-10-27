@@ -113,6 +113,9 @@ const SERVICIOS_PUBLICOS_EMAILS = [
   "waldaquin84@gmail.com",
 ];
 
+// Autorización adicional exclusiva para el Mapa de Barrido.
+const BARRIDO_EMAILS = ["martincornejo.gp@gmail.com"];
+
 const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
 
@@ -172,6 +175,10 @@ export default async function AccesosPage() {
     SERVICIOS_PUBLICOS_EMAILS
       .map(normalizeText)
       .includes(userEmail);
+
+  const isBarridoUser = BARRIDO_EMAILS
+    .map(normalizeText)
+    .includes(userEmail);
 
   const isDirectorGirsu =
     userEmail === normalizeText(DIRECTOR_GIRSU_EMAIL);
@@ -333,11 +340,13 @@ export default async function AccesosPage() {
    * - AdminLectura (solo lectura se controla dentro del módulo/API)
    * - adm.serviciospublicos.mgp@gmail.com
    * - waldaquin84@gmail.com
+   * - martincornejo.gp@gmail.com (solo este módulo)
    */
   if (
     (
       hasAllowedRole ||
-      isServiciosPublicosUser
+      isServiciosPublicosUser ||
+      isBarridoUser
     ) &&
     !alreadyHasSweepingMap
   ) {
@@ -363,13 +372,13 @@ export default async function AccesosPage() {
        * Taller solamente:
        * - Órdenes de Trabajo
        * - Planta Vehicular
+       * - Mapa de Barrido únicamente para la cuenta autorizada
        */
       if (isTallerUser) {
         return (
-          item.key ===
-            "work_orders" ||
-          item.key ===
-            "vehicle_fleet"
+          item.key === "work_orders" ||
+          item.key === "vehicle_fleet" ||
+          (isBarridoUser && item.key === "sweeping_map")
         );
       }
 
@@ -531,6 +540,7 @@ export default async function AccesosPage() {
        * - Admin
        * - AdminLectura
        * - las dos cuentas de Servicios Públicos
+       * - cuenta autorizada exclusivamente para Barrido
        */
       if (
         item.key ===
@@ -538,7 +548,8 @@ export default async function AccesosPage() {
       ) {
         return (
           hasAllowedRole ||
-          isServiciosPublicosUser
+          isServiciosPublicosUser ||
+          isBarridoUser
         );
       }
 

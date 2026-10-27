@@ -13,11 +13,13 @@ const SWEEPING_VEHICLE_CODES = new Set([
   "B.P2",
   "B.P3",
   "B.P4",
+  "S.P.10",
 ]);
 
 const SWEEPING_FULL_ACCESS_EMAILS = new Set([
   "waldaquin84@gmail.com",
   "adm.serviciospublicos.mgp@gmail.com",
+  "martincornejo.gp@gmail.com",
 ]);
 
 const normalizeText = (value: unknown) =>

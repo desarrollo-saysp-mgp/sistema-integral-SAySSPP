@@ -5,6 +5,7 @@ import MapClient from "./map-client";
 const SERVICIOS_PUBLICOS_EMAILS = [
   "waldaquin84@gmail.com",
   "adm.serviciospublicos.mgp@gmail.com",
+  "martincornejo.gp@gmail.com",
 ];
 
 function normalizeAccessValue(value: unknown) {
