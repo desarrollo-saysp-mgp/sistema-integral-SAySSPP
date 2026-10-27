@@ -175,6 +175,7 @@ function normalizeStatus(
 const SWEEPING_EDITOR_EMAILS = [
   "waldaquin84@gmail.com",
   "adm.serviciospublicos.mgp@gmail.com",
+  "martincornejo.gp@gmail.com",
 ];
 
 function normalizeAccessValue(value: unknown) {
@@ -186,13 +187,66 @@ function normalizeAccessValue(value: unknown) {
     .replace(/\s+/g, "");
 }
 
+/**
+ * Un fallo transitorio de Supabase Auth NO significa que la sesion haya vencido.
+ * No se autoriza ninguna operacion si no es posible verificar la identidad.
+ */
+class SweepingAuthUnavailableError extends Error {
+  constructor() {
+    super("No se pudo verificar la sesion por un problema temporal de conexion. Intenta nuevamente.");
+    this.name = "SweepingAuthUnavailableError";
+  }
+}
+
+function isTemporaryAuthError(error: {
+  name?: string;
+  status?: number;
+  message?: string;
+}): boolean {
+  return (
+    error.name === "AuthRetryableFetchError" ||
+    (typeof error.status === "number" && error.status >= 500) ||
+    /fetch failed|connect timeout|UND_ERR_CONNECT_TIMEOUT/i.test(error.message ?? "")
+  );
+}
+
 async function getSweepingAccess() {
   const supabase = await createClient();
+
+  let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  const inicioAuth = performance.now();
+  try {
+    authResult = await supabase.auth.getUser();
+  } catch (error) {
+    if (error instanceof Error && isTemporaryAuthError(error)) {
+      console.error("[BARRIDO AUTH] Error de red verificando sesion:", error.message);
+      throw new SweepingAuthUnavailableError();
+    }
+    throw error;
+  } finally {
+    console.log(
+      "[BARRIDO] Tiempo autenticación:",
+      Math.round(performance.now() - inicioAuth),
+      "ms"
+    );
+  }
 
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = authResult;
+
+  if (authError) {
+    console.error("[BARRIDO AUTH] Error verificando sesion:", {
+      tipo: authError.name,
+      mensaje: authError.message,
+      status: authError.status,
+    });
+
+    if (isTemporaryAuthError(authError)) {
+      throw new SweepingAuthUnavailableError();
+    }
+  }
 
   if (authError || !user) {
     return {
@@ -670,6 +724,13 @@ export async function GET(request: Request) {
       error
 
     );
+
+    if (error instanceof SweepingAuthUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
 
@@ -1402,6 +1463,13 @@ export async function POST(
 
     );
 
+    if (error instanceof SweepingAuthUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
 
       {
@@ -1795,6 +1863,13 @@ export async function PATCH(
 
     );
 
+    if (error instanceof SweepingAuthUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
 
       {
@@ -2015,6 +2090,13 @@ export async function DELETE(
       error
 
     );
+
+    if (error instanceof SweepingAuthUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
 

@@ -6,6 +6,7 @@ const BARRIDO_SERVICE_ID = 5;
 const FULL_ACCESS_EMAILS = new Set([
   "waldaquin84@gmail.com",
   "adm.serviciospublicos.mgp@gmail.com",
+  "martincornejo.gp@gmail.com",
 ]);
 
 function isValidYmd(value: string | null) {
