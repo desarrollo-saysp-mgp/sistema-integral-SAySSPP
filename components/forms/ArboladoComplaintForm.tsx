@@ -90,6 +90,16 @@ type ComplaintExtraData = {
   resolution_date?: unknown;
   agent?: unknown;
   resolution_responsible?: unknown;
+  // Claves históricas de la importación Excel
+  depto?: unknown;
+  nivel?: unknown;
+  descripcion?: unknown;
+  observaciones_originales?: unknown;
+  solucion?: unknown;
+  agente?: unknown;
+  responsable_de_resolucion?: unknown;
+  fecha_resolucion_original_excel?: unknown;
+  medio_contacto_original?: unknown;
 };
 
 export interface ArboladoComplaintFormData {
@@ -134,52 +144,63 @@ const getExtraData = (complaint?: Complaint | null): ComplaintExtraData => {
 const normalizeComparable = (value: unknown) =>
   String(value ?? "").trim();
 
+// Prioriza los campos actuales; si no tienen valor, consulta los del Excel.
+const firstStored = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+};
+
+const toDateInput = (value: string): string => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
+};
+
+// Muestra también la opción histórica si no figura en el catálogo actual.
+const withStoredOption = (options: readonly string[], stored: string): string[] =>
+  stored && !options.includes(stored) ? [stored, ...options] : [...options];
+
 const getInitialFormData = (
   complaint: Complaint | null | undefined,
   profileFullName: string,
   today: string,
 ): ArboladoComplaintFormData => {
   const extra = getExtraData(complaint);
+  const isEditing = Boolean(complaint);
+  const contact = firstStored(complaint?.contact_method, extra.medio_contacto_original);
 
   return {
-    arbolado_number:
-      complaint?.arbolado_number === null ||
-      complaint?.arbolado_number === undefined
-        ? ""
-        : String(complaint.arbolado_number),
+    arbolado_number: firstStored(
+      complaint?.arbolado_number,
+      // Solo se muestra el número general al editar un reclamo proveniente de Reclamos Generales.
+      complaint?.form_variant === "general" ? complaint?.complaint_number : null,
+    ),
     complaint_date: complaint?.complaint_date || today,
     complainant_name: complaint?.complainant_name || "",
     address: complaint?.address || "",
     street_number: complaint?.street_number || "",
     phone_number: complaint?.phone_number || "",
-    department:
-      (typeof extra.department === "string"
-        ? extra.department
-        : "Arbolado") as ArboladoDepartment,
-    level: (typeof extra.level === "string"
-      ? extra.level
-      : "") as ArboladoLevel | "",
-    description_type:
-      (typeof extra.description_type === "string"
-        ? extra.description_type
-        : complaint?.details || "") as ArboladoDescription | "",
-    observations:
-      typeof extra.observations === "string" ? extra.observations : "",
-    solution:
-      (typeof extra.solution === "string"
-        ? extra.solution
-        : "") as ArboladoSolution | "",
-    contact_method: (complaint?.contact_method || "") as ContactMethod,
+    department: firstStored(extra.department, extra.depto, "Arbolado") as ArboladoDepartment,
+    level: firstStored(extra.level, extra.nivel) as ArboladoLevel | "",
+    description_type: firstStored(
+      extra.description_type, extra.descripcion, complaint?.details,
+    ) as ArboladoDescription | "",
+    observations: firstStored(extra.observations, extra.observaciones_originales),
+    solution: firstStored(extra.solution, extra.solucion) as ArboladoSolution | "",
+    contact_method: (contact.toLowerCase() === "teléfono" ? "Telefono" : contact) as ContactMethod,
     status: complaint?.status || "En proceso",
-    resolution_date:
-      typeof extra.resolution_date === "string" ? extra.resolution_date : "",
-    agent: (typeof extra.agent === "string"
-      ? extra.agent
-      : "N/A") as ArboladoAgent | "",
-    resolution_responsible:
-      typeof extra.resolution_responsible === "string"
-        ? extra.resolution_responsible
-        : profileFullName,
+    resolution_date: toDateInput(firstStored(
+      complaint?.resolution_date, extra.resolution_date, extra.fecha_resolucion_original_excel,
+    )),
+    agent: firstStored(extra.agent, extra.agente, isEditing ? "" : "N/A") as ArboladoAgent | "",
+    resolution_responsible: firstStored(
+      extra.resolution_responsible,
+      extra.responsable_de_resolucion,
+      isEditing ? "" : profileFullName,
+    ),
   };
 };
 
@@ -212,13 +233,6 @@ export function ArboladoComplaintForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addressContainerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      resolution_responsible: profile?.full_name || prev.resolution_responsible,
-    }));
-  }, [profile?.full_name]);
 
   useEffect(() => {
     setFormData(initialFormData);
@@ -382,7 +396,6 @@ export function ArboladoComplaintForm({
     setFormData((prev) => ({
       ...prev,
       agent: value as ArboladoAgent,
-      resolution_responsible: profile?.full_name || prev.resolution_responsible,
     }));
   };
 
@@ -414,7 +427,7 @@ export function ArboladoComplaintForm({
         street_number: formData.street_number.trim(),
         phone_number: formData.phone_number.trim(),
         observations: formData.observations.trim(),
-        resolution_responsible: profile?.full_name || "",
+        resolution_responsible: formData.resolution_responsible,
       });
 
       if (!result.success) {
@@ -441,6 +454,7 @@ export function ArboladoComplaintForm({
               <Label htmlFor="arbolado_number">N° Reclamo Arbolado</Label>
               <Input
                 id="arbolado_number"
+                readOnly={complaint?.form_variant === "general"}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -612,7 +626,7 @@ export function ArboladoComplaintForm({
                   <SelectValue placeholder="Seleccione un departamento" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ARBOLADO_DEPARTMENTS.map((department) => (
+                  {withStoredOption(ARBOLADO_DEPARTMENTS, formData.department).map((department) => (
                     <SelectItem key={department} value={department}>
                       {department}
                     </SelectItem>
@@ -636,7 +650,7 @@ export function ArboladoComplaintForm({
                   <SelectValue placeholder="Seleccione un nivel" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ARBOLADO_LEVELS.map((item) => (
+                  {withStoredOption(ARBOLADO_LEVELS, formData.level).map((item) => (
                     <SelectItem key={item} value={item}>
                       {item}
                     </SelectItem>
@@ -663,7 +677,7 @@ export function ArboladoComplaintForm({
                 <SelectValue placeholder="Seleccione una descripción" />
               </SelectTrigger>
               <SelectContent>
-                {ARBOLADO_DESCRIPTION_OPTIONS.map((item) => (
+                {withStoredOption(ARBOLADO_DESCRIPTION_OPTIONS, formData.description_type).map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
                   </SelectItem>
@@ -702,7 +716,7 @@ export function ArboladoComplaintForm({
                   <SelectValue placeholder="Seleccione una solución" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ARBOLADO_SOLUTIONS.map((item) => (
+                  {withStoredOption(ARBOLADO_SOLUTIONS, formData.solution).map((item) => (
                     <SelectItem key={item} value={item}>
                       {item}
                     </SelectItem>
@@ -784,7 +798,7 @@ export function ArboladoComplaintForm({
                   <SelectValue placeholder="Seleccione un agente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ARBOLADO_AGENTS.map((agent) => (
+                  {withStoredOption(ARBOLADO_AGENTS, formData.agent).map((agent) => (
                     <SelectItem key={agent} value={agent}>
                       {agent}
                     </SelectItem>
@@ -799,7 +813,7 @@ export function ArboladoComplaintForm({
               </Label>
               <Input
                 id="resolution_responsible"
-                value={profile?.full_name || ""}
+                value={formData.resolution_responsible}
                 disabled
                 className="bg-muted"
               />
