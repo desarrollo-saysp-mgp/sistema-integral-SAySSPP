@@ -81,31 +81,29 @@ type ComplaintWithDetails = Complaint & {
 
 
 type ComplaintExtraData = {
-
+  // Formato actual de Arbolado
   department?: unknown;
-
   description_type?: unknown;
-
   level?: unknown;
-
-
-
+  agent?: unknown;
+  solution?: unknown;
+  observations?: unknown;
+  resolution_date?: unknown;
+  resolution_responsible?: unknown;
+  // Formato histórico migrado desde Excel
   depto?: unknown;
-
   descripcion?: unknown;
-
   nivel?: unknown;
-
   agente?: unknown;
-
-
-
+  solucion?: unknown;
+  observaciones_originales?: unknown;
+  fecha_resolucion_original_excel?: unknown;
+  responsable_de_resolucion?: unknown;
+  medio_contacto_original?: unknown;
+  // Seguimiento de Servicios Públicos: intacto
   sp_seen?: unknown;
-
   sp_observations?: unknown;
-
   sp_resolution_date?: unknown;
-
 };
 
 
@@ -178,51 +176,44 @@ const getExtraData = (complaint: Complaint): ComplaintExtraData => {
 
 
 
-const getArboladoDepartment = (extra: ComplaintExtraData) => {
-
-  if (typeof extra.department === "string") return extra.department;
-
-  if (typeof extra.depto === "string") return extra.depto;
-
+// Lectura compatible con reclamos nuevos, migrados desde Excel y generales
+// cuyo servicio es Arbolado. No modifica el objeto original.
+const firstText = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
   return "";
-
 };
 
+const getArboladoDepartment = (extra: ComplaintExtraData) =>
+  firstText(extra.department, extra.depto);
 
+const getArboladoLevel = (extra: ComplaintExtraData) =>
+  firstText(extra.level, extra.nivel);
 
-const getArboladoLevel = (extra: ComplaintExtraData) => {
+const getArboladoDescription = (extra: ComplaintExtraData, details?: string | null) =>
+  firstText(extra.description_type, extra.descripcion, details);
 
-  if (typeof extra.level === "string") return extra.level;
+const getArboladoAgent = (extra: ComplaintExtraData) =>
+  firstText(extra.agent, extra.agente);
 
-  if (typeof extra.nivel === "string") return extra.nivel;
+const getArboladoContact = (extra: ComplaintExtraData, contact?: string | null) =>
+  firstText(contact, extra.medio_contacto_original);
 
-  return "";
+const getArboladoSolution = (extra: ComplaintExtraData) =>
+  firstText(extra.solution, extra.solucion);
 
+const getArboladoObservations = (extra: ComplaintExtraData) =>
+  firstText(extra.observations, extra.observaciones_originales);
+
+const getArboladoResponsible = (extra: ComplaintExtraData) =>
+  firstText(extra.resolution_responsible, extra.responsable_de_resolucion);
+
+const normalizeArboladoDate = (value: string): string => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : value;
 };
-
-
-
-const getArboladoDescription = (extra: ComplaintExtraData) => {
-
-  if (typeof extra.description_type === "string") return extra.description_type;
-
-  if (typeof extra.descripcion === "string") return extra.descripcion;
-
-  return "";
-
-};
-
-
-
-const getArboladoAgent = (extra: ComplaintExtraData) => {
-
-  if (typeof extra.agente === "string") return extra.agente;
-
-  return "";
-
-};
-
-
 
 const normalizeText = (value: string) =>
 
@@ -726,7 +717,18 @@ export default function ComplaintViewPage() {
 
     if (item.resolution_date) return item.resolution_date;
 
+    const isArboladoRecord =
+      item.form_variant === "arbolado" ||
+      (item.service?.name || "").toLowerCase().includes("arbol");
 
+    if (isArboladoRecord) {
+      const extra = getExtraData(item);
+      const historicalDate = firstText(
+        extra.resolution_date,
+        extra.fecha_resolucion_original_excel,
+      );
+      return historicalDate ? normalizeArboladoDate(historicalDate) : null;
+    }
 
     if (item.status === "Resuelto") {
 
@@ -874,7 +876,7 @@ export default function ComplaintViewPage() {
 
       const arboladoLevel = getArboladoLevel(extra);
 
-      const arboladoDescription = getArboladoDescription(extra);
+      const arboladoDescription = getArboladoDescription(extra, complaint.details);
 
       const arboladoAgent = getArboladoAgent(extra);
 
@@ -1122,7 +1124,7 @@ export default function ComplaintViewPage() {
 
             "Medio de contacto",
 
-            cleanValue(complaint.contact_method),
+            cleanValue(isArbolado ? getArboladoContact(extra, complaint.contact_method) : complaint.contact_method),
 
           ],
 
@@ -1226,7 +1228,7 @@ export default function ComplaintViewPage() {
 
         head: [["Detalle"]],
 
-        body: [[cleanValue(complaint.details)]],
+        body: [[cleanValue(isArbolado ? getArboladoDescription(extra, complaint.details) : complaint.details)]],
 
         styles: {
 
@@ -1602,7 +1604,7 @@ export default function ComplaintViewPage() {
 
   const arboladoLevel = getArboladoLevel(extra);
 
-  const arboladoDescription = getArboladoDescription(extra);
+  const arboladoDescription = getArboladoDescription(extra, complaint.details);
 
   const arboladoAgent = getArboladoAgent(extra);
 
@@ -1810,7 +1812,7 @@ export default function ComplaintViewPage() {
 
               label="Medio de Contacto"
 
-              value={cleanValue(complaint.contact_method)}
+              value={cleanValue(isArbolado ? getArboladoContact(extra, complaint.contact_method) : complaint.contact_method)}
 
             />
 
@@ -1932,6 +1934,21 @@ export default function ComplaintViewPage() {
 
 
 
+          {isArbolado && (
+            <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+              <InfoField label="Solución" value={cleanValue(getArboladoSolution(extra))} />
+              <InfoField label="Responsable de resolución" value={cleanValue(getArboladoResponsible(extra))} />
+              {getArboladoObservations(extra) && (
+                <div className="md:col-span-2">
+                  <p className="mb-2 text-sm font-medium text-muted-foreground">Observaciones</p>
+                  <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
+                    {getArboladoObservations(extra)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-4">
 
             <p className="mb-2 text-sm font-medium text-muted-foreground">
@@ -1944,7 +1961,7 @@ export default function ComplaintViewPage() {
 
             <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed">
 
-              {cleanValue(complaint.details)}
+              {cleanValue(isArbolado ? getArboladoDescription(extra, complaint.details) : complaint.details)}
 
             </p>
 
