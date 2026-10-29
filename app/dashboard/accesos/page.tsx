@@ -18,7 +18,8 @@ type ModuleKey =
   | "stock_inventory"
   | "rnu"
   | "personnel"
-  | "sweeping_map";
+  | "sweeping_map"
+  | "grading_map";
 
 type AccessItem = {
   key: ModuleKey;
@@ -95,6 +96,14 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     description:
       "Planificación, registro y seguimiento de los recorridos de barrido.",
     href: "/dashboard/test-sweeping-map",
+    available: true,
+  },
+  grading_map: {
+    key: "grading_map",
+    title: "Mapa de Motonivelación",
+    description:
+      "Planificación, registro y seguimiento de trabajos de motonivelación.",
+    href: "/dashboard/test-grading-map",
     available: true,
   },
 };
@@ -251,6 +260,10 @@ export default async function AccesosPage() {
     (item) => item.key === "sweeping_map",
   );
 
+  const alreadyHasGradingMap = accesses.some(
+    (item) => item.key === "grading_map",
+  );
+
   /*
    * Admin/AdminLectura: ven Tablero General.
    * GIRSU: ve Tablero GIRSU.
@@ -355,6 +368,17 @@ export default async function AccesosPage() {
     );
   }
 
+  /*
+   * Mapa de Motonivelación: exactamente las mismas cuentas
+   * que tienen acceso al Mapa de Barrido.
+   */
+  if (
+    (hasAllowedRole || isServiciosPublicosUser || isBarridoUser) &&
+    !alreadyHasGradingMap
+  ) {
+    accesses.push(MODULE_CONFIG.grading_map);
+  }
+
   const filteredAccesses =
     accesses.filter((item) => {
       /*
@@ -378,7 +402,7 @@ export default async function AccesosPage() {
         return (
           item.key === "work_orders" ||
           item.key === "vehicle_fleet" ||
-          (isBarridoUser && item.key === "sweeping_map")
+          (isBarridoUser && (item.key === "sweeping_map" || item.key === "grading_map"))
         );
       }
 
@@ -442,7 +466,9 @@ export default async function AccesosPage() {
           item.key ===
             "vehicle_fleet" ||
           item.key ===
-            "sweeping_map"
+            "sweeping_map" ||
+          item.key ===
+            "grading_map"
         );
       }
 
@@ -551,6 +577,10 @@ export default async function AccesosPage() {
           isServiciosPublicosUser ||
           isBarridoUser
         );
+      }
+
+      if (item.key === "grading_map") {
+        return hasAllowedRole || isServiciosPublicosUser || isBarridoUser;
       }
 
       return true;
