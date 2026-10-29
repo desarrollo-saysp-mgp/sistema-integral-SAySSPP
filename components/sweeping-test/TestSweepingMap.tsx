@@ -7267,6 +7267,19 @@ export default function TestSweepingMap({
   const monitorCenterRef =
     useRef<HTMLDivElement | null>(null);
 
+  // Centro de monitoreo: una actualización general cada diez minutos.
+  const MONITOR_REFRESH_MS = 10 * 60 * 1000;
+  const [monitorLastUpdated, setMonitorLastUpdated] =
+    useState<Date | null>(null);
+  const [monitorRefreshError, setMonitorRefreshError] =
+    useState(false);
+  const [monitorRefreshing, setMonitorRefreshing] =
+    useState(false);
+  const monitorRefreshingRef = useRef(false);
+  const monitorRefreshCallbackRef = useRef<() => Promise<void>>(
+    async () => undefined
+  );
+
   /*
    * ==========================================================
    * PANTALLA COMPLETA DE MAPAS
@@ -7580,22 +7593,40 @@ export default function TestSweepingMap({
   }
 
   async function refreshMonitorCenter() {
-    await Promise.all([
-      loadPlannedRecords(
-        plannedAppliedFrom,
-        plannedAppliedTo
-      ),
-      loadCompletedRecords(
-        completedAppliedFrom,
-        completedAppliedTo
-      ),
-      loadSweepingComplaints(
-        complaintsAppliedFrom,
-        complaintsAppliedTo
-      ),
-      refreshAlltrackActiveView(),
-    ]);
+    if (monitorRefreshingRef.current) return;
+    monitorRefreshingRef.current = true;
+    setMonitorRefreshing(true);
+    setMonitorRefreshError(false);
+    try {
+      await Promise.all([
+        loadPlannedRecords(plannedAppliedFrom, plannedAppliedTo),
+        loadCompletedRecords(completedAppliedFrom, completedAppliedTo),
+        loadSweepingComplaints(complaintsAppliedFrom, complaintsAppliedTo),
+        refreshAlltrackActiveView(),
+      ]);
+      setMonitorLastUpdated(new Date());
+    } catch (error) {
+      console.error("Error al actualizar el Centro de monitoreo de barrido:", error);
+      setMonitorRefreshError(true);
+    } finally {
+      monitorRefreshingRef.current = false;
+      setMonitorRefreshing(false);
+    }
   }
+
+  // Mantiene la referencia a la función actual y sus filtros vigentes,
+  // sin recrear el intervalo al renderizar cada mapa.
+  monitorRefreshCallbackRef.current = refreshMonitorCenter;
+
+  useEffect(() => {
+    if (!monitorMode) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") {
+        void monitorRefreshCallbackRef.current();
+      }
+    }, MONITOR_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, [monitorMode]);
 
   /*
    * ==========================================================
@@ -11964,18 +11995,24 @@ export default function TestSweepingMap({
       >
         {monitorFullscreen && (
           <>
-            <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-slate-800 bg-slate-950 px-4">
+            <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold tracking-wide text-white">
+                <p className="text-xs font-bold tracking-wide text-white">
                   Centro de monitoreo de barrido
                 </p>
-                <p className="mt-0.5 text-[11px] text-slate-400">
+                <p className="text-[9px] text-slate-400">
                   Planificación · realizado · reclamos · vehículos All Track
                 </p>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {(loadingPlanned ||
+                <div className="text-right text-[10px] leading-tight text-slate-300">
+                  <p>{monitorRefreshError ? "Error en la última actualización" : monitorLastUpdated
+                    ? `Última actualización: ${monitorLastUpdated.toLocaleTimeString("es-AR")}`
+                    : "Esperando primera actualización"}</p>
+                  <p className="text-[9px] text-slate-400">Automática cada 10 min</p>
+                </div>
+                {(monitorRefreshing || loadingPlanned ||
                   loadingCompleted ||
                   loadingComplaints ||
                   loadingAlltrack) && (
@@ -11991,6 +12028,7 @@ export default function TestSweepingMap({
                     void refreshMonitorCenter()
                   }
                   disabled={
+                    monitorRefreshing ||
                     loadingPlanned ||
                     loadingCompleted ||
                     loadingComplaints ||
@@ -12013,7 +12051,7 @@ export default function TestSweepingMap({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-2 p-2">
+            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1 p-1">
               {/* PLANIFICACIÓN */}
               <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-blue-900/70 bg-white text-slate-900 shadow-xl">
                 <div className="flex h-10 shrink-0 items-center justify-between border-b bg-blue-50 px-3">
@@ -12250,10 +12288,14 @@ export default function TestSweepingMap({
                           icon={createComplaintPinIcon(color)}
                         >
                           <Popup>
-                            <div className="min-w-[200px] space-y-1">
+                            <div className="min-w-[220px] space-y-2">
                               <p className="font-semibold">Reclamo #{complaint.id}</p>
                               <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
+                              <p className="text-sm"><strong>Fecha:</strong> {formatDateAr(complaint.complaint_date)}</p>
                               <p className="text-sm"><strong>Estado:</strong> {complaint.status ?? "-"}</p>
+                              {complaint.details && (
+                                <p className="text-sm leading-relaxed"><strong>Detalle:</strong> {complaint.details}</p>
+                              )}
                             </div>
                           </Popup>
                         </Marker>
