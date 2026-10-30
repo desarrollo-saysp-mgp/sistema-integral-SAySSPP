@@ -25,6 +25,9 @@ import {
 import {
   ArrowLeft,
   ClipboardCheck,
+  ChevronDown,
+  Check,
+  Layers3,
   Eye,
   FileText,
   Filter,
@@ -108,7 +111,7 @@ type VehicleSecurityInspection = {
 
 type SecurityFilter = "Todos" | "Bueno" | "Regular" | "Crítico";
 type ViewMode = "history" | "latest";
-type ReportType = "lights" | "body";
+type ReportType = "lights" | "body" | "other" | "custom";
 
 const ESTADO_GENERAL_PATH =
   "/dashboard/taller/ordenes-trabajo/criticidad/estado-general";
@@ -165,6 +168,71 @@ const BODY_REPORT_FIELDS: ChecklistReportField[] = [
   { key: "limpia_parabrisas", label: "Limpia parabrisas" },
   { key: "espejos", label: "Espejos" },
 ];
+
+const OTHER_REPORT_FIELDS: ChecklistReportField[] = [
+  { key: "botiquin", label: "Botiquín" },
+  { key: "calcos_municipio", label: "Calcos del municipio" },
+  { key: "calco_codigo_vehiculo", label: "Calco código vehículo" },
+];
+
+const REPORT_FIELD_GROUPS: Array<{
+  title: string;
+  fields: ChecklistReportField[];
+}> = [
+  { title: "Luces delanteras y traseras", fields: LIGHT_REPORT_FIELDS },
+  {
+    title: "Cristales y espejos",
+    fields: [
+      { key: "parabrisa_delantero", label: "Parabrisas delantero" },
+      { key: "parabrisa_trasero", label: "Parabrisas trasero" },
+      { key: "parabrisas_laterales", label: "Cristales laterales" },
+      { key: "limpia_parabrisas", label: "Limpiaparabrisas" },
+      { key: "espejos", label: "Espejos" },
+    ],
+  },
+  {
+    title: "Seguridad y cabina",
+    fields: [
+      { key: "anclaje_asientos", label: "Anclaje de asientos" },
+      { key: "cinturones_seguridad", label: "Cinturones de seguridad" },
+      { key: "bocina", label: "Bocina" },
+      { key: "espejo_ret_central", label: "Espejo retrovisor central" },
+      { key: "freno_mano_bloqueo", label: "Freno de mano / bloqueo" },
+      { key: "tablero_indicadores", label: "Tablero de indicadores" },
+    ],
+  },
+  {
+    title: "Carrocería y puertas",
+    fields: [
+      { key: "puerta_lado_conductor", label: "Puerta lado conductor" },
+      { key: "puerta_lado_acompanante", label: "Puerta lado acompañante" },
+      { key: "baul_porton_trasero", label: "Baúl / portón trasero" },
+      { key: "guardabarros_barreros", label: "Guardabarros / barreros" },
+    ],
+  },
+  {
+    title: "Ejes",
+    fields: [
+      { key: "eje_delantero", label: "Eje delantero" },
+      { key: "eje_trasero", label: "Eje trasero" },
+      { key: "eje_dual", label: "Eje dual" },
+    ],
+  },
+  {
+    title: "Reglamentarios",
+    fields: [
+      { key: "documentacion_completa", label: "Documentación completa" },
+      { key: "chapa_patente_delantera", label: "Chapa patente delantera" },
+      { key: "chapa_patente_trasera", label: "Chapa patente trasera" },
+      { key: "calcos_reflectivos", label: "Calcos reflectivos" },
+      { key: "extintor", label: "Extintor" },
+      { key: "conos_balizas", label: "Conos / balizas" },
+    ],
+  },
+  { title: "Otros", fields: OTHER_REPORT_FIELDS },
+];
+
+const ALL_REPORT_FIELDS = REPORT_FIELD_GROUPS.flatMap((group) => group.fields);
 
 const normalizeText = (value: unknown) =>
   String(value || "")
@@ -291,38 +359,43 @@ const getProblemLabel = (value: ChecklistValue) => {
   return null;
 };
 
-const getReportFields = (reportType: ReportType) => {
-  return reportType === "lights" ? LIGHT_REPORT_FIELDS : BODY_REPORT_FIELDS;
+const getReportFields = (
+  reportType: ReportType,
+  selectedFields: string[] = [],
+): ChecklistReportField[] => {
+  if (reportType === "lights") return LIGHT_REPORT_FIELDS;
+  if (reportType === "body") return BODY_REPORT_FIELDS;
+  if (reportType === "other") return OTHER_REPORT_FIELDS;
+  return ALL_REPORT_FIELDS.filter((field) => selectedFields.includes(field.key));
 };
 
 const getReportTitle = (reportType: ReportType) => {
-  return reportType === "lights"
-    ? "INFORME PARA TALLER - LUCES"
-    : "INFORME PARA TALLER - CHAPA / CARROCERÍA";
+  if (reportType === "lights") return "INFORME PARA TALLER - LUCES";
+  if (reportType === "body") return "INFORME PARA TALLER - CHAPA / CARROCERÍA";
+  if (reportType === "other") return "INFORME PARA TALLER - OTROS";
+  return "INFORME PARA TALLER - PERSONALIZADO";
 };
 
 const getReportFileName = (reportType: ReportType) => {
-  return reportType === "lights" ? "informe_luces" : "informe_chapa";
+  if (reportType === "lights") return "informe_luces";
+  if (reportType === "body") return "informe_chapa";
+  if (reportType === "other") return "informe_otros";
+  return "informe_personalizado";
 };
 
 const getInspectionProblems = (
   inspection: VehicleSecurityInspection,
   reportType: ReportType,
+  selectedFields: string[] = [],
 ) => {
-  const fields = getReportFields(reportType);
+  const fields = getReportFields(reportType, selectedFields);
 
   return fields
     .map((field) => {
       const value = inspection[field.key] as ChecklistValue;
       const problem = getProblemLabel(value);
-
       if (!problem) return null;
-
-      return {
-        label: field.label,
-        value,
-        problem,
-      };
+      return { label: field.label, value, problem };
     })
     .filter(Boolean) as Array<{
       label: string;
@@ -371,8 +444,7 @@ export function VehicleSecurityClient() {
   const [deleting, setDeleting] = useState(false);
 
   const [reportType, setReportType] = useState<ReportType | null>(null);
-  const [selectedReportVehicle, setSelectedReportVehicle] = useState("all");
-  const [generatingReport, setGeneratingReport] = useState(false);
+
 
   const estadoGeneralUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -515,220 +587,7 @@ export function VehicleSecurityClient() {
     );
   }, [inspections]);
 
-  const reportVehicles = useMemo(() => {
-    if (!reportType) return [];
-
-    return latestByVehicle
-      .map((inspection) => ({
-        inspection,
-        problems: getInspectionProblems(inspection, reportType),
-      }))
-      .filter((item) => item.problems.length > 0)
-      .sort((a, b) =>
-        a.inspection.vehicle_code.localeCompare(b.inspection.vehicle_code, "es", {
-          numeric: true,
-        }),
-      );
-  }, [latestByVehicle, reportType]);
-
-  const openReportModal = (nextReportType: ReportType) => {
-    setReportType(nextReportType);
-    setSelectedReportVehicle("all");
-  };
-
-  const closeReportModal = () => {
-    if (generatingReport) return;
-
-    setReportType(null);
-    setSelectedReportVehicle("all");
-  };
-
-  const generateReportPdf = async () => {
-    if (!reportType) return;
-
-    const selectedItems =
-      selectedReportVehicle === "all"
-        ? reportVehicles
-        : reportVehicles.filter(
-          (item) => item.inspection.id === selectedReportVehicle,
-        );
-
-    if (selectedItems.length === 0) {
-      toast.error("No hay vehículos con problemas para generar el informe");
-      return;
-    }
-
-    try {
-      setGeneratingReport(true);
-
-      const { default: jsPDF } = await import("jspdf");
-
-      const doc = new jsPDF("p", "mm", "a4");
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const marginX = 14;
-      const bottomMargin = 16;
-      let y = 16;
-
-      const addPageIfNeeded = (neededHeight = 20) => {
-        if (y + neededHeight <= pageHeight - bottomMargin) return;
-
-        doc.addPage();
-        y = 16;
-      };
-
-      const addText = (
-        text: string,
-        x: number,
-        options?: {
-          fontSize?: number;
-          bold?: boolean;
-          color?: [number, number, number];
-          maxWidth?: number;
-          lineGap?: number;
-        },
-      ) => {
-        const fontSize = options?.fontSize ?? 10;
-        const maxWidth = options?.maxWidth ?? pageWidth - marginX * 2;
-        const lineGap = options?.lineGap ?? 5;
-
-        doc.setFontSize(fontSize);
-        doc.setFont("helvetica", options?.bold ? "bold" : "normal");
-
-        if (options?.color) {
-          doc.setTextColor(...options.color);
-        } else {
-          doc.setTextColor(20, 20, 20);
-        }
-
-        const lines = doc.splitTextToSize(text, maxWidth);
-        addPageIfNeeded(lines.length * lineGap);
-
-        doc.text(lines, x, y);
-        y += lines.length * lineGap;
-      };
-
-      doc.setFillColor(0, 162, 127);
-      doc.rect(0, 0, pageWidth, 10, "F");
-
-      y = 18;
-
-      addText(getReportTitle(reportType), marginX, {
-        fontSize: 15,
-        bold: true,
-      });
-
-      addText(
-        `Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}`,
-        marginX,
-        {
-          fontSize: 9,
-          color: [90, 90, 90],
-        },
-      );
-
-      addText(`Vehículos incluidos: ${selectedItems.length}`, marginX, {
-        fontSize: 9,
-        color: [90, 90, 90],
-      });
-
-      y += 3;
-
-      selectedItems.forEach((item, index) => {
-        const inspection = item.inspection;
-        const problems = item.problems;
-
-        addPageIfNeeded(45);
-
-        if (index > 0) {
-          doc.setDrawColor(220, 220, 220);
-          doc.line(marginX, y, pageWidth - marginX, y);
-          y += 7;
-        }
-
-        addText(
-          `${inspection.vehicle_code} - ${inspection.vehicle || "Sin vehículo"}`,
-          marginX,
-          {
-            fontSize: 12,
-            bold: true,
-          },
-        );
-
-        addText(
-          `Dominio: ${inspection.license_plate || "-"}   |   Dirección: ${inspection.area || "-"
-          }   |   Última checklist: ${formatDate(inspection.inspection_date)}`,
-          marginX,
-          {
-            fontSize: 9,
-            color: [90, 90, 90],
-          },
-        );
-
-        addText(
-          `Estado general: ${inspection.state_percent ?? "-"
-          }%   |   Seguridad: ${inspection.security_score}`,
-          marginX,
-          {
-            fontSize: 9,
-            color: [90, 90, 90],
-          },
-        );
-
-        y += 2;
-
-        addText("Elementos a revisar / reparar:", marginX, {
-          fontSize: 10,
-          bold: true,
-        });
-
-        problems.forEach((problem) => {
-          addText(`• ${problem.label}: ${problem.problem}`, marginX + 3, {
-            fontSize: 9,
-            maxWidth: pageWidth - marginX * 2 - 3,
-          });
-        });
-
-        if (inspection.observations?.trim()) {
-          y += 1;
-
-          addText(`Observaciones: ${inspection.observations.trim()}`, marginX, {
-            fontSize: 9,
-            color: [70, 70, 70],
-          });
-        }
-
-        y += 6;
-      });
-
-      const totalPages = doc.getNumberOfPages();
-
-      for (let page = 1; page <= totalPages; page += 1) {
-        doc.setPage(page);
-        doc.setFontSize(7);
-        doc.setTextColor(120, 120, 120);
-        doc.text(
-          `Página ${page} de ${totalPages}`,
-          pageWidth - marginX,
-          pageHeight - 7,
-          { align: "right" },
-        );
-      }
-
-      const fileName = `${getReportFileName(reportType)}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.pdf`;
-
-      doc.save(fileName);
-      toast.success("Informe generado correctamente");
-      closeReportModal();
-    } catch (error) {
-      console.error("Error generating vehicle report:", error);
-      toast.error("No se pudo generar el informe");
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
+  const openReportModal = (nextReportType: ReportType) => setReportType(nextReportType);
 
   const applyCommonFilters = (
     source: VehicleSecurityInspection[],
@@ -978,6 +837,28 @@ export function VehicleSecurityClient() {
             >
               <FileText className="h-4 w-4" />
               Informe chapa
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openReportModal("other")}
+              disabled={loading || latestByVehicle.length === 0}
+              className="gap-2 rounded-xl"
+            >
+              <FileText className="h-4 w-4" />
+              Informe otros
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openReportModal("custom")}
+              disabled={loading || latestByVehicle.length === 0}
+              className="gap-2 rounded-xl"
+            >
+              <Filter className="h-4 w-4" />
+              Informe personalizado
             </Button>
 
             <Button asChild className="gap-2 rounded-xl">
@@ -1490,109 +1371,11 @@ export function VehicleSecurityClient() {
       </div>
 
       {reportType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-2xl border bg-background p-5 shadow-xl">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold">
-                {reportType === "lights"
-                  ? "Generar informe de luces"
-                  : "Generar informe de chapa"}
-              </h2>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                Se toma la última checklist de cada vehículo. Podés generar un
-                informe general o elegir un vehículo puntual.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Vehículo
-                </label>
-
-                <select
-                  value={selectedReportVehicle}
-                  onChange={(event) =>
-                    setSelectedReportVehicle(event.target.value)
-                  }
-                  className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
-                >
-                  <option value="all">
-                    Todos los vehículos con problemas detectados (
-                    {reportVehicles.length})
-                  </option>
-
-                  {reportVehicles.map((item) => (
-                    <option
-                      key={item.inspection.id}
-                      value={item.inspection.id}
-                    >
-                      {item.inspection.vehicle_code} -{" "}
-                      {item.inspection.vehicle || "Sin vehículo"} -{" "}
-                      {item.inspection.license_plate || "Sin dominio"} (
-                      {item.problems.length} problema
-                      {item.problems.length === 1 ? "" : "s"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {reportVehicles.length === 0 && (
-                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-                  No se detectaron problemas para este tipo de informe en las
-                  últimas checklists.
-                </div>
-              )}
-
-              {reportVehicles.length > 0 && (
-                <div className="max-h-48 overflow-y-auto rounded-xl border bg-muted/20 p-3 text-sm">
-                  <p className="mb-2 font-semibold">
-                    Vehículos con problemas detectados:
-                  </p>
-
-                  <div className="space-y-1">
-                    {reportVehicles.map((item) => (
-                      <p key={item.inspection.id}>
-                        • <strong>{item.inspection.vehicle_code}</strong> -{" "}
-                        {item.inspection.vehicle || "-"} -{" "}
-                        {item.inspection.license_plate || "-"}:{" "}
-                        {item.problems.length} ítem
-                        {item.problems.length === 1 ? "" : "s"} a revisar
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={closeReportModal}
-                disabled={generatingReport}
-                className="rounded-xl"
-              >
-                Cancelar
-              </Button>
-
-              <Button
-                type="button"
-                onClick={generateReportPdf}
-                disabled={generatingReport || reportVehicles.length === 0}
-                className="gap-2 rounded-xl"
-              >
-                {generatingReport ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-                Generar PDF
-              </Button>
-            </div>
-          </div>
-        </div>
+        <VehicleReportModal
+          reportType={reportType}
+          latestByVehicle={latestByVehicle}
+          onClose={() => setReportType(null)}
+        />
       )}
 
       <AlertDialog
@@ -1629,6 +1412,492 @@ export function VehicleSecurityClient() {
     </>
   );
 }
+
+
+// El estado del generador permanece aislado de la tabla principal.
+// Las selecciones y búsquedas del modal ya no vuelven a renderizar los 216 checklists.
+function VehicleReportModal({
+  reportType,
+  latestByVehicle,
+  onClose,
+}: {
+  reportType: ReportType;
+  latestByVehicle: VehicleSecurityInspection[];
+  onClose: () => void;
+}) {
+  const [selectedReportFields, setSelectedReportFields] = useState<string[]>([]);
+  const [reportFieldSearch, setReportFieldSearch] = useState("");
+  const [expandedReportGroups, setExpandedReportGroups] = useState<string[]>([]);
+  const [selectedReportVehicle, setSelectedReportVehicle] = useState("all");
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  const reportVehicles = useMemo(() => {
+    if (!reportType) return [];
+
+    return latestByVehicle
+      .map((inspection) => ({
+        inspection,
+        problems: getInspectionProblems(inspection, reportType, selectedReportFields),
+      }))
+      .filter((item) => item.problems.length > 0)
+      .sort((a, b) =>
+        a.inspection.vehicle_code.localeCompare(b.inspection.vehicle_code, "es", {
+          numeric: true,
+        }),
+      );
+  }, [latestByVehicle, reportType, selectedReportFields]);
+
+  // La vista previa y el PDF usan exactamente la misma selección.
+  const selectedReportItems = useMemo(() =>
+    selectedReportVehicle === "all"
+      ? reportVehicles
+      : reportVehicles.filter((item) => item.inspection.id === selectedReportVehicle),
+    [reportVehicles, selectedReportVehicle],
+  );
+
+  const closeReportModal = () => {
+    if (generatingReport) return;
+
+    onClose();
+  };
+
+  const generateReportPdf = async () => {
+    if (!reportType) return;
+    if (reportType === "custom" && selectedReportFields.length === 0) {
+      toast.error("Seleccioná al menos un campo para el informe");
+      return;
+    }
+
+    const selectedItems = selectedReportItems;
+
+    if (selectedItems.length === 0) {
+      toast.error("No hay vehículos con problemas para generar el informe");
+      return;
+    }
+
+    try {
+      setGeneratingReport(true);
+
+      const { default: jsPDF } = await import("jspdf");
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      const bottomMargin = 16;
+      let y = 16;
+
+      const addPageIfNeeded = (neededHeight = 20) => {
+        if (y + neededHeight <= pageHeight - bottomMargin) return;
+
+        doc.addPage();
+        y = 16;
+      };
+
+      const addText = (
+        text: string,
+        x: number,
+        options?: {
+          fontSize?: number;
+          bold?: boolean;
+          color?: [number, number, number];
+          maxWidth?: number;
+          lineGap?: number;
+        },
+      ) => {
+        const fontSize = options?.fontSize ?? 10;
+        const maxWidth = options?.maxWidth ?? pageWidth - marginX * 2;
+        const lineGap = options?.lineGap ?? 5;
+
+        doc.setFontSize(fontSize);
+        doc.setFont("helvetica", options?.bold ? "bold" : "normal");
+
+        if (options?.color) {
+          doc.setTextColor(...options.color);
+        } else {
+          doc.setTextColor(20, 20, 20);
+        }
+
+        const lines = doc.splitTextToSize(text, maxWidth);
+        addPageIfNeeded(lines.length * lineGap);
+
+        doc.text(lines, x, y);
+        y += lines.length * lineGap;
+      };
+
+      doc.setFillColor(0, 162, 127);
+      doc.rect(0, 0, pageWidth, 10, "F");
+
+      y = 18;
+
+      addText(getReportTitle(reportType), marginX, {
+        fontSize: 15,
+        bold: true,
+      });
+
+      addText(
+        `Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}`,
+        marginX,
+        {
+          fontSize: 9,
+          color: [90, 90, 90],
+        },
+      );
+
+      if (reportType === "custom") {
+        addText(`Campos seleccionados: ${getReportFields(reportType, selectedReportFields).map((field) => field.label).join(", ")}`, marginX, {
+          fontSize: 9,
+          color: [90, 90, 90],
+        });
+      }
+
+      addText(`Vehículos incluidos: ${selectedItems.length}`, marginX, {
+        fontSize: 9,
+        color: [90, 90, 90],
+      });
+
+      y += 3;
+
+      selectedItems.forEach((item, index) => {
+        const inspection = item.inspection;
+        const problems = item.problems;
+
+        addPageIfNeeded(45);
+
+        if (index > 0) {
+          doc.setDrawColor(220, 220, 220);
+          doc.line(marginX, y, pageWidth - marginX, y);
+          y += 7;
+        }
+
+        addText(
+          `${inspection.vehicle_code} - ${inspection.vehicle || "Sin vehículo"}`,
+          marginX,
+          {
+            fontSize: 12,
+            bold: true,
+          },
+        );
+
+        addText(
+          `Dominio: ${inspection.license_plate || "-"}   |   Dirección: ${inspection.area || "-"
+          }   |   Última checklist: ${formatDate(inspection.inspection_date)}`,
+          marginX,
+          {
+            fontSize: 9,
+            color: [90, 90, 90],
+          },
+        );
+
+        addText(
+          `Estado general: ${inspection.state_percent ?? "-"
+          }%   |   Seguridad: ${inspection.security_score}`,
+          marginX,
+          {
+            fontSize: 9,
+            color: [90, 90, 90],
+          },
+        );
+
+        y += 2;
+
+        addText("Elementos a revisar / reparar:", marginX, {
+          fontSize: 10,
+          bold: true,
+        });
+
+        problems.forEach((problem) => {
+          addText(`• ${problem.label}: ${problem.problem}`, marginX + 3, {
+            fontSize: 9,
+            maxWidth: pageWidth - marginX * 2 - 3,
+          });
+        });
+
+        if (inspection.observations?.trim()) {
+          y += 1;
+
+          addText(`Observaciones: ${inspection.observations.trim()}`, marginX, {
+            fontSize: 9,
+            color: [70, 70, 70],
+          });
+        }
+
+        y += 6;
+      });
+
+      const totalPages = doc.getNumberOfPages();
+
+      for (let page = 1; page <= totalPages; page += 1) {
+        doc.setPage(page);
+        doc.setFontSize(7);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `Página ${page} de ${totalPages}`,
+          pageWidth - marginX,
+          pageHeight - 7,
+          { align: "right" },
+        );
+      }
+
+      const fileName = `${getReportFileName(reportType)}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+
+      doc.save(fileName);
+      toast.success("Informe generado correctamente");
+      onClose();
+    } catch (error) {
+      console.error("Error generating vehicle report:", error);
+      toast.error("No se pudo generar el informe");
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+
+  return (
+
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border bg-background p-5 shadow-xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold">
+                {reportType === "lights"
+                  ? "Generar informe de luces"
+                  : reportType === "body"
+                    ? "Generar informe de chapa"
+                    : reportType === "other"
+                      ? "Generar informe de otros"
+                      : "Generar informe personalizado"}
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Se toma la última checklist de cada vehículo. Podés generar un
+                informe general o elegir un vehículo puntual.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {reportType === "custom" && (
+                <section className="overflow-hidden rounded-2xl border border-border/80 bg-muted/20">
+                  <div className="space-y-3 border-b border-border/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                          <Layers3 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold">Seleccioná qué querés evaluar</h3>
+                          <p className="text-xs text-muted-foreground">Elegí categorías completas o elementos puntuales.</p>
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
+                        {selectedReportFields.length} de {ALL_REPORT_FIELDS.length} seleccionados
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={reportFieldSearch}
+                        onChange={(event) => setReportFieldSearch(event.target.value)}
+                        placeholder="Buscar botiquín, extintor, luces, calcos..."
+                        className="h-10 rounded-xl bg-background pl-9"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" className="h-8 rounded-full text-xs"
+                        onClick={() => setSelectedReportFields(ALL_REPORT_FIELDS.map((field) => String(field.key)))}>
+                        <Check className="mr-1 h-3.5 w-3.5" /> Seleccionar todo
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-8 rounded-full text-xs"
+                        disabled={selectedReportFields.length === 0}
+                        onClick={() => setSelectedReportFields([])}>
+                        <X className="mr-1 h-3.5 w-3.5" /> Limpiar selección
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-[310px] space-y-2 overflow-y-auto p-3 [scrollbar-color:theme(colors.zinc.600)_transparent] [scrollbar-width:thin]">
+                    {REPORT_FIELD_GROUPS.filter((group) =>
+                      !reportFieldSearch.trim() ||
+                      normalizeText(group.title).includes(normalizeText(reportFieldSearch)) ||
+                      group.fields.some((field) => normalizeText(field.label).includes(normalizeText(reportFieldSearch)))
+                    ).map((group) => {
+                      const keys = group.fields.map((field) => String(field.key));
+                      const count = keys.filter((key) => selectedReportFields.includes(key)).length;
+                      const allSelected = count === keys.length;
+                      const searching = Boolean(reportFieldSearch.trim());
+                      const groupMatches = normalizeText(group.title).includes(normalizeText(reportFieldSearch));
+                      const visibleFields = searching && !groupMatches
+                        ? group.fields.filter((field) => normalizeText(field.label).includes(normalizeText(reportFieldSearch)))
+                        : group.fields;
+                      const expanded = searching || expandedReportGroups.includes(group.title);
+                      return (
+                        <div key={group.title} className={`overflow-hidden rounded-xl border transition-colors ${count ? "border-emerald-500/40 bg-emerald-500/[0.035]" : "border-border/70 bg-background/70"}`}>
+                          <div className="flex items-center gap-2 p-2">
+                            <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+                              onClick={() => setExpandedReportGroups((previous) => previous.includes(group.title) ? previous.filter((title) => title !== group.title) : [...previous, group.title])}>
+                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${count ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
+                                <ClipboardCheck className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold">{group.title}</div>
+                                <div className="text-[11px] text-muted-foreground">{count} de {keys.length} elementos</div>
+                              </div>
+                              <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+                            </button>
+                            <button type="button" title={allSelected ? "Quitar categoría" : "Seleccionar categoría"}
+                              aria-label={`${allSelected ? "Quitar" : "Seleccionar"} ${group.title}`}
+                              onClick={() => setSelectedReportFields((previous) => allSelected ? previous.filter((key) => !keys.includes(key)) : Array.from(new Set([...previous, ...keys])))}
+                              className={`flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-medium transition-colors ${allSelected ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500" : "border-border hover:border-emerald-500/50 hover:text-emerald-500"}`}>
+                              {allSelected ? <><Check className="mr-1 h-3 w-3" /> Completa</> : "Elegir todos"}
+                            </button>
+                          </div>
+                          {expanded && (
+                            <div className="grid grid-cols-1 gap-2 border-t border-border/60 p-3 sm:grid-cols-2">
+                              {visibleFields.map((field) => {
+                                const key = String(field.key);
+                                const selected = selectedReportFields.includes(key);
+                                return (
+                                  <button key={key} type="button" aria-pressed={selected}
+                                    onClick={() => setSelectedReportFields((previous) => selected ? previous.filter((item) => item !== key) : [...previous, key])}
+                                    className={`flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-xs font-medium transition-all ${selected ? "border-emerald-500/50 bg-emerald-500/10 text-foreground" : "border-border/80 bg-background/80 text-muted-foreground hover:border-emerald-500/40 hover:bg-muted/50 hover:text-foreground"}`}>
+                                    <span className={`flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-md border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/40"}`}>
+                                      {selected && <Check className="h-3 w-3 stroke-[3]" />}
+                                    </span>
+                                    {field.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {REPORT_FIELD_GROUPS.every((group) => !normalizeText(group.title).includes(normalizeText(reportFieldSearch)) && !group.fields.some((field) => normalizeText(field.label).includes(normalizeText(reportFieldSearch))) ) && (
+                      <p className="py-6 text-center text-sm text-muted-foreground">No encontramos campos con esa búsqueda.</p>
+                    )}
+                  </div>
+                  <div className="border-t border-border/70 bg-background/50 px-4 py-2.5 text-xs text-muted-foreground">
+                    El PDF incluirá únicamente los elementos seleccionados que estén rotos u observados.
+                  </div>
+                </section>
+              )}
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Vehículo
+                </label>
+
+                <select
+                  value={selectedReportVehicle}
+                  onChange={(event) =>
+                    setSelectedReportVehicle(event.target.value)
+                  }
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
+                >
+                  <option value="all">
+                    Todos los vehículos con problemas detectados (
+                    {reportVehicles.length})
+                  </option>
+
+                  {reportVehicles.map((item) => (
+                    <option
+                      key={item.inspection.id}
+                      value={item.inspection.id}
+                    >
+                      {item.inspection.vehicle_code} -{" "}
+                      {item.inspection.vehicle || "Sin vehículo"} -{" "}
+                      {item.inspection.license_plate || "Sin dominio"} (
+                      {item.problems.length} problema
+                      {item.problems.length === 1 ? "" : "s"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {reportType === "custom" && selectedReportFields.length === 0 && (
+                <p className="text-sm text-muted-foreground">Elegí al menos un campo para consultar vehículos con problemas.</p>
+              )}
+
+              {reportVehicles.length === 0 && (reportType !== "custom" || selectedReportFields.length > 0) && (
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                  No se detectaron problemas para este tipo de informe en las
+                  últimas checklists.
+                </div>
+              )}
+
+              {selectedReportItems.length > 0 && (
+                <div className={`rounded-2xl border p-4 text-sm transition-colors ${
+                  selectedReportVehicle === "all"
+                    ? "border-border bg-muted/20"
+                    : "border-emerald-500/40 bg-emerald-500/10"
+                }`}>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-semibold">
+                      {selectedReportVehicle === "all" ? (
+                        <Truck className="h-4 w-4 text-emerald-500" />
+                      ) : (
+                        <Check className="h-4 w-4 text-emerald-500" />
+                      )}
+                      {selectedReportVehicle === "all"
+                        ? "Informe general · Todos los vehículos"
+                        : "Informe individual · Solo el vehículo seleccionado"}
+                    </div>
+                    <Badge variant="outline" className="rounded-full border-emerald-500/40 bg-emerald-500/10 text-emerald-500">
+                      {selectedReportItems.length} {selectedReportItems.length === 1 ? "vehículo" : "vehículos"} en el PDF
+                    </Badge>
+                  </div>
+                  <div className={selectedReportVehicle === "all" ? "max-h-40 space-y-1 overflow-y-auto pr-1" : "space-y-1"}>
+                    {selectedReportItems.map((item) => (
+                      <div key={item.inspection.id} className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+                        <p className="font-medium">
+                          {item.inspection.vehicle_code} - {item.inspection.vehicle || "Sin vehículo"}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Dominio: {item.inspection.license_plate || "-"} · {item.problems.length} {item.problems.length === 1 ? "ítem" : "ítems"} a revisar
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {selectedReportVehicle === "all"
+                      ? "El PDF incluirá todos los vehículos de esta lista."
+                      : "El PDF incluirá únicamente este vehículo y los problemas detectados en los campos del informe."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeReportModal}
+                disabled={generatingReport}
+                className="rounded-xl"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={generateReportPdf}
+                disabled={generatingReport || reportVehicles.length === 0 || (reportType === "custom" && selectedReportFields.length === 0)}
+                className="gap-2 rounded-xl"
+              >
+                {generatingReport ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                {selectedReportVehicle === "all"
+                  ? `Generar PDF (${selectedReportItems.length} vehículos)`
+                  : "Generar PDF individual"}
+              </Button>
+            </div>
+          </div>
+        </div>
+  );
+}
+
 
 function Actions({
   inspection,

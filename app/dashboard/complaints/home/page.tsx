@@ -46,8 +46,6 @@ import { PageLoader } from "@/components/ui/page-loader";
 
 import { toast } from "sonner";
 
-import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
-
 import { useUser } from "@/hooks/useUser";
 
 
@@ -433,18 +431,6 @@ export default function DashboardPage() {
     void fetchStats();
 
   }, [fetchStats]);
-
-
-
-  useComplaintsRealtime({
-
-    onChange: () => {
-
-      void fetchStats(false);
-
-    },
-
-  });
 
 
 

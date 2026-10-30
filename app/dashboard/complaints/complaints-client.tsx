@@ -38,7 +38,6 @@ import type { Complaint, Service, User } from "@/types";
 
 import { toast } from "sonner";
 
-import { useComplaintsRealtime } from "@/hooks/useComplaintsRealtime";
 
 import { useUser } from "@/hooks/useUser";
 
@@ -1105,17 +1104,6 @@ export default function ComplaintsClient() {
 
   }, [fetchComplaints]);
 
-
-
-  useComplaintsRealtime({
-
-    onChange: () => {
-
-      void fetchComplaints(false);
-
-    },
-
-  });
 
 
 
