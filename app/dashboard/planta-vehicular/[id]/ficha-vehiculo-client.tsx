@@ -945,6 +945,96 @@ const buildAlltrackRoutePeriods = (
     return periods;
 };
 
+
+/** Métricas GPS estimadas únicamente para la barredora B.6.
+ * No permiten confirmar el encendido de los cepillos ni la ejecución real del barrido.
+ * Un intervalo mayor a 5 minutos se considera sin cobertura suficiente.
+ */
+type SweeperGpsMetrics = {
+    slowSeconds: number;
+    transferSeconds: number;
+    stationarySeconds: number;
+    classifiedSeconds: number;
+    points: number;
+    periodsWithData: number;
+};
+
+const isB6Sweeper = (code: string, plate: string | null) =>
+    normalizeVehicleCode(code) === "b6" &&
+    String(plate || "").replace(/[\s-]/g, "").toUpperCase() === "AB564HJ";
+
+const sweeperTime = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    return [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60]
+        .map((v) => String(v).padStart(2, "0"))
+        .join(":");
+};
+
+const sweeperGpsTimestamp = (point: AlltrackReportRoutePoint): number | null => {
+    const text = String(point.timestamp || "").trim() ||
+        `${point.date || ""} ${point.time || ""}`.trim();
+    const match = text.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/);
+    const iso = match
+        ? `${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}:${match[6]}-03:00`
+        : /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.test(text)
+          ? `${text.replace(" ", "T")}-03:00`
+          : text;
+    const value = Date.parse(iso);
+    return Number.isFinite(value) ? value : null;
+};
+
+const sweeperDistanceMeters = (a: AlltrackReportRoutePoint, b: AlltrackReportRoutePoint) => {
+    const rad = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * rad;
+    const dLon = (b.lon - a.lon) * rad;
+    const h = Math.sin(dLat / 2) ** 2 +
+        Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+    return 12742000 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+const classifySweeperGps = (periods: AlltrackWeeklyRoute[]): SweeperGpsMetrics => {
+    const result: SweeperGpsMetrics = {
+        slowSeconds: 0, transferSeconds: 0, stationarySeconds: 0,
+        classifiedSeconds: 0, points: 0, periodsWithData: 0,
+    };
+    for (const period of periods) {
+        const route = period.data?.route;
+        if (!route) continue;
+        const paths = route.paths?.length ? route.paths : [route.points];
+        let hasPoints = false;
+        for (const path of paths) {
+            result.points += path.length;
+            if (path.length > 1) hasPoints = true;
+            for (let index = 1; index < path.length; index++) {
+                const a = path[index - 1];
+                const b = path[index];
+                const ta = sweeperGpsTimestamp(a);
+                const tb = sweeperGpsTimestamp(b);
+                if (ta === null || tb === null) continue;
+                const seconds = (tb - ta) / 1000;
+                if (seconds <= 0 || seconds > 300) continue;
+                if (![a.lat, a.lon, b.lat, b.lon].every(Number.isFinite)) continue;
+                const meters = sweeperDistanceMeters(a, b);
+                const derivedSpeed = meters / seconds * 3.6;
+                if (!Number.isFinite(derivedSpeed) || derivedSpeed > 120) continue;
+                // Se combina desplazamiento efectivo y velocidad GPS para evitar falsos
+                // detenidos (y descartar temblores de GPS de pocos metros).
+                const speed = typeof b.speed === "number" && Number.isFinite(b.speed)
+                    ? b.speed : derivedSpeed;
+                if (meters >= 8 || speed > 1) {
+                    if (speed <= 10 && derivedSpeed <= 15) result.slowSeconds += seconds;
+                    else result.transferSeconds += seconds;
+                } else {
+                    result.stationarySeconds += seconds;
+                }
+                result.classifiedSeconds += seconds;
+            }
+        }
+        if (hasPoints) result.periodsWithData += 1;
+    }
+    return result;
+};
+
 const downsampleRoutePoints = (
     points: AlltrackReportRoutePoint[],
     maxPoints = 1400,
@@ -2311,6 +2401,22 @@ export function FichaVehiculoClient({
 
 
 
+    const isSweeperB6 = isB6Sweeper(vehicle.code, vehicle.license_plate);
+    const sweeperGps = useMemo(
+        () => classifySweeperGps(alltrackWeeklyRoutes),
+        [alltrackWeeklyRoutes],
+    );
+    // Porcentajes exclusivamente visuales: no modifican la clasificación GPS.
+    const sweeperGpsBreakdown = {
+        slowPercent: sweeperGps.classifiedSeconds > 0 ? (sweeperGps.slowSeconds / sweeperGps.classifiedSeconds) * 100 : 0,
+        transferPercent: sweeperGps.classifiedSeconds > 0 ? (sweeperGps.transferSeconds / sweeperGps.classifiedSeconds) * 100 : 0,
+        stationaryPercent: sweeperGps.classifiedSeconds > 0 ? (sweeperGps.stationarySeconds / sweeperGps.classifiedSeconds) * 100 : 0,
+    };
+    const sweeperGpsComplete = isSweeperB6 &&
+        !alltrackWeeklyRoutesLoading &&
+        alltrackWeeklyRoutes.length > 0 &&
+        alltrackWeeklyRoutes.every((period) => !period.loading && !period.error && !!period.data?.route);
+
     const exportAlltrackReportToPdf =
         useCallback(async () => {
             if (
@@ -2514,7 +2620,7 @@ export function FichaVehiculoClient({
                             alltrackReportData.summary.movement_time,
                     },
                     {
-                        label: "Ocioso",
+                        label: isSweeperB6 ? "Sin movimiento (AT)" : "Ocioso",
                         value:
                             alltrackReportData.summary.idle_time,
                     },
@@ -2599,6 +2705,81 @@ export function FichaVehiculoClient({
                 );
 
                 currentY += 27;
+
+                if (isSweeperB6) {
+                    // Panel informativo B.6: mismo cálculo GPS, nueva presentación.
+                    const panelX = marginX;
+                    const panelY = currentY;
+                    const panelW = contentWidth;
+                    const panelH = sweeperGpsComplete && sweeperGps.classifiedSeconds > 0 ? 71 : 33;
+                    doc.setFillColor(240, 249, 255);
+                    doc.setDrawColor(125, 211, 252);
+                    doc.roundedRect(panelX, panelY, panelW, panelH, 3, 3, "FD");
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(11);
+                    doc.setTextColor(12, 74, 110);
+                    doc.text("ANÁLISIS GPS ESPECIAL - BARREDORA B.6", panelX + 5, panelY + 8);
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(71, 85, 105);
+                    doc.text("La baja velocidad puede registrarse como 'sin movimiento' en AllTrack.", panelX + 5, panelY + 14);
+                    if (sweeperGpsComplete && sweeperGps.classifiedSeconds > 0) {
+                        const metrics = [
+                            { label: "POSIBLE BARRIDO", value: sweeperTime(sweeperGps.slowSeconds), color: [5, 150, 105] as [number, number, number] },
+                            { label: "TRASLADO", value: sweeperTime(sweeperGps.transferSeconds), color: [37, 99, 235] as [number, number, number] },
+                            { label: "DETENIDO", value: sweeperTime(sweeperGps.stationarySeconds), color: [100, 116, 139] as [number, number, number] },
+                            { label: "COBERTURA GPS", value: sweeperTime(sweeperGps.classifiedSeconds), color: [124, 58, 237] as [number, number, number] },
+                        ];
+                        const gap = 2;
+                        const metricW = (panelW - 10 - gap * 3) / 4;
+                        metrics.forEach((metric, index) => {
+                            const x = panelX + 5 + index * (metricW + gap);
+                            doc.setFillColor(255, 255, 255);
+                            doc.setDrawColor(219, 234, 254);
+                            doc.roundedRect(x, panelY + 19, metricW, 20, 2, 2, "FD");
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(6.5);
+                            doc.setTextColor(...metric.color);
+                            doc.text(metric.label, x + 3, panelY + 26);
+                            doc.setFontSize(12);
+                            doc.text(metric.value, x + 3, panelY + 34);
+                        });
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(8);
+                        doc.setTextColor(30, 41, 59);
+                        doc.text("Distribucion del tiempo GPS clasificable", panelX + 5, panelY + 46);
+                        const barX = panelX + 5;
+                        const barY = panelY + 49;
+                        const barW = panelW - 10;
+                        doc.setFillColor(226, 232, 240);
+                        doc.roundedRect(barX, barY, barW, 5, 1, 1, "F");
+                        let offset = 0;
+                        ([
+                            { pct: sweeperGpsBreakdown.slowPercent, color: [16, 185, 129] as [number, number, number] },
+                            { pct: sweeperGpsBreakdown.transferPercent, color: [59, 130, 246] as [number, number, number] },
+                            { pct: sweeperGpsBreakdown.stationaryPercent, color: [148, 163, 184] as [number, number, number] },
+                        ]).forEach((part) => {
+                            const w = Math.max(0, barW * part.pct / 100);
+                            if (w > 0) {
+                                doc.setFillColor(...part.color);
+                                doc.rect(barX + offset, barY, w, 5, "F");
+                            }
+                            offset += w;
+                        });
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(7.2);
+                        doc.setTextColor(51, 65, 85);
+                        const pctLabel = (value: number) => `${value.toLocaleString("es-AR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
+                        doc.text(`Posible barrido ${pctLabel(sweeperGpsBreakdown.slowPercent)}    Traslado ${pctLabel(sweeperGpsBreakdown.transferPercent)}    Detenido ${pctLabel(sweeperGpsBreakdown.stationaryPercent)}`, panelX + 5, panelY + 60);
+                        doc.setFontSize(7);
+                        doc.text("Estimacion por avance lento (hasta 10 km/h); no confirma cepillos activos.", panelX + 5, panelY + 66);
+                    } else {
+                        doc.setFontSize(8);
+                        doc.setTextColor(100, 116, 139);
+                        doc.text("No hay datos GPS suficientes para una clasificacion confiable.", panelX + 5, panelY + 24);
+                    }
+                    currentY += panelH + 6;
+                }
 
                 const movementPercent =
                     alltrackReportData.summary.movement_percent;
@@ -2715,7 +2896,7 @@ export function FichaVehiculoClient({
 
                 drawPercentCard(
                     marginX,
-                    "Tiempo en movimiento",
+                    isSweeperB6 ? "Movimiento AllTrack" : "Tiempo en movimiento",
                     movementPercent,
                     [245, 158, 11],
                 );
@@ -2723,7 +2904,7 @@ export function FichaVehiculoClient({
                     marginX +
                         barWidth +
                         5,
-                    "Tiempo ocioso",
+                    isSweeperB6 ? "Sin mov. (AllTrack)" : "Tiempo ocioso",
                     idlePercent,
                     [255, 79, 184],
                 );
@@ -2772,7 +2953,7 @@ export function FichaVehiculoClient({
                         [
                             "Fecha",
                             "Sesión",
-                            "Ocioso",
+                            isSweeperB6 ? "Sin mov. AT" : "Ocioso",
                             "Movimiento",
                             "Recorrido",
                         ],
@@ -2985,7 +3166,7 @@ export function FichaVehiculoClient({
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                 },
-                            )} km   ·   Movimiento: ${summary.movement_time}   ·   Ocioso: ${summary.idle_time}`;
+                            )} km   ·   Movimiento AT: ${summary.movement_time}   ·   ${isSweeperB6 ? "Sin mov. AT" : "Ocioso"}: ${summary.idle_time}`;
 
                         doc.text(
                             metricsLine,
@@ -3220,6 +3401,9 @@ export function FichaVehiculoClient({
             alltrackWeeklyRoutes,
             alltrackWeeklyRoutesLoading,
             isExportingAlltrackPdf,
+            isSweeperB6,
+            sweeperGps,
+            sweeperGpsComplete,
             vehicle.code,
         ]);
 
@@ -6889,7 +7073,7 @@ export function FichaVehiculoClient({
                         <DialogTitle className="flex items-center gap-2">
                             <Activity className="h-5 w-5 text-sky-600" />
 
-                            Informe Alltrack · {vehicle.code}
+                            {isSweeperB6 ? "Informe AllTrack · Actividad barredora" : "Informe Alltrack"} · {vehicle.code}
                         </DialogTitle>
 
                         <DialogDescription>
@@ -7119,7 +7303,7 @@ export function FichaVehiculoClient({
                                     />
 
                                     <TrackingInfoCard
-                                        label="Ocioso"
+                                        label={isSweeperB6 ? "Sin movimiento (AllTrack)" : "Ocioso"}
                                         value={alltrackReportData.summary.idle_time}
                                     />
 
@@ -7150,11 +7334,88 @@ export function FichaVehiculoClient({
                                     />
                                 </div>
 
+                                {isSweeperB6 && (
+                                    <section className="rounded-2xl border-2 border-sky-300 bg-gradient-to-br from-sky-50 via-cyan-50 to-white p-5 shadow-sm dark:border-sky-800 dark:from-sky-950/30 dark:via-cyan-950/20 dark:to-slate-950">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 dark:bg-sky-900/50">
+                                                    <Truck className="h-6 w-6 text-sky-700 dark:text-sky-300" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-base font-bold text-sky-950 dark:text-sky-100">Análisis GPS especial · Barredora B.6</h3>
+                                                    <p className="text-xs text-sky-700 dark:text-sky-300">Informe adaptado al trabajo a baja velocidad</p>
+                                                </div>
+                                            </div>
+                                            <Badge className="w-fit border border-sky-200 bg-sky-100 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Hasta 10 km/h: posible barrido</Badge>
+                                        </div>
+                                        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                                            <div className="flex gap-2">
+                                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                                <p><strong>Importante:</strong> para esta barredora, “sin movimiento según AllTrack” no equivale automáticamente a tiempo ocioso.</p>
+                                            </div>
+                                        </div>
+                                        {sweeperGpsComplete && sweeperGps.classifiedSeconds > 0 ? (
+                                            <>
+                                                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                                    {[
+                                                        { label: "Posible barrido (GPS)", value: sweeperTime(sweeperGps.slowSeconds), hint: "Avance lento", color: "emerald" },
+                                                        { label: "Traslado (GPS)", value: sweeperTime(sweeperGps.transferSeconds), hint: "Desplazamiento", color: "blue" },
+                                                        { label: "Detenido (GPS)", value: sweeperTime(sweeperGps.stationarySeconds), hint: "Sin desplazamiento", color: "slate" },
+                                                        { label: "Cobertura clasificable", value: sweeperTime(sweeperGps.classifiedSeconds), hint: "Tiempo GPS utilizable", color: "violet" },
+                                                    ].map((metric) => (
+                                                        <div key={metric.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`h-2.5 w-2.5 rounded-full ${metric.color === "emerald" ? "bg-emerald-500" : metric.color === "blue" ? "bg-blue-500" : metric.color === "violet" ? "bg-violet-500" : "bg-slate-400"}`} />
+                                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{metric.label}</span>
+                                                            </div>
+                                                            <div className="mt-2 text-2xl font-bold tabular-nums text-slate-950 dark:text-white">{metric.value}</div>
+                                                            <p className="mt-1 text-xs text-muted-foreground">{metric.hint}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                                        <strong className="text-sm">Distribución del tiempo GPS clasificable</strong>
+                                                        <span className="text-xs text-muted-foreground">Base: {sweeperTime(sweeperGps.classifiedSeconds)}</span>
+                                                    </div>
+                                                    <div className="flex h-5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="img" aria-label="Distribución porcentual del tiempo GPS clasificable">
+                                                        <div className="h-full bg-emerald-500" style={{ width: `${sweeperGpsBreakdown.slowPercent}%` }} title="Posible barrido" />
+                                                        <div className="h-full bg-blue-500" style={{ width: `${sweeperGpsBreakdown.transferPercent}%` }} title="Traslado" />
+                                                        <div className="h-full bg-slate-400" style={{ width: `${sweeperGpsBreakdown.stationaryPercent}%` }} title="Detenido" />
+                                                    </div>
+                                                    <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                                                        {[
+                                                            { label: "Posible barrido", pct: sweeperGpsBreakdown.slowPercent, color: "bg-emerald-500" },
+                                                            { label: "Traslado", pct: sweeperGpsBreakdown.transferPercent, color: "bg-blue-500" },
+                                                            { label: "Detenido", pct: sweeperGpsBreakdown.stationaryPercent, color: "bg-slate-400" },
+                                                        ].map((part) => (
+                                                            <div key={part.label} className="flex items-center gap-2">
+                                                                <span className={`h-3 w-3 shrink-0 rounded-full ${part.color}`} />
+                                                                <span>{part.label}: <strong>{part.pct.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</strong></span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <p className="mt-3 rounded-lg bg-slate-100/80 p-3 text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                                    <strong>Cómo interpretar:</strong> “Posible barrido” significa avance lento detectado por GPS; no confirma que los cepillos estén activados. Las detenciones no se consideran automáticamente tiempo ocioso. Los intervalos sin cobertura o superiores a 5 minutos no se clasifican.
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950">
+                                                {alltrackWeeklyRoutesLoading || alltrackWeeklyRoutes.some((p) => p.loading)
+                                                    ? "Analizando los recorridos GPS..."
+                                                    : "No hay datos GPS suficientes o algunos períodos no se pudieron consultar para calcular una clasificación confiable."}
+                                            </p>
+                                        )}
+                                    </section>
+                                )}
+
+                                {isSweeperB6 && <p className="text-xs text-muted-foreground">Los porcentajes siguientes son datos originales de AllTrack, no representan la productividad de barrido.</p>}
                                 <div className="grid gap-3 sm:grid-cols-2">
                                     <div className="rounded-xl border border-[#f59e0b]/30 bg-[#fff7e6]/60 p-4 dark:bg-[#f59e0b]/5">
                                         <div className="flex items-center justify-between gap-3">
                                             <span className="text-sm font-medium">
-                                                Tiempo en movimiento
+                                                {isSweeperB6 ? "Movimiento según AllTrack" : "Tiempo en movimiento"}
                                             </span>
 
                                             <span className="text-lg font-semibold text-[#f59e0b]">
@@ -7187,7 +7448,7 @@ export function FichaVehiculoClient({
                                     <div className="rounded-xl border border-[#ff4fb8]/30 bg-[#fff0fa]/60 p-4 dark:bg-[#ff4fb8]/5">
                                         <div className="flex items-center justify-between gap-3">
                                             <span className="text-sm font-medium">
-                                                Tiempo ocioso
+                                                {isSweeperB6 ? "Sin movimiento según AllTrack" : "Tiempo ocioso"}
                                             </span>
 
                                             <span className="text-lg font-semibold text-[#ff4fb8]">
@@ -7401,7 +7662,7 @@ export function FichaVehiculoClient({
                                                                             Movimiento {period.data.summary.movement_time}
                                                                         </Badge>
                                                                         <Badge variant="outline">
-                                                                            Ocioso {period.data.summary.idle_time}
+                                                                            {isSweeperB6 ? "Sin mov. AT" : "Ocioso"} {period.data.summary.idle_time}
                                                                         </Badge>
                                                                     </div>
                                                                 ) : null}
