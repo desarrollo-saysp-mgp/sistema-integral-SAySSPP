@@ -19,7 +19,8 @@ type ModuleKey =
   | "rnu"
   | "personnel"
   | "sweeping_map"
-  | "grading_map";
+  | "grading_map"
+  | "surveys";
 
 type AccessItem = {
   key: ModuleKey;
@@ -104,6 +105,14 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     description:
       "Planificación, registro y seguimiento de trabajos de motonivelación.",
     href: "/dashboard/test-grading-map",
+    available: true,
+  },
+  surveys: {
+    key: "surveys",
+    title: "Encuestas",
+    description:
+      "Resultados, estadísticas y comparativas de encuestas de KoboToolbox.",
+    href: "/dashboard/encuestas",
     available: true,
   },
 };
@@ -379,8 +388,23 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.grading_map);
   }
 
+  // Encuestas: exclusivamente Admin y AdminLectura.
+  // Se agrega sin depender de profile.modules y sin duplicarla.
+  if (
+    hasAllowedRole &&
+    !accesses.some((item) => item.key === "surveys")
+  ) {
+    accesses.push(MODULE_CONFIG.surveys);
+  }
+
   const filteredAccesses =
     accesses.filter((item) => {
+      // Aunque el módulo figure en profile.modules,
+      // ninguna otra cuenta puede ver Encuestas.
+      if (item.key === "surveys") {
+        return hasAllowedRole;
+      }
+
       /*
        * Ocultamos Formularios de Compra
        * únicamente del frontend.
