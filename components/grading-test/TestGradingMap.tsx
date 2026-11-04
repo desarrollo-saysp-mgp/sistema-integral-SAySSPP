@@ -250,6 +250,8 @@ type NotCompletedDialogState = {
 
 type SweepingComplaint = {
   id: number;
+  complaint_number: number | string | null;
+  complainant_name: string | null;
   complaint_date: string;
   address: string | null;
   street_number: string | null;
@@ -3049,6 +3051,93 @@ function WorkOrderPreviewController({
   ]);
 
   return null;
+}
+
+
+/** Agrupa solamente coordenadas idénticas (precisión de datos recibidos).
+ * No altera la posición almacenada y respeta los filtros del mapa.
+ */
+function getComplaintStatusColor(statusValue: string | null): string {
+  const status = (statusValue ?? "").trim().toLocaleLowerCase("es");
+  if (status.includes("no resuelto")) return "#dc2626";
+  if (status.includes("resuelto")) return "#16a34a";
+  return "#f59e0b";
+}
+
+function createComplaintGroupIcon(complaints: SweepingComplaint[]) {
+  if (complaints.length === 1) {
+    return createComplaintPinIcon(getComplaintStatusColor(complaints[0].status));
+  }
+  // Priorizar pendientes, luego no resueltos; un grupo mixto no debe verse todo verde.
+  const colors = complaints.map((complaint) => getComplaintStatusColor(complaint.status));
+  const background = colors.includes("#f59e0b")
+    ? "#f59e0b"
+    : colors.includes("#dc2626")
+      ? "#dc2626"
+      : "#16a34a";
+  return L.divIcon({
+    className: "",
+    iconSize: [38, 43],
+    iconAnchor: [19, 39],
+    popupAnchor: [0, -35],
+    html: `<div style="position:relative;width:38px;height:43px;display:flex;align-items:flex-start;justify-content:center">
+      <div style="width:34px;height:34px;border:3px solid #fff;border-radius:9999px;background:${background};color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800">${complaints.length}</div>
+      <div style="position:absolute;top:29px;left:15px;width:9px;height:9px;background:${background};border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(45deg)"></div>
+    </div>`,
+  });
+}
+
+function ComplaintMarkers({ complaints }: { complaints: SweepingComplaint[] }) {
+  const grouped = useMemo(() => {
+    const byCoordinate = new Map<string, SweepingComplaint[]>();
+    for (const complaint of complaints) {
+      // La API parsea coordenadas numéricas; no se agrupa por nombre/dirección.
+      const key = `${complaint.lat},${complaint.lng}`;
+      const current = byCoordinate.get(key);
+      if (current) current.push(complaint);
+      else byCoordinate.set(key, [complaint]);
+    }
+    return Array.from(byCoordinate.values());
+  }, [complaints]);
+
+  return (
+    <>
+      {grouped.map((group) => (
+        <Marker
+          key={`complaints-at-${group.map((item) => item.id).join("-")}`}
+          position={[group[0].lat, group[0].lng]}
+          icon={createComplaintGroupIcon(group)}
+        >
+          <Popup maxWidth={350} minWidth={220}>
+            <div className="max-h-[300px] min-w-[210px] space-y-2 overflow-y-auto pr-1">
+              {group.length > 1 && (
+                <p className="border-b pb-2 text-sm font-bold">
+                  {group.length} reclamos en esta ubicación
+                </p>
+              )}
+              {group.map((complaint) => (
+                <div key={complaint.id} className="space-y-1.5 border-b pb-2 last:border-b-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold">Reclamo #{complaint.complaint_number ?? "Sin número"}</p>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                      style={{ backgroundColor: getComplaintStatusColor(complaint.status) }}>
+                      {complaint.status || "Sin estado"}
+                    </span>
+                  </div>
+                  <p className="text-sm"><strong>Reclamante:</strong> {complaint.complainant_name?.trim() || "Sin nombre"}</p>
+                  <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
+                  <p className="text-sm"><strong>Fecha:</strong> {formatDateAr(complaint.complaint_date)}</p>
+                  {complaint.details && (
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed"><strong>Detalle:</strong> {complaint.details}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
 }
 
 function FitComplaintPoints({
@@ -7553,6 +7642,17 @@ export default function TestGradingMap({
     setSweepingComplaints,
   ] = useState<SweepingComplaint[]>([]);
 
+  // Filtro local por número real o nombre. No hace consultas adicionales.
+  const [complaintNumberFilter, setComplaintNumberFilter] = useState("");
+  const visibleSweepingComplaints = useMemo(() => {
+    const q = complaintNumberFilter.trim().replace(/^#/, "").toLocaleLowerCase("es");
+    if (!q) return sweepingComplaints;
+    return sweepingComplaints.filter((complaint) =>
+      String(complaint.complaint_number ?? "").toLocaleLowerCase("es").includes(q) ||
+      (complaint.complainant_name ?? "").toLocaleLowerCase("es").includes(q)
+    );
+  }, [sweepingComplaints, complaintNumberFilter]);
+
   const [
     complaintsTotal,
     setComplaintsTotal,
@@ -11799,7 +11899,7 @@ export default function TestGradingMap({
         ref={monitorCenterRef}
         className={
           monitorFullscreen
-            ? "fixed inset-0 z-[20000] flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-white"
+            ? "grading-monitor-landscape fixed inset-0 z-[20000] flex h-screen w-screen min-w-0 min-h-0 flex-col overflow-hidden bg-slate-950 text-white"
             : "pointer-events-none fixed -left-[10000px] top-0 h-px w-px overflow-hidden opacity-0"
         }
         style={
@@ -11816,7 +11916,264 @@ export default function TestGradingMap({
       >
         {monitorFullscreen && (
           <>
-            <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3">
+            <style>{`
+              /* Celulares en vertical: dos filas de encabezado legibles,
+                 sin comprimir ni superponer los cuatro mapas. */
+              @media screen and (orientation: portrait) and (max-width: 600px) {
+                .grading-monitor-landscape {
+                  width: 100vw !important;
+                  height: 100dvh !important;
+                  min-width: 0 !important;
+                  max-height: 100dvh !important;
+                }
+                .grading-monitor-toolbar {
+                  box-sizing: border-box;
+                  flex: 0 0 auto !important;
+                  height: auto !important;
+                  min-height: 66px !important;
+                  padding: 4px 8px !important;
+                  display: flex !important;
+                  flex-direction: column !important;
+                  flex-wrap: nowrap !important;
+                  align-items: stretch !important;
+                  justify-content: center !important;
+                  gap: 2px !important;
+                }
+                .grading-monitor-toolbar > div:first-child {
+                  flex: 0 0 auto !important;
+                  min-width: 0 !important;
+                }
+                .grading-monitor-toolbar > div:first-child p:first-child {
+                  display: block !important;
+                  font-size: 11px !important;
+                  line-height: 14px !important;
+                  white-space: normal !important;
+                }
+                .grading-monitor-toolbar > div:first-child p:last-child {
+                  display: block !important;
+                  font-size: 8px !important;
+                  line-height: 10px !important;
+                  overflow-wrap: anywhere;
+                }
+                .grading-monitor-toolbar-actions {
+                  display: flex !important;
+                  flex: 0 0 auto !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  justify-content: space-between !important;
+                  align-items: center !important;
+                  gap: 5px !important;
+                }
+                .grading-monitor-refresh-info {
+                  flex: 1 1 auto !important;
+                  min-width: 0 !important;
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  text-align: left !important;
+                }
+                .grading-monitor-refresh-info p:first-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  overflow-wrap: anywhere;
+                }
+                .grading-monitor-refresh-info p:last-child {
+                  display: block !important;
+                  font-size: 8px !important;
+                }
+                .grading-monitor-toolbar-actions > button {
+                  flex: 0 0 auto !important;
+                  white-space: nowrap !important;
+                  padding: 4px 6px !important;
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                }
+                .grading-monitor-grid {
+                  display: grid !important;
+                  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  gap: 4px !important;
+                  padding: 4px !important;
+                  min-height: 0 !important;
+                  overflow: hidden !important;
+                }
+                .grading-monitor-card-head {
+                  box-sizing: border-box;
+                  height: auto !important;
+                  min-height: 51px !important;
+                  max-height: 62px !important;
+                  flex: 0 0 auto !important;
+                  display: flex !important;
+                  flex-direction: column !important;
+                  flex-wrap: nowrap !important;
+                  align-items: stretch !important;
+                  justify-content: center !important;
+                  gap: 2px !important;
+                  padding: 4px 6px !important;
+                }
+                .grading-monitor-card-head > div:first-child {
+                  min-width: 0 !important;
+                  width: 100% !important;
+                }
+                .grading-monitor-card-head > div:first-child p:first-child {
+                  font-size: 10px !important;
+                  line-height: 12px !important;
+                  overflow-wrap: anywhere;
+                }
+                .grading-monitor-card-head > div:first-child p:last-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+                .grading-monitor-card-head > div:last-child:not(:first-child) {
+                  display: flex;
+                  flex-wrap: nowrap;
+                  align-items: center;
+                  gap: 3px !important;
+                  min-width: 0;
+                }
+                .grading-monitor-card-head span {
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                  padding: 2px 5px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-alltrack-head {
+                  min-height: 62px !important;
+                  max-height: 73px !important;
+                }
+                .grading-monitor-alltrack-head > div:last-child {
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  overflow-x: auto !important;
+                  justify-content: flex-start !important;
+                }
+                .grading-monitor-alltrack-head button,
+                .grading-monitor-alltrack-head summary {
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                  padding: 3px 5px !important;
+                  white-space: nowrap !important;
+                }
+                .grading-monitor-grid .leaflet-control-zoom a {
+                  width: 28px !important;
+                  height: 28px !important;
+                  line-height: 28px !important;
+                }
+                .grading-monitor-grid .leaflet-control-attribution {
+                  font-size: 8px !important;
+                }
+              }
+              @media screen and (orientation: landscape) and (max-height: 550px) and (max-width: 1000px) {
+                .grading-monitor-landscape {
+                  height: 100dvh !important;
+                  max-height: 100dvh;
+                }
+                .grading-monitor-toolbar {
+                  height: 43px !important;
+                  min-height: 43px !important;
+                  padding: 3px 10px !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  align-items: center !important;
+                  justify-content: space-between !important;
+                  gap: 8px !important;
+                }
+                .grading-monitor-toolbar > div:first-child {
+                  flex: 0 1 auto;
+                  min-width: 0;
+                }
+                .grading-monitor-toolbar > div:first-child p:first-child {
+                  font-size: 11px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-toolbar > div:first-child p:last-child,
+                .grading-monitor-refresh-info p:last-child { display: none !important; }
+                .grading-monitor-toolbar-actions {
+                  flex: 0 0 auto !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  gap: 5px !important;
+                }
+                .grading-monitor-refresh-info { flex: 0 0 auto !important; }
+                .grading-monitor-refresh-info p:first-child {
+                  font-size: 9px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-toolbar-actions > button {
+                  padding: 4px 7px !important;
+                  font-size: 10px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-grid {
+                  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  gap: 4px !important;
+                  padding: 4px !important;
+                  min-height: 0 !important;
+                }
+                .grading-monitor-card-head {
+                  min-height: 29px !important;
+                  height: 29px !important;
+                  padding: 2px 6px !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  align-items: center !important;
+                  gap: 4px !important;
+                }
+                .grading-monitor-card-head > div:first-child {
+                  min-width: 0;
+                  flex: 1 1 auto;
+                }
+                .grading-monitor-card-head > div:first-child p:first-child {
+                  font-size: 10px !important;
+                  line-height: 13px !important;
+                  overflow: hidden;
+                  white-space: nowrap;
+                  text-overflow: ellipsis;
+                }
+                .grading-monitor-card-head > div:first-child p:last-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-card-head > span,
+                .grading-monitor-card-head > div:last-child span {
+                  flex: 0 0 auto;
+                  font-size: 9px !important;
+                  padding: 2px 5px !important;
+                }
+                .grading-monitor-alltrack-head {
+                  min-height: 36px !important;
+                  height: 36px !important;
+                }
+                .grading-monitor-alltrack-head > div:first-child { flex: 0 1 155px; }
+                .grading-monitor-alltrack-head > div:first-child p:last-child { display: none !important; }
+                .grading-monitor-alltrack-head > div:last-child {
+                  width: auto !important;
+                  flex: 1 1 auto;
+                  min-width: 0;
+                  overflow-x: auto;
+                  justify-content: flex-end;
+                }
+                .grading-monitor-alltrack-head button,
+                .grading-monitor-alltrack-head summary {
+                  font-size: 9px !important;
+                  padding: 3px 5px !important;
+                  white-space: nowrap;
+                }
+                .grading-monitor-grid .leaflet-control-zoom a {
+                  width: 26px !important;
+                  height: 26px !important;
+                  line-height: 26px !important;
+                }
+                .grading-monitor-grid .leaflet-control-attribution { font-size: 8px !important; }
+              }
+            `}</style>
+            <div className="grading-monitor-toolbar flex shrink-0 flex-col gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 md:h-10 md:flex-row md:items-center md:justify-between md:py-0">
               <div className="min-w-0">
                 <p className="text-xs font-bold tracking-wide text-white">
                   Centro de monitoreo de motonivelación
@@ -11826,8 +12183,8 @@ export default function TestGradingMap({
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-1.5">
-                <div className="hidden text-right text-[10px] leading-tight text-slate-300 sm:block" aria-live="polite">
+              <div className="grading-monitor-toolbar-actions flex min-w-0 flex-wrap items-center justify-between gap-2 md:shrink-0 md:flex-nowrap md:justify-end">
+                <div className="grading-monitor-refresh-info min-w-0 flex-1 text-left text-[10px] leading-tight text-slate-300 md:flex-none md:text-right" aria-live="polite">
                   <div className={monitorLastError ? "text-amber-300" : "text-slate-300"}>
                     {monitorLastError
                       ? "Error en última actualización"
@@ -11877,10 +12234,10 @@ export default function TestGradingMap({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1 p-1">
+            <div className="grading-monitor-grid grid min-h-0 min-w-0 flex-1 grid-cols-2 grid-rows-2 gap-1 overflow-hidden p-1">
               {/* PLANIFICACIÓN */}
               <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-blue-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-9 shrink-0 items-center justify-between border-b bg-blue-50 px-3">
+                <div className="grading-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-blue-50 px-3">
                   <div>
                     <p className="text-xs font-bold text-blue-700">Planificación de motonivelación</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(plannedAppliedFrom)} al {formatDateAr(plannedAppliedTo)}</p>
@@ -12010,7 +12367,7 @@ export default function TestGradingMap({
 
               {/* REALIZADO */}
               <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-emerald-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-9 shrink-0 items-center justify-between border-b bg-emerald-50 px-3">
+                <div className="grading-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-emerald-50 px-3">
                   <div>
                     <p className="text-xs font-bold text-emerald-700">Motonivelación realizado</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(completedAppliedFrom)} al {formatDateAr(completedAppliedTo)}</p>
@@ -12060,7 +12417,7 @@ export default function TestGradingMap({
 
               {/* RECLAMOS */}
               <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-9 shrink-0 items-center justify-between border-b bg-amber-50 px-3">
+                <div className="grading-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-amber-50 px-3">
                   <div>
                     <p className="text-xs font-bold text-amber-700">Reclamos georreferenciados de motonivelación</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(complaintsAppliedFrom)} al {formatDateAr(complaintsAppliedTo)}</p>
@@ -12076,34 +12433,7 @@ export default function TestGradingMap({
                     style={{ width: "100%", height: "100%" }}
                   >
                     <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    {sweepingComplaints.map((complaint) => {
-                      const status = (complaint.status ?? "").toLowerCase();
-                      const color =
-                        status.includes("resuelto") && !status.includes("no resuelto")
-                          ? "#16a34a"
-                          : status.includes("no resuelto")
-                            ? "#dc2626"
-                            : "#f59e0b";
-                      return (
-                        <Marker
-                          key={`monitor-complaint-${complaint.id}`}
-                          position={[complaint.lat, complaint.lng]}
-                          icon={createComplaintPinIcon(color)}
-                        >
-                          <Popup>
-                            <div className="min-w-[220px] space-y-2">
-                              <p className="font-semibold">Reclamo #{complaint.id}</p>
-                              <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
-                              <p className="text-sm"><strong>Fecha:</strong> {formatDateAr(complaint.complaint_date)}</p>
-                              <p className="text-sm"><strong>Estado:</strong> {complaint.status ?? "-"}</p>
-                              {complaint.details && (
-                                <p className="text-sm leading-relaxed"><strong>Detalle:</strong> {complaint.details}</p>
-                              )}
-                            </div>
-                          </Popup>
-                        </Marker>
-                      );
-                    })}
+                    <ComplaintMarkers complaints={sweepingComplaints} />
                     <FitComplaintPoints complaints={sweepingComplaints} />
                     <InvalidateMapOnFullscreen fullscreen={monitorFullscreen} />
 
@@ -12114,7 +12444,7 @@ export default function TestGradingMap({
 
               {/* ALL TRACK */}
               <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-sky-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex min-h-9 shrink-0 items-center justify-between gap-2 border-b bg-sky-50 px-2 py-1">
+                <div className="grading-monitor-card-head grading-monitor-alltrack-head flex min-h-9 shrink-0 items-center justify-between gap-2 border-b bg-sky-50 px-2 py-1">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-sky-700">
                       Vehículos de motonivelación · All Track
@@ -15615,7 +15945,7 @@ export default function TestGradingMap({
             }`}
           >
             <div className="bg-amber-50/40 p-4 dark:bg-amber-950/10">
-              <div className="mb-3 flex flex-wrap gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -15654,6 +15984,26 @@ export default function TestGradingMap({
                 >
                   Este mes
                 </button>
+                <div className="relative ml-auto flex w-[190px] max-w-full min-w-0 items-center sm:w-[230px]">
+                  <label htmlFor="grading-complaint-search" className="sr-only">Buscar por número o nombre del reclamante</label>
+                  <span aria-hidden="true" className="pointer-events-none absolute left-2 text-xs text-muted-foreground">⌕</span>
+                  <input
+                    id="grading-complaint-search"
+                    type="search"
+                    autoComplete="off"
+                    value={complaintNumberFilter}
+                    onChange={(event) => setComplaintNumberFilter(event.target.value)}
+                    placeholder="Nº o nombre..."
+                    className="h-8 w-full min-w-0 rounded-md border bg-background pl-6 pr-7 text-xs outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                  />
+                  {complaintNumberFilter.trim() && (
+                    <button type="button" aria-label="Limpiar búsqueda" title="Limpiar búsqueda"
+                      onClick={() => setComplaintNumberFilter("")}
+                      className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted">
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -15722,7 +16072,9 @@ export default function TestGradingMap({
                 </span>
 
                 <span>
-                  {sweepingComplaints.length} georreferenciados
+                  {complaintNumberFilter.trim()
+                    ? `${visibleSweepingComplaints.length} de ${sweepingComplaints.length} georreferenciados`
+                    : `${sweepingComplaints.length} georreferenciados`}
                 </span>
 
                 <span>
@@ -15796,95 +16148,11 @@ export default function TestGradingMap({
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                {sweepingComplaints.map(
-                  (complaint) => {
-                    const status =
-                      (
-                        complaint.status ??
-                        ""
-                      ).toLowerCase();
-
-                    const color =
-                      status.includes(
-                        "resuelto"
-                      ) &&
-                      !status.includes(
-                        "no resuelto"
-                      )
-                        ? "#16a34a"
-                        : status.includes(
-                              "no resuelto"
-                            )
-                          ? "#dc2626"
-                          : "#f59e0b";
-
-                    return (
-                      <Marker
-                        key={
-                          complaint.id
-                        }
-                        position={[
-                          complaint.lat,
-                          complaint.lng,
-                        ]}
-                        icon={
-                          createComplaintPinIcon(
-                            color
-                          )
-                        }
-                      >
-                        <Popup>
-                          <div className="min-w-[220px] space-y-2">
-                            <p className="font-semibold">
-                              Reclamo #
-                              {complaint.id}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Dirección:
-                              </strong>{" "}
-                              {complaint.address ??
-                                "Sin calle"}{" "}
-                              {complaint.street_number ??
-                                ""}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Fecha:
-                              </strong>{" "}
-                              {formatDateAr(
-                                complaint.complaint_date
-                              )}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Estado:
-                              </strong>{" "}
-                              {complaint.status ??
-                                "-"}
-                            </p>
-
-                            {complaint.details && (
-                              <p className="text-sm leading-relaxed">
-                                <strong>
-                                  Detalle:
-                                </strong>{" "}
-                                {complaint.details}
-                              </p>
-                            )}
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  }
-                )}
+                <ComplaintMarkers complaints={visibleSweepingComplaints} />
 
                 <FitComplaintPoints
                   complaints={
-                    sweepingComplaints
+                    visibleSweepingComplaints
                   }
                 />
 

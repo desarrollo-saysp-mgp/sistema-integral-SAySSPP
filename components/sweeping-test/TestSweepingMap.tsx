@@ -242,6 +242,14 @@ type ConfirmDialogConfig = {
   variant?: "danger" | "success";
 };
 
+type RealizedDateDialogState = {
+  target:
+    | { kind: "single"; record: MapRoute }
+    | { kind: "batch"; batchId: string; records: MapRoute[] };
+  workDate: string;
+  error: string | null;
+};
+
 type NotCompletedDialogState = {
   record: MapRoute;
   observation: string;
@@ -249,7 +257,9 @@ type NotCompletedDialogState = {
 };
 
 type SweepingComplaint = {
-  id: number;
+  id: number; // ID interno de la tabla, no es el número visible
+  complaint_number: number | string | null;
+  complainant_name: string | null;
   complaint_date: string;
   address: string | null;
   street_number: string | null;
@@ -3195,6 +3205,93 @@ function WorkOrderPreviewController({
   return null;
 }
 
+
+/** Agrupa solamente coordenadas idénticas (precisión de datos recibidos).
+ * No altera la posición almacenada y respeta los filtros del mapa.
+ */
+function getComplaintStatusColor(statusValue: string | null): string {
+  const status = (statusValue ?? "").trim().toLocaleLowerCase("es");
+  if (status.includes("no resuelto")) return "#dc2626";
+  if (status.includes("resuelto")) return "#16a34a";
+  return "#f59e0b";
+}
+
+function createComplaintGroupIcon(complaints: SweepingComplaint[]) {
+  if (complaints.length === 1) {
+    return createComplaintPinIcon(getComplaintStatusColor(complaints[0].status));
+  }
+  // Priorizar pendientes, luego no resueltos; un grupo mixto no debe verse todo verde.
+  const colors = complaints.map((complaint) => getComplaintStatusColor(complaint.status));
+  const background = colors.includes("#f59e0b")
+    ? "#f59e0b"
+    : colors.includes("#dc2626")
+      ? "#dc2626"
+      : "#16a34a";
+  return L.divIcon({
+    className: "",
+    iconSize: [38, 43],
+    iconAnchor: [19, 39],
+    popupAnchor: [0, -35],
+    html: `<div style="position:relative;width:38px;height:43px;display:flex;align-items:flex-start;justify-content:center">
+      <div style="width:34px;height:34px;border:3px solid #fff;border-radius:9999px;background:${background};color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800">${complaints.length}</div>
+      <div style="position:absolute;top:29px;left:15px;width:9px;height:9px;background:${background};border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(45deg)"></div>
+    </div>`,
+  });
+}
+
+function ComplaintMarkers({ complaints }: { complaints: SweepingComplaint[] }) {
+  const grouped = useMemo(() => {
+    const byCoordinate = new Map<string, SweepingComplaint[]>();
+    for (const complaint of complaints) {
+      // La API parsea coordenadas numéricas; no se agrupa por nombre/dirección.
+      const key = `${complaint.lat},${complaint.lng}`;
+      const current = byCoordinate.get(key);
+      if (current) current.push(complaint);
+      else byCoordinate.set(key, [complaint]);
+    }
+    return Array.from(byCoordinate.values());
+  }, [complaints]);
+
+  return (
+    <>
+      {grouped.map((group) => (
+        <Marker
+          key={`complaints-at-${group.map((item) => item.id).join("-")}`}
+          position={[group[0].lat, group[0].lng]}
+          icon={createComplaintGroupIcon(group)}
+        >
+          <Popup maxWidth={350} minWidth={220}>
+            <div className="max-h-[300px] min-w-[210px] space-y-2 overflow-y-auto pr-1">
+              {group.length > 1 && (
+                <p className="border-b pb-2 text-sm font-bold">
+                  {group.length} reclamos en esta ubicación
+                </p>
+              )}
+              {group.map((complaint) => (
+                <div key={complaint.id} className="space-y-1.5 border-b pb-2 last:border-b-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold">Reclamo #{complaint.complaint_number ?? "Sin número"}</p>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                      style={{ backgroundColor: getComplaintStatusColor(complaint.status) }}>
+                      {complaint.status || "Sin estado"}
+                    </span>
+                  </div>
+                  <p className="text-sm"><strong>Reclamante:</strong> {complaint.complainant_name?.trim() || "Sin nombre"}</p>
+                  <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
+                  <p className="text-sm"><strong>Fecha:</strong> {formatDateAr(complaint.complaint_date)}</p>
+                  {complaint.details && (
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed"><strong>Detalle:</strong> {complaint.details}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
+}
+
 function FitComplaintPoints({
   complaints,
 }: {
@@ -3495,6 +3592,25 @@ function InvalidateMapOnFullscreen({
 
 }
 
+
+/** Recupera los handlers del mapa tras refrescar los filtros. */
+function RestoreMapInteraction({ refreshToken }: { refreshToken: number }) {
+  const map = useMap();
+  useEffect(() => {
+    if (refreshToken === 0) return;
+    const id = window.requestAnimationFrame(() => {
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoom.enable();
+      map.boxZoom.enable();
+      map.invalidateSize({ pan: false });
+      map.getContainer().style.cursor = "";
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [map, refreshToken]);
+  return null;
+}
 
 function InvalidateMapOnResize() {
   const map = useMap();
@@ -7745,6 +7861,18 @@ export default function TestSweepingMap({
     setSweepingComplaints,
   ] = useState<SweepingComplaint[]>([]);
 
+  // Búsqueda local: no hace llamadas adicionales ni altera el filtro de fechas.
+  const [complaintNumberFilter, setComplaintNumberFilter] = useState("");
+  const visibleSweepingComplaints = useMemo(() => {
+    const search = complaintNumberFilter.trim().replace(/^#/, "").toLocaleLowerCase("es");
+    if (!search) return sweepingComplaints;
+    return sweepingComplaints.filter((complaint) => {
+      const number = String(complaint.complaint_number ?? "").toLocaleLowerCase("es");
+      const name = (complaint.complainant_name ?? "").toLocaleLowerCase("es");
+      return number.includes(search) || name.includes(search);
+    });
+  }, [sweepingComplaints, complaintNumberFilter]);
+
   const [
     complaintsTotal,
     setComplaintsTotal,
@@ -8010,6 +8138,11 @@ export default function TestSweepingMap({
   ] = useState<
     NotCompletedDialogState | null
   >(null);
+
+  const [realizedDateDialog, setRealizedDateDialog] =
+    useState<RealizedDateDialogState | null>(null);
+  const [plannedInteractionToken, setPlannedInteractionToken] = useState(0);
+  const [completedInteractionToken, setCompletedInteractionToken] = useState(0);
 
   const confirmResolverRef =
     useRef<
@@ -8438,26 +8571,6 @@ export default function TestSweepingMap({
   const completedHoverEnabled =
     completedRoutes.length < 300;
 
-  const plannedCanvasRenderer =
-    useMemo(
-      () =>
-        L.canvas({
-          padding: 0.5,
-          tolerance: 8,
-        }),
-      []
-    );
-
-  const completedCanvasRenderer =
-    useMemo(
-      () =>
-        L.canvas({
-          padding: 0.5,
-          tolerance: 8,
-        }),
-      []
-    );
-
   /*
    * ==========================================================
    * LEYENDA DEL MAPA REALIZADO
@@ -8550,11 +8663,11 @@ export default function TestSweepingMap({
 
   async function applyPlannedFilter() {
     setSuccess(null);
-
-    await loadPlannedRecords(
-      plannedFilterFrom,
-      plannedFilterTo
-    );
+    // Mantener el modo de selección/dibujo activo al cambiar las fechas.
+    // Desactivarlo aquí dejaba el cursor de Leaflet en modo arrastre
+    // y los clics ya no agregaban puntos para dibujar o seleccionar zonas.
+    const ok = await loadPlannedRecords(plannedFilterFrom, plannedFilterTo);
+    if (ok) setPlannedInteractionToken((token) => token + 1);
   }
 
   async function plannedFilterToday() {
@@ -8651,11 +8764,9 @@ export default function TestSweepingMap({
 
   async function applyCompletedFilter() {
     setSuccess(null);
-
-    await loadCompletedRecords(
-      completedFilterFrom,
-      completedFilterTo
-    );
+    // El filtro no debe cancelar una herramienta de dibujo activa.
+    const ok = await loadCompletedRecords(completedFilterFrom, completedFilterTo);
+    if (ok) setCompletedInteractionToken((token) => token + 1);
   }
 
   async function completedFilterToday() {
@@ -10962,41 +11073,24 @@ export default function TestSweepingMap({
     }
   }
 
-  async function markPlannedAsCompleted(
-    record: MapRoute
-  ) {
+  function markPlannedAsCompleted(record: MapRoute) {
+    if (readOnly) return;
     if (record.result_status === "NO_REALIZADO") {
       setError("Primero deshacé el resultado NO REALIZADO.");
       return;
     }
     if (record.realized_record_id) {
-      setSuccess(
-        "Este tramo ya está registrado como realizado."
-      );
+      setSuccess("Este tramo ya está registrado como realizado.");
       return;
     }
+    setRealizedDateDialog({
+      target: { kind: "single", record },
+      workDate: getTodayYmd(),
+      error: null,
+    });
+  }
 
-    const confirmed =
-      await requestConfirmation({
-        title:
-          "Marcar tramo como realizado",
-        message:
-          `${record.main_street} — ${record.from_street} → ${record.to_street}`,
-        detail:
-          "El tramo planificado se conservará y se creará una copia en Realizados con la fecha de hoy.",
-        confirmLabel:
-          "Marcar como realizado",
-        variant:
-          "success",
-      });
-
-    if (!confirmed) {
-      return;
-    }
-
-    const workDate =
-      getTodayYmd();
-
+  async function savePlannedAsCompleted(record: MapRoute, workDate: string) {
     try {
       setMarkingRealizedId(
         record.id
@@ -11107,6 +11201,7 @@ export default function TestSweepingMap({
         );
       }
 
+      setRealizedDateDialog(null);
       setSuccess(
         `${record.main_street} se registró como realizado. La planificación original se conserva.`
       );
@@ -11125,6 +11220,24 @@ export default function TestSweepingMap({
       setMarkingRealizedId(
         null
       );
+    }
+  }
+
+  async function submitRealizedDateDialog() {
+    const dialog = realizedDateDialog;
+    if (!dialog) return;
+    const parsed = dateFromYmd(dialog.workDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dialog.workDate) ||
+        !parsed || dateToYmd(parsed) !== dialog.workDate) {
+      setRealizedDateDialog((current) => current ? {
+        ...current, error: "Seleccioná una fecha válida para la realización.",
+      } : null);
+      return;
+    }
+    if (dialog.target.kind === "single") {
+      await savePlannedAsCompleted(dialog.target.record, dialog.workDate);
+    } else {
+      await saveBatchAsCompleted(dialog.target.batchId, dialog.target.records, dialog.workDate);
     }
   }
 
@@ -11255,44 +11368,26 @@ export default function TestSweepingMap({
     }
   }
 
-  async function markBatchAsCompleted(
-    batchId: string,
-    records: MapRoute[]
-  ) {
-    const pendingRecords =
-      records.filter(
-        (record) =>
-          !record.realized_record_id && record.result_status !== "NO_REALIZADO"
-      );
-
+  function markBatchAsCompleted(batchId: string, records: MapRoute[]) {
+    if (readOnly) return;
+    const pendingRecords = records.filter(
+      (record) => !record.realized_record_id && record.result_status !== "NO_REALIZADO"
+    );
     if (pendingRecords.length === 0) {
-      setSuccess(
-        "Todos los tramos de esta zona ya están registrados como realizados."
-      );
+      setSuccess("Todos los tramos de esta zona ya están registrados como realizados.");
       return;
     }
+    setRealizedDateDialog({
+      target: { kind: "batch", batchId, records },
+      workDate: getTodayYmd(),
+      error: null,
+    });
+  }
 
-    const confirmed =
-      await requestConfirmation({
-        title:
-          "Marcar zona como realizada",
-        message:
-          `Se registrarán ${pendingRecords.length} tramos pendientes como realizados.`,
-        detail:
-          "Los tramos planificados originales se conservarán. Solo se crearán realizados para los pendientes del grupo.",
-        confirmLabel:
-          "Marcar grupo como realizado",
-        variant:
-          "success",
-      });
-
-    if (!confirmed) {
-      return;
-    }
-
-    const workDate =
-      getTodayYmd();
-
+  async function saveBatchAsCompleted(batchId: string, records: MapRoute[], workDate: string) {
+    const pendingRecords = records.filter(
+      (record) => !record.realized_record_id && record.result_status !== "NO_REALIZADO"
+    );
     try {
       setMarkingBatchId(
         batchId
@@ -11383,6 +11478,7 @@ export default function TestSweepingMap({
             pendingRecords.length
         );
 
+      setRealizedDateDialog(null);
       setSuccess(
         `${completedCount} tramos de la zona se registraron como realizados. La planificación original se conserva.`
       );
@@ -11978,7 +12074,7 @@ export default function TestSweepingMap({
         ref={monitorCenterRef}
         className={
           monitorFullscreen
-            ? "fixed inset-0 z-[20000] flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-white"
+            ? "sweeping-monitor-landscape fixed inset-0 z-[20000] flex h-screen w-screen min-w-0 flex-col overflow-hidden bg-slate-950 text-white"
             : "pointer-events-none fixed -left-[10000px] top-0 h-px w-px overflow-hidden opacity-0"
         }
         style={
@@ -11995,22 +12091,280 @@ export default function TestSweepingMap({
       >
         {monitorFullscreen && (
           <>
-            <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3">
+            {/* Solo celulares en horizontal: no afecta vertical, tablet ni escritorio. */}
+            <style>{`
+              /* Celulares en vertical: dos filas de encabezado legibles,
+                 sin comprimir ni superponer los cuatro mapas. */
+              @media screen and (orientation: portrait) and (max-width: 600px) {
+                .sweeping-monitor-landscape {
+                  width: 100vw !important;
+                  height: 100dvh !important;
+                  min-width: 0 !important;
+                  max-height: 100dvh !important;
+                }
+                .sweeping-monitor-toolbar {
+                  box-sizing: border-box;
+                  flex: 0 0 auto !important;
+                  height: auto !important;
+                  min-height: 66px !important;
+                  padding: 4px 8px !important;
+                  display: flex !important;
+                  flex-direction: column !important;
+                  flex-wrap: nowrap !important;
+                  align-items: stretch !important;
+                  justify-content: center !important;
+                  gap: 2px !important;
+                }
+                .sweeping-monitor-toolbar > div:first-child {
+                  flex: 0 0 auto !important;
+                  min-width: 0 !important;
+                }
+                .sweeping-monitor-toolbar > div:first-child p:first-child {
+                  display: block !important;
+                  font-size: 11px !important;
+                  line-height: 14px !important;
+                  white-space: normal !important;
+                }
+                .sweeping-monitor-toolbar > div:first-child p:last-child {
+                  display: block !important;
+                  font-size: 8px !important;
+                  line-height: 10px !important;
+                  overflow-wrap: anywhere;
+                }
+                .sweeping-monitor-toolbar-actions {
+                  display: flex !important;
+                  flex: 0 0 auto !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  justify-content: space-between !important;
+                  align-items: center !important;
+                  gap: 5px !important;
+                }
+                .sweeping-monitor-refresh-info {
+                  flex: 1 1 auto !important;
+                  min-width: 0 !important;
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  text-align: left !important;
+                }
+                .sweeping-monitor-refresh-info p:first-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  overflow-wrap: anywhere;
+                }
+                .sweeping-monitor-refresh-info p:last-child {
+                  display: block !important;
+                  font-size: 8px !important;
+                }
+                .sweeping-monitor-toolbar-actions > button {
+                  flex: 0 0 auto !important;
+                  white-space: nowrap !important;
+                  padding: 4px 6px !important;
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                }
+                .sweeping-monitor-grid {
+                  display: grid !important;
+                  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  gap: 4px !important;
+                  padding: 4px !important;
+                  min-height: 0 !important;
+                  overflow: hidden !important;
+                }
+                .sweeping-monitor-card-head {
+                  box-sizing: border-box;
+                  height: auto !important;
+                  min-height: 51px !important;
+                  max-height: 62px !important;
+                  flex: 0 0 auto !important;
+                  display: flex !important;
+                  flex-direction: column !important;
+                  flex-wrap: nowrap !important;
+                  align-items: stretch !important;
+                  justify-content: center !important;
+                  gap: 2px !important;
+                  padding: 4px 6px !important;
+                }
+                .sweeping-monitor-card-head > div:first-child {
+                  min-width: 0 !important;
+                  width: 100% !important;
+                }
+                .sweeping-monitor-card-head > div:first-child p:first-child {
+                  font-size: 10px !important;
+                  line-height: 12px !important;
+                  overflow-wrap: anywhere;
+                }
+                .sweeping-monitor-card-head > div:first-child p:last-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+                .sweeping-monitor-card-head > div:last-child:not(:first-child) {
+                  display: flex;
+                  flex-wrap: nowrap;
+                  align-items: center;
+                  gap: 3px !important;
+                  min-width: 0;
+                }
+                .sweeping-monitor-card-head span {
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                  padding: 2px 5px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-alltrack-head {
+                  min-height: 62px !important;
+                  max-height: 73px !important;
+                }
+                .sweeping-monitor-alltrack-head > div:last-child {
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  overflow-x: auto !important;
+                  justify-content: flex-start !important;
+                }
+                .sweeping-monitor-alltrack-head button,
+                .sweeping-monitor-alltrack-head summary {
+                  font-size: 9px !important;
+                  line-height: 12px !important;
+                  padding: 3px 5px !important;
+                  white-space: nowrap !important;
+                }
+                .sweeping-monitor-grid .leaflet-control-zoom a {
+                  width: 28px !important;
+                  height: 28px !important;
+                  line-height: 28px !important;
+                }
+                .sweeping-monitor-grid .leaflet-control-attribution {
+                  font-size: 8px !important;
+                }
+              }
+              @media screen and (orientation: landscape) and (max-height: 550px) and (max-width: 1000px) {
+                .sweeping-monitor-landscape {
+                  height: 100dvh !important;
+                  max-height: 100dvh;
+                }
+                .sweeping-monitor-toolbar {
+                  height: 43px !important;
+                  min-height: 43px !important;
+                  padding: 3px 10px !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  align-items: center !important;
+                  justify-content: space-between !important;
+                  gap: 8px !important;
+                }
+                .sweeping-monitor-toolbar > div:first-child {
+                  flex: 0 1 auto;
+                  min-width: 0;
+                }
+                .sweeping-monitor-toolbar > div:first-child p:first-child {
+                  font-size: 11px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-toolbar > div:first-child p:last-child,
+                .sweeping-monitor-refresh-info p:last-child { display: none !important; }
+                .sweeping-monitor-toolbar-actions {
+                  flex: 0 0 auto !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  gap: 5px !important;
+                }
+                .sweeping-monitor-refresh-info { flex: 0 0 auto !important; }
+                .sweeping-monitor-refresh-info p:first-child {
+                  font-size: 9px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-toolbar-actions > button {
+                  padding: 4px 7px !important;
+                  font-size: 10px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-grid {
+                  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+                  gap: 4px !important;
+                  padding: 4px !important;
+                  min-height: 0 !important;
+                }
+                .sweeping-monitor-card-head {
+                  min-height: 29px !important;
+                  height: 29px !important;
+                  padding: 2px 6px !important;
+                  flex-direction: row !important;
+                  flex-wrap: nowrap !important;
+                  align-items: center !important;
+                  gap: 4px !important;
+                }
+                .sweeping-monitor-card-head > div:first-child {
+                  min-width: 0;
+                  flex: 1 1 auto;
+                }
+                .sweeping-monitor-card-head > div:first-child p:first-child {
+                  font-size: 10px !important;
+                  line-height: 13px !important;
+                  overflow: hidden;
+                  white-space: nowrap;
+                  text-overflow: ellipsis;
+                }
+                .sweeping-monitor-card-head > div:first-child p:last-child {
+                  font-size: 9px !important;
+                  line-height: 11px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-card-head > span,
+                .sweeping-monitor-card-head > div:last-child span {
+                  flex: 0 0 auto;
+                  font-size: 9px !important;
+                  padding: 2px 5px !important;
+                }
+                .sweeping-monitor-alltrack-head {
+                  min-height: 36px !important;
+                  height: 36px !important;
+                }
+                .sweeping-monitor-alltrack-head > div:first-child { flex: 0 1 155px; }
+                .sweeping-monitor-alltrack-head > div:first-child p:last-child { display: none !important; }
+                .sweeping-monitor-alltrack-head > div:last-child {
+                  width: auto !important;
+                  flex: 1 1 auto;
+                  min-width: 0;
+                  overflow-x: auto;
+                  justify-content: flex-end;
+                }
+                .sweeping-monitor-alltrack-head button,
+                .sweeping-monitor-alltrack-head summary {
+                  font-size: 9px !important;
+                  padding: 3px 5px !important;
+                  white-space: nowrap;
+                }
+                .sweeping-monitor-grid .leaflet-control-zoom a {
+                  width: 26px !important;
+                  height: 26px !important;
+                  line-height: 26px !important;
+                }
+                .sweeping-monitor-grid .leaflet-control-attribution { font-size: 8px !important; }
+              }
+            `}</style>
+            <div className="sweeping-monitor-toolbar flex shrink-0 flex-col gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 md:h-10 md:flex-row md:items-center md:justify-between md:py-0">
               <div className="min-w-0">
-                <p className="text-xs font-bold tracking-wide text-white">
+                <p className="text-sm font-bold tracking-wide text-white md:text-xs">
                   Centro de monitoreo de barrido
                 </p>
-                <p className="text-[9px] text-slate-400">
+                <p className="text-[10px] text-slate-400 md:text-[9px]">
                   Planificación · realizado · reclamos · vehículos All Track
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="text-right text-[10px] leading-tight text-slate-300">
+              <div className="sweeping-monitor-toolbar-actions flex min-w-0 flex-wrap items-center justify-between gap-2 md:shrink-0 md:flex-nowrap md:justify-end">
+                <div className="sweeping-monitor-refresh-info min-w-0 flex-1 text-left text-[10px] leading-tight text-slate-300 md:flex-none md:text-right">
                   <p>{monitorRefreshError ? "Error en la última actualización" : monitorLastUpdated
                     ? `Última actualización: ${monitorLastUpdated.toLocaleTimeString("es-AR")}`
                     : "Esperando primera actualización"}</p>
-                  <p className="text-[9px] text-slate-400">Automática cada 10 min</p>
+                  <p className="text-[10px] text-slate-400 md:text-[9px]">Automática cada 10 min</p>
                 </div>
                 {(monitorRefreshing || loadingPlanned ||
                   loadingCompleted ||
@@ -12034,7 +12388,7 @@ export default function TestSweepingMap({
                     loadingComplaints ||
                     loadingAlltrack
                   }
-                  className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+                  className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 md:px-3 md:py-1.5 md:text-xs"
                 >
                   ↻ Actualizar todo
                 </button>
@@ -12044,28 +12398,28 @@ export default function TestSweepingMap({
                   onClick={() =>
                     void closeMonitorCenter()
                   }
-                  className="rounded-md border border-red-800 bg-red-950/60 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-900"
+                  className="shrink-0 rounded-md border border-red-800 bg-red-950/60 px-2.5 py-2 text-[11px] font-semibold text-red-200 transition hover:bg-red-900 md:px-3 md:py-1.5 md:text-xs"
                 >
                   ✕ Salir
                 </button>
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1 p-1">
+            <div className="sweeping-monitor-grid grid min-h-0 min-w-0 flex-1 grid-cols-2 grid-rows-2 gap-1 overflow-hidden p-1 md:grid-cols-2 md:grid-rows-2">
               {/* PLANIFICACIÓN */}
-              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-blue-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-blue-50 px-3">
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-blue-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="sweeping-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-blue-50 px-1.5 py-1 md:h-10 md:px-3 md:min-h-0 md:flex-nowrap md:py-0">
                   <div>
                     <p className="text-xs font-bold text-blue-700">Planificación de barrido</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(plannedAppliedFrom)} al {formatDateAr(plannedAppliedTo)}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     {plannedAreaBatches.length > 0 && (
-                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                      <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] md:px-2 md:text-[10px] font-bold text-orange-700">
                         {plannedAreaBatches.length} {plannedAreaBatches.length === 1 ? "zona" : "zonas"}
                       </span>
                     )}
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] md:px-2 md:text-[10px] font-bold text-blue-700">
                       {plannedRoutes.length} tramos
                     </span>
                   </div>
@@ -12153,7 +12507,9 @@ export default function TestSweepingMap({
                     {plannedRoutes.map((record) => (
                       <Polyline
                         key={`monitor-planned-${record.id}`}
-                        positions={record.positions}
+                        interactive={true}
+
+                positions={record.positions}
                         smoothFactor={2}
                         pathOptions={{
                           color:
@@ -12196,13 +12552,13 @@ export default function TestSweepingMap({
               </div>
 
               {/* REALIZADO */}
-              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-emerald-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-emerald-50 px-3">
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-emerald-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="sweeping-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-emerald-50 px-1.5 py-1 md:h-10 md:px-3 md:min-h-0 md:flex-nowrap md:py-0">
                   <div>
                     <p className="text-xs font-bold text-emerald-700">Barrido realizado</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(completedAppliedFrom)} al {formatDateAr(completedAppliedTo)}</p>
                   </div>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{completedRoutes.length} tramos</span>
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] md:px-2 md:text-[10px] font-bold text-emerald-700">{completedRoutes.length} tramos</span>
                 </div>
                 <div className="relative min-h-0 flex-1">
                   <MapContainer
@@ -12256,13 +12612,13 @@ export default function TestSweepingMap({
               </div>
 
               {/* RECLAMOS */}
-              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex h-10 shrink-0 items-center justify-between border-b bg-amber-50 px-3">
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="sweeping-monitor-card-head flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-1 border-b bg-amber-50 px-1.5 py-1 md:h-10 md:px-3 md:min-h-0 md:flex-nowrap md:py-0">
                   <div>
                     <p className="text-xs font-bold text-amber-700">Reclamos georreferenciados de barrido</p>
                     <p className="text-[10px] text-slate-500">{formatDateAr(complaintsAppliedFrom)} al {formatDateAr(complaintsAppliedTo)}</p>
                   </div>
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{sweepingComplaints.length} ubicados</span>
+                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] md:px-2 md:text-[10px] font-bold text-amber-700">{sweepingComplaints.length} ubicados</span>
                 </div>
                 <div className="relative min-h-0 flex-1">
                   <MapContainer
@@ -12273,34 +12629,7 @@ export default function TestSweepingMap({
                     style={{ width: "100%", height: "100%" }}
                   >
                     <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    {sweepingComplaints.map((complaint) => {
-                      const status = (complaint.status ?? "").toLowerCase();
-                      const color =
-                        status.includes("resuelto") && !status.includes("no resuelto")
-                          ? "#16a34a"
-                          : status.includes("no resuelto")
-                            ? "#dc2626"
-                            : "#f59e0b";
-                      return (
-                        <Marker
-                          key={`monitor-complaint-${complaint.id}`}
-                          position={[complaint.lat, complaint.lng]}
-                          icon={createComplaintPinIcon(color)}
-                        >
-                          <Popup>
-                            <div className="min-w-[220px] space-y-2">
-                              <p className="font-semibold">Reclamo #{complaint.id}</p>
-                              <p className="text-sm"><strong>Dirección:</strong> {complaint.address ?? "Sin calle"} {complaint.street_number ?? ""}</p>
-                              <p className="text-sm"><strong>Fecha:</strong> {formatDateAr(complaint.complaint_date)}</p>
-                              <p className="text-sm"><strong>Estado:</strong> {complaint.status ?? "-"}</p>
-                              {complaint.details && (
-                                <p className="text-sm leading-relaxed"><strong>Detalle:</strong> {complaint.details}</p>
-                              )}
-                            </div>
-                          </Popup>
-                        </Marker>
-                      );
-                    })}
+                    <ComplaintMarkers complaints={sweepingComplaints} />
                     <FitComplaintPoints complaints={sweepingComplaints} />
                     <InvalidateMapOnFullscreen fullscreen={monitorFullscreen} />
 
@@ -12310,8 +12639,8 @@ export default function TestSweepingMap({
               </div>
 
               {/* ALL TRACK */}
-              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-sky-900/70 bg-white text-slate-900 shadow-xl">
-                <div className="flex min-h-10 shrink-0 items-center justify-between gap-2 border-b bg-sky-50 px-3 py-1.5">
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-sky-900/70 bg-white text-slate-900 shadow-xl">
+                <div className="sweeping-monitor-card-head sweeping-monitor-alltrack-head flex min-h-10 shrink-0 flex-col items-stretch gap-2 border-b bg-sky-50 px-1.5 py-1 md:px-3 md:flex-row md:items-center md:justify-between md:py-1.5">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-sky-700">
                       Vehículos de barrido · All Track
@@ -12323,7 +12652,7 @@ export default function TestSweepingMap({
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap md:w-auto md:shrink-0 md:overflow-visible">
                     <button
                       type="button"
                       onClick={() =>
@@ -12755,6 +13084,74 @@ export default function TestSweepingMap({
         </div>
       )}
 
+
+      {realizedDateDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[2px]">
+          <div role="dialog" aria-modal="true" aria-labelledby="sweeping-realized-date-title"
+            className="w-full max-w-lg overflow-hidden rounded-2xl border bg-background shadow-2xl">
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Barrido realizado</p>
+                  <h3 id="sweeping-realized-date-title" className="mt-1 text-base font-semibold">
+                    {realizedDateDialog.target.kind === "single" ? "Registrar tramo realizado" : "Registrar zona realizada"}
+                  </h3>
+                </div>
+                <button type="button" onClick={() => setRealizedDateDialog(null)}
+                  disabled={markingRealizedId !== null || markingBatchId !== null}
+                  className="rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">Cerrar</button>
+              </div>
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+                {realizedDateDialog.target.kind === "single" ? (
+                  <>
+                    <p className="font-semibold">{realizedDateDialog.target.record.main_street}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {realizedDateDialog.target.record.from_street} → {realizedDateDialog.target.record.to_street}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Planificado: {formatDateAr(realizedDateDialog.target.record.work_date)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold">Planificación por zona</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {realizedDateDialog.target.records.filter((record) =>
+                        !record.realized_record_id && record.result_status !== "NO_REALIZADO"
+                      ).length} tramos pendientes para registrar
+                    </p>
+                  </>
+                )}
+              </div>
+              <label htmlFor="sweeping-realized-work-date" className="mt-5 block text-sm font-semibold">
+                Fecha en que se realizó el barrido
+              </label>
+              <input id="sweeping-realized-work-date" type="date" required
+                value={realizedDateDialog.workDate}
+                onChange={(event) => setRealizedDateDialog((current) => current ? {
+                  ...current, workDate: event.target.value, error: null,
+                } : null)}
+                className="mt-2 h-11 w-full rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+              <p className="mt-2 text-xs text-muted-foreground">
+                La fecha de realización es independiente de la fecha planificada. El tramo original se conserva.
+              </p>
+              {realizedDateDialog.error && (
+                <p className="mt-2 text-xs font-semibold text-red-600">{realizedDateDialog.error}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t bg-muted/20 px-5 py-4">
+              <button type="button" onClick={() => setRealizedDateDialog(null)}
+                disabled={markingRealizedId !== null || markingBatchId !== null}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancelar</button>
+              <button type="button" onClick={() => void submitRealizedDateDialog()}
+                disabled={!realizedDateDialog.workDate || markingRealizedId !== null || markingBatchId !== null}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {markingRealizedId !== null || markingBatchId !== null ? "Guardando..." : "Confirmar realización"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {notCompletedDialog && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[2px]">
@@ -14890,7 +15287,7 @@ export default function TestSweepingMap({
 
               scrollWheelZoom
 
-              preferCanvas
+              preferCanvas={false}
 
               className="relative z-0 h-full w-full"
 
@@ -14900,6 +15297,8 @@ export default function TestSweepingMap({
               }}
 
             >
+
+            <RestoreMapInteraction refreshToken={plannedInteractionToken} />
 
             <TileLayer
 
@@ -15128,7 +15527,6 @@ export default function TestSweepingMap({
 
                 positions={record.positions}
 
-                renderer={plannedCanvasRenderer}
 
                 smoothFactor={2}
 
@@ -15524,7 +15922,7 @@ export default function TestSweepingMap({
 
               scrollWheelZoom
 
-              preferCanvas
+              preferCanvas={false}
 
               className="relative z-0 h-full w-full"
 
@@ -15534,6 +15932,8 @@ export default function TestSweepingMap({
               }}
 
             >
+
+            <RestoreMapInteraction refreshToken={completedInteractionToken} />
 
             <TileLayer
 
@@ -15575,10 +15975,11 @@ export default function TestSweepingMap({
 
                   key={record.id}
 
-                  positions={record.positions}
+                  interactive={true}
 
-                  renderer={completedCanvasRenderer}
+                positions={record.positions}
 
+  
                   smoothFactor={2}
 
                   pathOptions={{
@@ -15846,7 +16247,7 @@ export default function TestSweepingMap({
             }`}
           >
             <div className="bg-amber-50/40 p-4 dark:bg-amber-950/10">
-              <div className="mb-3 flex flex-wrap gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -15885,6 +16286,32 @@ export default function TestSweepingMap({
                 >
                   Este mes
                 </button>
+                <div className="relative ml-auto flex min-w-0 w-[190px] max-w-full items-center sm:w-[230px]">
+                  <label htmlFor="sweeping-complaint-number" className="sr-only">
+                    Buscar por número o nombre del reclamante
+                  </label>
+                  <span aria-hidden="true" className="pointer-events-none absolute left-2 text-xs text-muted-foreground">⌕</span>
+                  <input
+                    id="sweeping-complaint-number"
+                    type="search"
+                    autoComplete="off"
+                    value={complaintNumberFilter}
+                    onChange={(event) => setComplaintNumberFilter(event.target.value)}
+                    placeholder="Nº o nombre..."
+                    className="h-8 w-full min-w-0 rounded-md border bg-background pl-6 pr-7 text-xs outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                  />
+                  {complaintNumberFilter.trim() && (
+                    <button
+                      type="button"
+                      aria-label="Limpiar búsqueda"
+                      title="Limpiar búsqueda"
+                      onClick={() => setComplaintNumberFilter("")}
+                      className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -15940,6 +16367,7 @@ export default function TestSweepingMap({
                 </button>
               </div>
 
+
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>
                   Mostrando reclamos del{" "}
@@ -15953,7 +16381,9 @@ export default function TestSweepingMap({
                 </span>
 
                 <span>
-                  {sweepingComplaints.length} georreferenciados
+                  {complaintNumberFilter.trim()
+                    ? `${visibleSweepingComplaints.length} de ${sweepingComplaints.length} georreferenciados`
+                    : `${sweepingComplaints.length} georreferenciados`}
                 </span>
 
                 <span>
@@ -15996,6 +16426,12 @@ export default function TestSweepingMap({
                       }
               }
             >
+              {complaintNumberFilter.trim() && visibleSweepingComplaints.length === 0 && !loadingComplaints && (
+                <div className="pointer-events-none absolute left-1/2 top-4 z-[900] w-[min(90%,340px)] -translate-x-1/2 rounded-lg border bg-white/95 px-3 py-2 text-center text-xs font-medium text-slate-700 shadow-md">
+                  No se encontraron reclamos con ese número o nombre en el período.
+                </div>
+              )}
+
               {complaintsFullscreen && (
                 <button
                   type="button"
@@ -16027,96 +16463,10 @@ export default function TestSweepingMap({
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                {sweepingComplaints.map(
-                  (complaint) => {
-                    const status =
-                      (
-                        complaint.status ??
-                        ""
-                      ).toLowerCase();
-
-                    const color =
-                      status.includes(
-                        "resuelto"
-                      ) &&
-                      !status.includes(
-                        "no resuelto"
-                      )
-                        ? "#16a34a"
-                        : status.includes(
-                              "no resuelto"
-                            )
-                          ? "#dc2626"
-                          : "#f59e0b";
-
-                    return (
-                      <Marker
-                        key={
-                          complaint.id
-                        }
-                        position={[
-                          complaint.lat,
-                          complaint.lng,
-                        ]}
-                        icon={
-                          createComplaintPinIcon(
-                            color
-                          )
-                        }
-                      >
-                        <Popup>
-                          <div className="min-w-[220px] space-y-2">
-                            <p className="font-semibold">
-                              Reclamo #
-                              {complaint.id}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Dirección:
-                              </strong>{" "}
-                              {complaint.address ??
-                                "Sin calle"}{" "}
-                              {complaint.street_number ??
-                                ""}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Fecha:
-                              </strong>{" "}
-                              {formatDateAr(
-                                complaint.complaint_date
-                              )}
-                            </p>
-
-                            <p className="text-sm">
-                              <strong>
-                                Estado:
-                              </strong>{" "}
-                              {complaint.status ??
-                                "-"}
-                            </p>
-
-                            {complaint.details && (
-                              <p className="text-sm leading-relaxed">
-                                <strong>
-                                  Detalle:
-                                </strong>{" "}
-                                {complaint.details}
-                              </p>
-                            )}
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  }
-                )}
+                <ComplaintMarkers complaints={visibleSweepingComplaints} />
 
                 <FitComplaintPoints
-                  complaints={
-                    sweepingComplaints
-                  }
+                  complaints={visibleSweepingComplaints}
                 />
 
                 <InvalidateMapOnFullscreen
