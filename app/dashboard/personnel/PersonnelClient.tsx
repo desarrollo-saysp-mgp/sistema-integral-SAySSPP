@@ -155,6 +155,7 @@ export function PersonnelClient({
 
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
 
+
   const [loading, setLoading] = useState(true);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -1203,7 +1204,7 @@ export function PersonnelClient({
 
 
 
-        <div className="mx-auto flex min-h-[55vh] w-full max-w-[1600px] items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[55vh] w-full max-w-none items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
 
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
 
@@ -1241,7 +1242,7 @@ export function PersonnelClient({
 
 
 
-      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-none space-y-6 px-4 py-6 sm:px-6 lg:px-8">
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
@@ -1399,6 +1400,8 @@ export function PersonnelClient({
           </Card>
 
         )}
+
+
 
 
 
