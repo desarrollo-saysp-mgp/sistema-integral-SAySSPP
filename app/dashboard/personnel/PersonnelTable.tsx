@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Pencil,
   Search,
+  ArrowDownAZ,
   Trash2,
   UserCheck,
   UserX,
@@ -32,6 +33,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type PersonnelSchedule = Personnel & {
+  hora_ingreso?: string | null;
+  hora_salida?: string | null;
+  modalidad_horas_extra?: string | null;
+  horas_50?: number | null;
+  horas_100?: number | null;
+};
+
+const formatSchedule = (person: Personnel) => {
+  const data = person as PersonnelSchedule;
+  const entrada = data.hora_ingreso?.slice(0, 5);
+  const salida = data.hora_salida?.slice(0, 5);
+  return entrada || salida ? `${entrada || "--:--"} a ${salida || "--:--"}` : "Sin horario";
+};
+
+const formatExtraHours = (person: Personnel) => {
+  const data = person as PersonnelSchedule;
+  const modalidad = data.modalidad_horas_extra;
+  const rates: string[] = [];
+  if (Number(data.horas_50 ?? 0) > 0) rates.push("50 %");
+  if (Number(data.horas_100 ?? 0) > 0) rates.push("100 %");
+  if (!modalidad || modalidad === "NO") return "Sin horas extras";
+  const title = modalidad === "ARREGLO" ? "Arreglo" : "Horas extras";
+  return rates.length > 0
+    ? `${title} · ${rates.join(" y ")}`
+    : `${title} · sin porcentaje`;
+};
+
 const ITEMS_PER_PAGE = 15;
 
 type ContractFilter =
@@ -41,6 +70,21 @@ type ContractFilter =
   | "CONTRATO_CON_APORTES";
 
 type StatusFilter = "active" | "inactive" | "all";
+type SortOrder = "az" | "za" | "newest" | "oldest";
+
+// No se adivina una fecha de alta: solo se utilizan campos de fecha reales
+// cuando están presentes. Así evitamos ordenar UUID como si fueran fechas.
+const getCreationTimestamp = (person: Personnel): number | null => {
+  const value = person as Personnel & {
+    created_at?: string | null;
+    fecha_creacion?: string | null;
+    creado_en?: string | null;
+  };
+  const raw = value.created_at ?? value.fecha_creacion ?? value.creado_en;
+  if (!raw) return null;
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
 
 interface PersonnelTableProps {
   personnel: Personnel[];
@@ -111,6 +155,7 @@ export function PersonnelTable({
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("active");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("az");
 
   const directions = useMemo(() => {
     const values = personnel
@@ -177,21 +222,30 @@ export function PersonnelTable({
           matchesStatus
         );
       })
-      .sort((a, b) =>
-        a.nombre_completo.localeCompare(
+      .sort((a, b) => {
+        const byName = a.nombre_completo.localeCompare(
           b.nombre_completo,
           "es",
-          {
-            sensitivity: "base",
-          },
-        ),
-      );
+          { sensitivity: "base" },
+        );
+        if (sortOrder === "az") return byName;
+        if (sortOrder === "za") return -byName;
+        const aTime = getCreationTimestamp(a);
+        const bTime = getCreationTimestamp(b);
+        if (aTime !== null && bTime !== null && aTime !== bTime) {
+          return sortOrder === "newest" ? bTime - aTime : aTime - bTime;
+        }
+        if (aTime !== null && bTime === null) return -1;
+        if (bTime !== null && aTime === null) return 1;
+        return byName;
+      });
   }, [
     personnel,
     searchTerm,
     contractFilter,
     directionFilter,
     statusFilter,
+    sortOrder,
   ]);
 
   const totalPages = Math.max(
@@ -209,6 +263,7 @@ export function PersonnelTable({
     contractFilter,
     directionFilter,
     statusFilter,
+    sortOrder,
   ]);
 
   useEffect(() => {
@@ -229,13 +284,15 @@ export function PersonnelTable({
     searchTerm.trim() !== "" ||
     contractFilter !== "all" ||
     directionFilter !== "all" ||
-    statusFilter !== "active";
+    statusFilter !== "active" ||
+    sortOrder !== "az";
 
   const clearFilters = () => {
     setSearchTerm("");
     setContractFilter("all");
     setDirectionFilter("all");
     setStatusFilter("active");
+    setSortOrder("az");
     setCurrentPage(1);
   };
 
@@ -290,8 +347,13 @@ export function PersonnelTable({
       );
     }
 
+    if (sortOrder !== "az") {
+      const sortLabel = { za: "Nombre Z a A", newest: "Últimos cargados", oldest: "Primeros cargados" }[sortOrder];
+      filters.push(`Orden: ${sortLabel}`);
+    }
     return filters;
   }, [
+    sortOrder,
     searchTerm,
     contractFilter,
     directionFilter,
@@ -403,6 +465,25 @@ export function PersonnelTable({
             </SelectContent>
           </Select>
 
+          <Select
+            value={sortOrder}
+            onValueChange={(value) => setSortOrder(value as SortOrder)}
+          >
+            <SelectTrigger
+              aria-label="Ordenar personal"
+              className="w-full lg:w-[195px]"
+            >
+              <ArrowDownAZ className="mr-1 size-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="az">Nombre A → Z</SelectItem>
+              <SelectItem value="za">Nombre Z → A</SelectItem>
+              <SelectItem value="newest">Últimos cargados</SelectItem>
+              <SelectItem value="oldest">Primeros cargados</SelectItem>
+            </SelectContent>
+          </Select>
+
           {hasActiveFilters && (
             <Button
               type="button"
@@ -494,7 +575,7 @@ export function PersonnelTable({
                             {formatContractType(person.tipo_contrato)}
                           </Badge>
 
-                          {person.tipo_contrato === "PLANTA_PERMANENTE" && (
+                          {(person.tipo_contrato === "PLANTA_PERMANENTE" || person.tipo_contrato === "CONTRATO_CON_APORTES") && (
                             <p className="text-xs text-muted-foreground">
                               {person.numero_resolucion
                                 ? `Resolución: ${person.numero_resolucion}`
@@ -502,23 +583,7 @@ export function PersonnelTable({
                             </p>
                           )}
 
-                          {person.tipo_contrato === "MONOTRIBUTISTA" && (
-                            <div className="space-y-1 text-xs text-muted-foreground">
-                              <p>
-                                {person.convenio
-                                  ? "Con convenio"
-                                  : "Sin convenio"}
-                              </p>
-
-                              {person.convenio && (
-                                <p>
-                                  {person.numero_resolucion
-                                    ? `Resolución: ${person.numero_resolucion}`
-                                    : "Resolución no informada"}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                          
                         </div>
                       </div>
 
@@ -530,6 +595,12 @@ export function PersonnelTable({
                           {person.tarea || "-"}
                         </p>
                       </div>
+
+                       <div className="rounded-xl bg-muted/35 p-3">
+                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Horario y horas extras</p>
+                         <p className="mt-1 font-medium">{formatSchedule(person)}</p>
+                         <p className="mt-1 text-xs text-muted-foreground">{formatExtraHours(person)}</p>
+                       </div>
                     </div>
 
                     {!isReadOnly && (
@@ -624,6 +695,7 @@ export function PersonnelTable({
                   <TableHead className="min-w-[170px] px-2">
                     Tarea que realiza
                   </TableHead>
+                  <TableHead className="min-w-[155px] px-2">Horario / extras</TableHead>
                   <TableHead className="w-[76px] min-w-[76px] px-2">
                     Estado
                   </TableHead>
@@ -640,7 +712,7 @@ export function PersonnelTable({
                 {paginatedPersonnel.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={isReadOnly ? 8 : 9}
+                      colSpan={isReadOnly ? 9 : 10}
                       className="h-32 text-center text-muted-foreground"
                     >
                       No se encontraron registros de personal.
@@ -694,8 +766,7 @@ export function PersonnelTable({
                               )}
                             </Badge>
 
-                            {person.tipo_contrato ===
-                              "PLANTA_PERMANENTE" && (
+                            {(person.tipo_contrato === "PLANTA_PERMANENTE" || person.tipo_contrato === "CONTRATO_CON_APORTES") && (
                               <p className="text-xs text-muted-foreground">
                                 {person.numero_resolucion
                                   ? `Resolución: ${person.numero_resolucion}`
@@ -703,24 +774,7 @@ export function PersonnelTable({
                               </p>
                             )}
 
-                            {person.tipo_contrato ===
-                              "MONOTRIBUTISTA" && (
-                              <div className="space-y-1 text-xs text-muted-foreground">
-                                <p>
-                                  {person.convenio
-                                    ? "Con convenio"
-                                    : "Sin convenio"}
-                                </p>
-
-                                {person.convenio && (
-                                  <p>
-                                    {person.numero_resolucion
-                                      ? `Resolución: ${person.numero_resolucion}`
-                                      : "Resolución no informada"}
-                                  </p>
-                                )}
-                              </div>
-                            )}
+                            
                           </div>
                         </TableCell>
 
@@ -729,6 +783,11 @@ export function PersonnelTable({
                             {person.tarea || "-"}
                           </p>
                         </TableCell>
+
+                         <TableCell className="px-2 py-2">
+                           <p className="whitespace-nowrap font-medium">{formatSchedule(person)}</p>
+                           <p className="mt-1 text-xs text-muted-foreground">{formatExtraHours(person)}</p>
+                         </TableCell>
 
                         <TableCell className="px-2 py-2">
                           {person.activo ? (

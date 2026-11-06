@@ -399,6 +399,12 @@ export default async function AccesosPage() {
 
   const filteredAccesses =
     accesses.filter((item) => {
+      // Ocultar Tablero General (Power BI) sin alterar los otros permisos.
+      // String() evita estrechar el tipo discriminado en las ramas siguientes.
+      if (String(item.key) === "general_dashboard") {
+        return false;
+      }
+
       // Aunque el módulo figure en profile.modules,
       // ninguna otra cuenta puede ver Encuestas.
       if (item.key === "surveys") {
