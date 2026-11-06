@@ -281,7 +281,7 @@ const isPermanent =
 
         horas_100: String((person as Personnel & { horas_100?: number | null }).horas_100 ?? ""),
 
-        horas_arregladas: "",
+        horas_arregladas: String((person as Personnel & { horas_arregladas?: number | null }).horas_arregladas ?? ""),
 
       });
 
@@ -475,6 +475,15 @@ const isPermanent =
 
     }
 
+    // La cantidad de horas arregladas solo se valida si la modalidad es Arreglo.
+    if (isArrangement && formData.horas_arregladas.trim() !== "") {
+      const cantidad = Number(formData.horas_arregladas.trim().replace(",", "."));
+      if (!/^\d+(?:[.,]\d+)?$/.test(formData.horas_arregladas.trim()) || !Number.isFinite(cantidad) || cantidad < 0) {
+        nextErrors.horas_arregladas =
+          "Ingresá una cantidad válida, por ejemplo 12,5 o 12.5.";
+      }
+    }
+
     if (formData.hora_ingreso && !/^([01]\d|2[0-3]):[0-5]\d$/.test(formData.hora_ingreso)) {
 
       nextErrors.hora_ingreso = "Ingresá una hora válida";
@@ -555,7 +564,9 @@ const isPermanent =
 
       hora_salida: formData.hora_salida || null,
 
-      horas_arregladas: null,
+      horas_arregladas: isArrangement && formData.horas_arregladas.trim() !== ""
+        ? Number(formData.horas_arregladas.trim().replace(",", "."))
+        : null,
 
       horas_50: (isExtraHours || isArrangement) && Number(formData.horas_50 || 0) > 0
 
@@ -1220,6 +1231,28 @@ const isPermanent =
                 </Select>
 
               </div>
+
+              {isArrangement && (
+                <div className="space-y-2">
+                  <Label htmlFor="horas_arregladas">Horas arregladas</Label>
+                  <Input
+                    id="horas_arregladas"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ej.: 12 o 12.5"
+                    value={formData.horas_arregladas}
+                    onChange={(event) =>
+                      handleChange("horas_arregladas", event.target.value)
+                    }
+                    disabled={isSubmitting}
+                  />
+                  {errors.horas_arregladas && (
+                    <p className="text-sm text-destructive">
+                      {errors.horas_arregladas}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {(isExtraHours || isArrangement) && (
 

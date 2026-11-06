@@ -39,6 +39,7 @@ type PersonnelSchedule = Personnel & {
   modalidad_horas_extra?: string | null;
   horas_50?: number | null;
   horas_100?: number | null;
+  horas_arregladas?: number | null;
 };
 
 const formatSchedule = (person: Personnel) => {
@@ -51,14 +52,26 @@ const formatSchedule = (person: Personnel) => {
 const formatExtraHours = (person: Personnel) => {
   const data = person as PersonnelSchedule;
   const modalidad = data.modalidad_horas_extra;
-  const rates: string[] = [];
-  if (Number(data.horas_50 ?? 0) > 0) rates.push("50 %");
-  if (Number(data.horas_100 ?? 0) > 0) rates.push("100 %");
   if (!modalidad || modalidad === "NO") return "Sin horas extras";
-  const title = modalidad === "ARREGLO" ? "Arreglo" : "Horas extras";
-  return rates.length > 0
-    ? `${title} · ${rates.join(" y ")}`
-    : `${title} · sin porcentaje`;
+
+  const porcentajes: string[] = [];
+  if (Number(data.horas_50 ?? 0) > 0) porcentajes.push("50 %");
+  if (Number(data.horas_100 ?? 0) > 0) porcentajes.push("100 %");
+
+  const titulo = modalidad === "ARREGLO" ? "Arreglo" : "Horas extras";
+  const detalle = porcentajes.length ? porcentajes.join(" y ") : "sin porcentaje";
+
+  // La cantidad solo se muestra para Arreglo y cuando existe un valor válido.
+  // Evitamos convertir null en 0 y respetamos los decimales en formato argentino.
+  const raw = data.horas_arregladas;
+  const cantidad = raw !== null && raw !== undefined && String(raw).trim() !== ""
+    ? Number(raw)
+    : null;
+  const horas = modalidad === "ARREGLO" && cantidad !== null && Number.isFinite(cantidad)
+    ? ` · ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 }).format(cantidad)} h arregladas`
+    : "";
+
+  return `${titulo} · ${detalle}${horas}`;
 };
 
 const ITEMS_PER_PAGE = 15;

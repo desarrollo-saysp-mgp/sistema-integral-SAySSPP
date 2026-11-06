@@ -14,6 +14,7 @@ type PersonnelWithSchedule = Personnel & {
   modalidad_horas_extra?: string | null;
   horas_50?: number | null;
   horas_100?: number | null;
+  horas_arregladas?: number | null;
 };
 
 const GREEN: [number, number, number] = [0, 174, 130];
@@ -54,17 +55,27 @@ const formatSchedule = (person: Personnel) => {
 
 const formatExtraHours = (person: Personnel) => {
   const data = person as PersonnelWithSchedule;
-  const modality = data.modalidad_horas_extra;
-  if (!modality || modality === "NO") return "Sin horas extras";
+  const modalidad = data.modalidad_horas_extra;
+  if (!modalidad || modalidad === "NO") return "Sin horas extras";
 
-  const rates: string[] = [];
-  if (Number(data.horas_50 ?? 0) > 0) rates.push("50 %");
-  if (Number(data.horas_100 ?? 0) > 0) rates.push("100 %");
+  const porcentajes: string[] = [];
+  if (Number(data.horas_50 ?? 0) > 0) porcentajes.push("50 %");
+  if (Number(data.horas_100 ?? 0) > 0) porcentajes.push("100 %");
 
-  const label = modality === "ARREGLO" ? "Arreglo" : "Horas extras";
-  return rates.length
-    ? `${label}: ${rates.join(" y ")}`
-    : `${label}: sin porcentaje`;
+  const titulo = modalidad === "ARREGLO" ? "Arreglo" : "Horas extras";
+  const detalle = porcentajes.length ? porcentajes.join(" y ") : "sin porcentaje";
+
+  // La cantidad solo se muestra para Arreglo y cuando existe un valor válido.
+  // Evitamos convertir null en 0 y respetamos los decimales en formato argentino.
+  const raw = data.horas_arregladas;
+  const cantidad = raw !== null && raw !== undefined && String(raw).trim() !== ""
+    ? Number(raw)
+    : null;
+  const horas = modalidad === "ARREGLO" && cantidad !== null && Number.isFinite(cantidad)
+    ? ` · ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 }).format(cantidad)} h arregladas`
+    : "";
+
+  return `${titulo} · ${detalle}${horas}`;
 };
 
 const formatDateTime = () =>
