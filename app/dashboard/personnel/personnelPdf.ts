@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable, { type CellHookData } from "jspdf-autotable";
 
 import type { Personnel } from "@/types";
+import { getServiceStatus, getServiceStatusLabel, getServiceDetail } from "./personnelStatus";
 
 type ExportPersonnelPdfOptions = {
   title?: string;
@@ -156,9 +157,12 @@ export async function exportPersonnelToPdf(
   // Se calculan sobre los mismos registros que recibe la exportación.
   // Así los totales siempre coinciden con la tabla y respetan sus filtros.
   const activePersonnel = personnel.filter((person) => person.activo);
+  const workingPersonnel = activePersonnel.filter((person) => getServiceStatus(person) === "ACTIVO");
+  const withoutService = personnel.filter((person) => getServiceStatus(person) === "SIN_PRESTACION");
   const basePersonnel = isFiltered ? personnel : activePersonnel;
   const counts = {
-    total: isFiltered ? personnel.length : activePersonnel.length,
+    total: isFiltered ? personnel.length : workingPersonnel.length,
+    withoutService: withoutService.length,
     permanent: basePersonnel.filter((p) => p.tipo_contrato === "PLANTA_PERMANENTE").length,
     monotributists: basePersonnel.filter((p) => p.tipo_contrato === "MONOTRIBUTISTA").length,
     contributions: basePersonnel.filter((p) => p.tipo_contrato === "CONTRATO_CON_APORTES").length,
@@ -213,10 +217,11 @@ export async function exportPersonnelToPdf(
     // Ocultamos los indicadores cuyo total sea cero. El indicador general
     // permanece visible incluso si la búsqueda no devuelve registros.
     const cards = [
-      { label: isFiltered ? "Registros filtrados" : "Personal activo", value: counts.total },
+      { label: isFiltered ? "Registros filtrados" : "Personal en servicio", value: counts.total },
       { label: "Planta permanente", value: counts.permanent },
       { label: "Monotributistas", value: counts.monotributists },
       { label: "Contratos con aportes", value: counts.contributions },
+      { label: "Sin prestación de servicios", value: counts.withoutService },
     ].filter((card, index) => index === 0 || card.value > 0);
 
     const cardGap = 3;
@@ -277,7 +282,7 @@ export async function exportPersonnelToPdf(
       formatContractDetail(person),
       person.tarea ?? "-",
       `${formatSchedule(person)}\n${formatExtraHours(person)}`,
-      person.activo ? "Activo" : "Baja",
+      getServiceStatusLabel(person) + (getServiceDetail(person) ? `\n${getServiceDetail(person)}` : ""),
     ]),
     theme: "striped",
     showHead: "everyPage",
@@ -320,8 +325,8 @@ export async function exportPersonnelToPdf(
     },
     didParseCell: (data: CellHookData) => {
       if (data.section === "body" && data.column.index === 8) {
-        const isActive = String(data.cell.raw) === "Activo";
-        data.cell.styles.textColor = isActive ? [0, 123, 93] : [169, 54, 54];
+        const status = String(data.cell.raw);
+        data.cell.styles.textColor = status.startsWith("Activo") ? [0, 123, 93] : status.startsWith("Sin prestación") ? [148, 95, 15] : [169, 54, 54];
         data.cell.styles.fontStyle = "bold";
       }
     },

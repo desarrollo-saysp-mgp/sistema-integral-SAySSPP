@@ -31,7 +31,8 @@ export default async function PersonnelPage() {
   const canAccessPersonnel =
     normalizedRole === "admin" ||
     normalizedRole === "adminlectura" ||
-    normalizedRole === "secretariaprivada";
+    normalizedRole === "secretariaprivada" ||
+    normalizedRole === "personal";
 
   if (!canAccessPersonnel) {
     redirect("/dashboard");

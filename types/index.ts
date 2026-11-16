@@ -27,6 +27,7 @@ export type UserRole =
   | "ReclamosZyV"
   | "AdminLectura"
   | "SecretariaPrivada"
+  | "Personal"
   | "FC_RRHH"
   | "Taller"
   | "Suministros"

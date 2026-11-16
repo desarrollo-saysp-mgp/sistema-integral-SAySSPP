@@ -18,6 +18,8 @@ type SupportedRole =
 
   | "SecretariaPrivada"
 
+  | "Personal"
+
   | "FC_RRHH"
 
   | "FC_SECTOR"
@@ -43,6 +45,8 @@ const VALID_ROLES: SupportedRole[] = [
   "AdminLectura",
 
   "SecretariaPrivada",
+
+  "Personal",
 
   "FC_RRHH",
 
@@ -170,6 +174,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
 
       };
 
+
+    case "Personal":
+      return {
+        modules: ["personnel"],
+        is_readonly: false,
+        default_module: "personnel",
+        fc_sectors: [],
+      };
 
 
     case "Reclamos":
@@ -644,8 +656,7 @@ export async function POST(request: NextRequest) {
         {
 
           error:
-
-            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "SecretariaPrivada", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
+            'Rol inválido. Debe ser "Admin", "Reclamos", "ReclamosArbolado", "ReclamosZyV", "AdminLectura", "SecretariaPrivada", "Personal", "FC_RRHH", "FC_SECTOR", "Taller", "Suministros" o "RNU"',
 
         },
 

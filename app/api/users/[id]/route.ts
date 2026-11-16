@@ -28,6 +28,8 @@ type SupportedRole =
 
   | "Suministros"
 
+  | "Personal"
+
   | "RNU";
 
 
@@ -53,6 +55,8 @@ const VALID_ROLES: SupportedRole[] = [
   "Taller",
 
   "Suministros",
+
+  "Personal",
 
   "RNU",
 
@@ -174,6 +178,14 @@ function getRoleConfig(role: SupportedRole, email?: string) {
 
         fc_sectors: [],
 
+      };
+
+    case "Personal":
+      return {
+        modules: ["personnel"],
+        is_readonly: false,
+        default_module: "personnel",
+        fc_sectors: [],
       };
 
 

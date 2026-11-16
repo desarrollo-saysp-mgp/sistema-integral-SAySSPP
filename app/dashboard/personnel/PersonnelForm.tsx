@@ -47,6 +47,9 @@ import {
 } from "@/components/ui/select";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import type { PersonnelServiceFields, ServiceReason } from "./personnelStatus";
+import { SERVICE_REASON_LABELS } from "./personnelStatus";
 
 type ContractType =
 
@@ -87,6 +90,10 @@ type FormState = {
   horas_100: string;
 
   horas_arregladas: string;
+  situacion_servicio: "ACTIVO" | "SIN_PRESTACION";
+  motivo_sin_servicio: string;
+  fecha_inicio_sin_servicio: string;
+  observaciones_sin_servicio: string;
 
 };
 
@@ -145,6 +152,10 @@ const EMPTY_FORM: FormState = {
   horas_100: "",
 
   horas_arregladas: "",
+  situacion_servicio: "ACTIVO",
+  motivo_sin_servicio: "",
+  fecha_inicio_sin_servicio: "",
+  observaciones_sin_servicio: "",
 
 };
 
@@ -282,6 +293,11 @@ const isPermanent =
         horas_100: String((person as Personnel & { horas_100?: number | null }).horas_100 ?? ""),
 
         horas_arregladas: String((person as Personnel & { horas_arregladas?: number | null }).horas_arregladas ?? ""),
+        situacion_servicio: (person as Personnel & PersonnelServiceFields).situacion_servicio === "SIN_PRESTACION" && person.activo
+          ? "SIN_PRESTACION" : "ACTIVO",
+        motivo_sin_servicio: (person as Personnel & PersonnelServiceFields).motivo_sin_servicio ?? "",
+        fecha_inicio_sin_servicio: (person as Personnel & PersonnelServiceFields).fecha_inicio_sin_servicio?.slice(0, 10) ?? "",
+        observaciones_sin_servicio: (person as Personnel & PersonnelServiceFields).observaciones_sin_servicio ?? "",
 
       });
 
@@ -576,6 +592,14 @@ const isPermanent =
 
         ? 1 : null,
 
+      // La situación laboral se guarda separada de `activo` para conservar las bajas.
+      situacion_servicio: formData.situacion_servicio,
+      motivo_sin_servicio: formData.situacion_servicio === "SIN_PRESTACION"
+        ? (formData.motivo_sin_servicio || null) : null,
+      fecha_inicio_sin_servicio: formData.situacion_servicio === "SIN_PRESTACION"
+        ? (formData.fecha_inicio_sin_servicio || null) : null,
+      observaciones_sin_servicio: formData.situacion_servicio === "SIN_PRESTACION"
+        ? (formData.observaciones_sin_servicio.trim() || null) : null,
       fecha_actualizacion: null,
 
     } as PersonnelInsert;
@@ -1183,6 +1207,62 @@ const isPermanent =
           )}
 
                       <div className="space-y-4 rounded-xl border p-4">
+              <div className="space-y-2">
+                <Label htmlFor="situacion_servicio">Situación de prestación de servicios</Label>
+                <Select
+                  value={formData.situacion_servicio}
+                  onValueChange={(value) => handleChange("situacion_servicio", value)}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger id="situacion_servicio" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVO">Activo - presta servicios</SelectItem>
+                    <SelectItem value="SIN_PRESTACION">Sin prestación de servicios</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Las bajas se administran desde el listado; no se modifican desde este campo.
+                </p>
+              </div>
+              {formData.situacion_servicio === "SIN_PRESTACION" && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="motivo_sin_servicio">Motivo (opcional)</Label>
+                    <Select
+                      value={formData.motivo_sin_servicio || "NINGUNO"}
+                      onValueChange={(value) => handleChange("motivo_sin_servicio", value === "NINGUNO" ? "" : value)}
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger id="motivo_sin_servicio" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NINGUNO">Sin especificar</SelectItem>
+                        {(Object.entries(SERVICE_REASON_LABELS) as [ServiceReason, string][]).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha_inicio_sin_servicio">Fecha de inicio (opcional)</Label>
+                    <Input id="fecha_inicio_sin_servicio" type="date"
+                      value={formData.fecha_inicio_sin_servicio}
+                      onChange={(event) => handleChange("fecha_inicio_sin_servicio", event.target.value)}
+                      disabled={isSubmitting} />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="observaciones_sin_servicio">Observaciones (opcional)</Label>
+                    <Textarea id="observaciones_sin_servicio" rows={2}
+                      value={formData.observaciones_sin_servicio}
+                      onChange={(event) => handleChange("observaciones_sin_servicio", event.target.value)}
+                      placeholder="Información complementaria..."
+                      disabled={isSubmitting} />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="space-y-4 rounded-xl border p-4">
 
               <h3 className="font-semibold">Horarios y horas extras</h3>
 
@@ -1239,7 +1319,7 @@ const isPermanent =
                     id="horas_arregladas"
                     type="text"
                     inputMode="decimal"
-                    placeholder="Ej.: 12 o 12.5"
+                    placeholder="Ej.: 12,5 o 12.5"
                     value={formData.horas_arregladas}
                     onChange={(event) =>
                       handleChange("horas_arregladas", event.target.value)
