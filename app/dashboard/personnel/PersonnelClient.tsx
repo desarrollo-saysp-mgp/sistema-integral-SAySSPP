@@ -62,6 +62,7 @@ import type {
 import { PersonnelTable } from "./PersonnelTable";
 
 import { PersonnelForm } from "./PersonnelForm";
+import { getServiceStatus } from "./personnelStatus";
 
 import { exportPersonnelToPdf } from "./personnelPdf";
 
@@ -277,12 +278,16 @@ export function PersonnelClient({
   const indicators = useMemo(() => {
 
     const activePersonnel = personnel.filter((item) => item.activo);
+    const workingPersonnel = activePersonnel.filter((item) => getServiceStatus(item) === "ACTIVO");
+    const withoutService = activePersonnel.filter((item) => getServiceStatus(item) === "SIN_PRESTACION");
 
 
 
     return {
 
-      total: activePersonnel.length,
+      linked: activePersonnel.length,
+      total: workingPersonnel.length,
+      withoutService: withoutService.length,
 
       permanent: activePersonnel.filter(
 
@@ -852,6 +857,8 @@ export function PersonnelClient({
 
           activo: true,
 
+          situacion_servicio: "ACTIVO",
+
           fecha_baja: null,
 
           motivo_baja: null,
@@ -1419,7 +1426,7 @@ export function PersonnelClient({
 
             <p className="text-sm text-muted-foreground">
 
-              Cantidades correspondientes a los registros activos.
+              El personal vinculado incluye a quienes están en servicio y a quienes no prestan servicios; no incluye las bajas.
 
             </p>
 
@@ -1427,134 +1434,88 @@ export function PersonnelClient({
 
 
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
+          {/* Totales de situación: el personal sin prestación sigue vinculado. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <Card className="rounded-2xl">
-
               <CardContent className="flex items-center gap-4 p-5">
-
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-
                   <Users className="size-5" />
-
                 </div>
-
                 <div>
-
-                  <p className="text-sm text-muted-foreground">
-
-                    Personal activo
-
-                  </p>
-
-                  <p className="text-2xl font-bold">
-
-                    {indicators.total}
-
-                  </p>
-
+                  <p className="text-sm text-muted-foreground">Personal vinculado</p>
+                  <p className="text-2xl font-bold">{indicators.linked}</p>
+                  <p className="text-xs text-muted-foreground">En servicio + sin prestación</p>
                 </div>
-
               </CardContent>
-
             </Card>
 
-
+            <Card className="rounded-2xl">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
+                  <UserCheck className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Personal en servicio</p>
+                  <p className="text-2xl font-bold">{indicators.total}</p>
+                  <p className="text-xs text-muted-foreground">Prestando servicios actualmente</p>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className="rounded-2xl">
-
               <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                  <UserX className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Sin prestación de servicios</p>
+                  <p className="text-2xl font-bold">{indicators.withoutService}</p>
+                  <p className="text-xs text-muted-foreground">Continúan vinculados</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
+          <p className="text-xs text-muted-foreground">
+            Distribución por tipo de contratación (incluye al personal sin prestación de servicios):
+          </p>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Card className="rounded-2xl">
+              <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-
                   <BadgeCheck className="size-5" />
-
                 </div>
-
                 <div>
-
-                  <p className="text-sm text-muted-foreground">
-
-                    Planta permanente
-
-                  </p>
-
-                  <p className="text-2xl font-bold">
-
-                    {indicators.permanent}
-
-                  </p>
-
+                  <p className="text-sm text-muted-foreground">Planta permanente</p>
+                  <p className="text-2xl font-bold">{indicators.permanent}</p>
                 </div>
-
               </CardContent>
-
             </Card>
 
-
-
             <Card className="rounded-2xl">
-
               <CardContent className="flex items-center gap-4 p-5">
-
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-
                   <ReceiptText className="size-5" />
-
                 </div>
-
                 <div>
-
-                  <p className="text-sm text-muted-foreground">
-
-                    Monotributistas
-
-                  </p>
-
-                  <p className="text-2xl font-bold">
-
-                    {indicators.monotributists}
-
-                  </p>
-
+                  <p className="text-sm text-muted-foreground">Monotributistas</p>
+                  <p className="text-2xl font-bold">{indicators.monotributists}</p>
                 </div>
-
               </CardContent>
-
             </Card>
-
-
 
             <Card className="rounded-2xl">
-
               <CardContent className="flex items-center gap-4 p-5">
-
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-
                   <BriefcaseBusiness className="size-5" />
-
                 </div>
-
                 <div>
-
-                  <p className="text-sm text-muted-foreground">
-
-                    Contratos con aportes
-
-                  </p>
-
-                  <p className="text-2xl font-bold">
-
-                    {indicators.contributionsContract}
-
-                  </p>
-
+                  <p className="text-sm text-muted-foreground">Contratos con aportes</p>
+                  <p className="text-2xl font-bold">{indicators.contributionsContract}</p>
                 </div>
-
               </CardContent>
-
             </Card>
-
           </div>
 
         </section>

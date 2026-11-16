@@ -295,9 +295,9 @@ export function UserForm({
 
         ? {
 
-            password: formData.password,
+          password: formData.password,
 
-          }
+        }
 
         : {}),
 
@@ -487,6 +487,10 @@ export function UserForm({
 
                     Secretaría Privada
 
+                  </SelectItem>
+
+                  <SelectItem value="Personal">
+                    Personal
                   </SelectItem>
 
                   <SelectItem value="Reclamos">

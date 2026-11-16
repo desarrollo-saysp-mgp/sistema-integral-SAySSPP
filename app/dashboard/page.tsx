@@ -1,3 +1,4 @@
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -95,6 +96,8 @@ export default async function DashboardRouter() {
     profile.email || user.email,
   );
 
+  const userRole = normalizeText(profile.role);
+
   const isGirsuUser =
     GIRSU_EMAILS
       .map(normalizeText)
@@ -128,13 +131,15 @@ export default async function DashboardRouter() {
    *
    * Director Arbolado:
    * - Reclamos Arbolado
-   * - Tablero Arbolado
    * - Planta Vehicular
    * - RNU
+   * - Solicitud de Intervenciones
    *
    * Director Servicios Públicos:
    * - Reclamos Servicios Públicos
    * - Planta Vehicular
+   * - Mapa de Barrido
+   * - Mapa de Motonivelación
    */
   if (
     isGirsuUser ||
@@ -146,12 +151,22 @@ export default async function DashboardRouter() {
   }
 
   /*
-   * Los administradores siempre entran
-   * a la pantalla de accesos.
+   * Admin y AdminLectura:
+   * siempre ingresan a la pantalla de Accesos.
+   *
+   * ReclamosArbolado:
+   * ahora tiene dos módulos:
+   *
+   * - Reclamos de Arbolado
+   * - Solicitud de Intervenciones
+   *
+   * Por eso también debe ingresar siempre a Accesos,
+   * sin importar su módulo predeterminado.
    */
   if (
-    profile.role === "Admin" ||
-    profile.role === "AdminLectura"
+    userRole === "admin" ||
+    userRole === "adminlectura" ||
+    userRole === "reclamosarbolado"
   ) {
     redirect("/dashboard/accesos");
   }
@@ -180,8 +195,8 @@ export default async function DashboardRouter() {
    * Si tiene un módulo predeterminado,
    * entra directamente.
    *
-   * Los perfiles especiales ya fueron
-   * tratados arriba.
+   * ReclamosArbolado y los perfiles especiales
+   * ya fueron tratados anteriormente.
    */
   if (defaultModule) {
     redirect(
@@ -210,29 +225,25 @@ export default async function DashboardRouter() {
   /*
    * Fallback temporal según rol.
    *
-   * Los directores especiales nunca deberían
-   * llegar hasta acá porque ya fueron tratados arriba.
+   * ReclamosArbolado ya fue tratado arriba,
+   * para que siempre pueda elegir sus dos módulos.
+   *
+   * Reclamos y ReclamosZyV mantienen
+   * su comportamiento actual.
    */
   if (
     profile.role === "Reclamos" ||
-    profile.role === "ReclamosArbolado" ||
     profile.role === "ReclamosZyV"
   ) {
-    redirect(
-      "/dashboard/complaints/home",
-    );
+    redirect("/dashboard/complaints/home");
   }
 
   if (profile.role === "Suministros") {
-    redirect(
-      "/dashboard/suministros",
-    );
+    redirect("/dashboard/suministros");
   }
 
   if (profile.role === "RNU") {
-    redirect(
-      "/dashboard/rnu",
-    );
+    redirect("/dashboard/rnu");
   }
 
   /*

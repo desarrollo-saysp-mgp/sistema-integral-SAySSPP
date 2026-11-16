@@ -50,8 +50,7 @@ function withTimeout<T>(
     timeoutId = setTimeout(() => {
       reject(
         new Error(
-          `La consulta excedió el tiempo máximo de ${
-            timeoutMs / 1000
+          `La consulta excedió el tiempo máximo de ${timeoutMs / 1000
           } segundos.`,
         ),
       );
@@ -575,7 +574,8 @@ export function UserProvider({
 
     canManagePersonnel:
       profile?.role === "Admin" ||
-      profile?.role === "SecretariaPrivada",
+      profile?.role === "SecretariaPrivada" ||
+      profile?.role === "Personal",
 
     // Puede ingresar y consultar Planta Vehicular
     canViewVehicleFleet:

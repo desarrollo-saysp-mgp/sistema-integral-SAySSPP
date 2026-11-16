@@ -20,7 +20,8 @@ type ModuleKey =
   | "personnel"
   | "sweeping_map"
   | "grading_map"
-  | "surveys";
+  | "surveys"
+  | "intervention_requests";
 
 type AccessItem = {
   key: ModuleKey;
@@ -105,6 +106,13 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     description:
       "Planificación, registro y seguimiento de trabajos de motonivelación.",
     href: "/dashboard/test-grading-map",
+    available: true,
+  },
+  intervention_requests: {
+    key: "intervention_requests",
+    title: "Solicitud de Intervenciones",
+    description: "Carga, consulta y seguimiento de solicitudes de intervención de arbolado.",
+    href: "/dashboard/solicitud-intervenciones",
     available: true,
   },
   surveys: {
@@ -217,9 +225,18 @@ export default async function AccesosPage() {
   const isRnuUser = userRole === "rnu";
   const isSecretariaPrivadaUser =
     userRole === "secretariaprivada";
+  const isPersonalUser =
+    userRole === "personal";
 
   const hasAllowedRole =
     allowedRoles.includes(userRole);
+
+  // Permiso independiente del módulo Reclamos:
+  // Admin, AdminLectura, ReclamosArbolado y Lucas Belliardo.
+  const canAccessInterventions =
+    hasAllowedRole ||
+    userRole === "reclamosarbolado" ||
+    isLucasBelliardo;
 
   const rawModules: string[] =
     Array.isArray(profile.modules)
@@ -320,11 +337,13 @@ export default async function AccesosPage() {
 
   /*
    * Personal disponible para Admin,
-   * AdminLectura y Secretaría Privada.
+   * AdminLectura, Secretaría Privada
+   * y rol Personal.
    */
   if (
     (hasAllowedRole ||
-      isSecretariaPrivadaUser) &&
+      isSecretariaPrivadaUser ||
+      isPersonalUser) &&
     !alreadyHasPersonnel
   ) {
     accesses.push(
@@ -397,12 +416,26 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.surveys);
   }
 
+  // Agregar automáticamente el nuevo módulo sin depender de users.modules.
+  if (
+    canAccessInterventions &&
+    !accesses.some((item) => item.key === "intervention_requests")
+  ) {
+    accesses.push(MODULE_CONFIG.intervention_requests);
+  }
+
   const filteredAccesses =
     accesses.filter((item) => {
       // Ocultar Tablero General (Power BI) sin alterar los otros permisos.
       // String() evita estrechar el tipo discriminado en las ramas siguientes.
       if (String(item.key) === "general_dashboard") {
         return false;
+      }
+
+      // La tarjeta de intervenciones es exclusiva de los roles/cuenta indicados,
+      // incluso si otro usuario la tuviera cargada en users.modules.
+      if (item.key === "intervention_requests") {
+        return canAccessInterventions;
       }
 
       // Aunque el módulo figure en profile.modules,
@@ -454,10 +487,12 @@ export default async function AccesosPage() {
       }
 
       /*
-       * Secretaría Privada solamente ve Personal.
+       * Secretaría Privada y rol Personal
+       * solamente ven Personal.
        */
       if (
-        isSecretariaPrivadaUser
+        isSecretariaPrivadaUser ||
+        isPersonalUser
       ) {
         return (
           item.key ===
@@ -571,6 +606,9 @@ export default async function AccesosPage() {
        * Personal:
        * solamente Admin y AdminLectura
        * en esta rama.
+       *
+       * Secretaría Privada y rol Personal
+       * ya fueron tratados anteriormente.
        */
       if (
         item.key ===

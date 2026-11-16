@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { Personnel } from "@/types";
+import { getServiceStatus, getServiceStatusLabel, getServiceDetail } from "./personnelStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,7 +83,7 @@ type ContractFilter =
   | "MONOTRIBUTISTA"
   | "CONTRATO_CON_APORTES";
 
-type StatusFilter = "active" | "inactive" | "all";
+type StatusFilter = "active" | "without_service" | "inactive" | "all";
 type SortOrder = "az" | "za" | "newest" | "oldest";
 
 // No se adivina una fecha de alta: solo se utilizan campos de fecha reales
@@ -223,10 +224,9 @@ export function PersonnelTable({
 
         const matchesStatus =
           statusFilter === "all" ||
-          (statusFilter === "active" &&
-            person.activo) ||
-          (statusFilter === "inactive" &&
-            !person.activo);
+          (statusFilter === "active" && getServiceStatus(person) === "ACTIVO") ||
+          (statusFilter === "without_service" && getServiceStatus(person) === "SIN_PRESTACION") ||
+          (statusFilter === "inactive" && getServiceStatus(person) === "BAJA");
 
         return (
           matchesSearch &&
@@ -356,7 +356,7 @@ export function PersonnelTable({
 
     if (statusFilter !== "all") {
       filters.push(
-        `Estado: ${statusFilter === "active" ? "Activos" : "Dados de baja"}`,
+        `Estado: ${statusFilter === "active" ? "Activos" : statusFilter === "without_service" ? "Sin prestación de servicios" : statusFilter === "inactive" ? "Dados de baja" : "Todos"}`,
       );
     }
 
@@ -469,6 +469,7 @@ export function PersonnelTable({
               <SelectItem value="active">
                 Activos
               </SelectItem>
+              <SelectItem value="without_service">Sin prestación de servicios</SelectItem>
               <SelectItem value="inactive">
                 Dados de baja
               </SelectItem>
@@ -539,17 +540,17 @@ export function PersonnelTable({
                         </p>
                       </div>
 
-                      {person.activo ? (
-                        <Badge variant="default" className="shrink-0">
-                          Activo
+                      <Badge
+                          variant={getServiceStatus(person) === "BAJA" ? "destructive" : getServiceStatus(person) === "SIN_PRESTACION" ? "secondary" : "default"}
+                          className={getServiceStatus(person) === "SIN_PRESTACION" ? "shrink-0 border-amber-200 bg-amber-100 text-amber-900" : "shrink-0"}
+                        >
+                          {getServiceStatusLabel(person)}
                         </Badge>
-                      ) : (
-                        <Badge variant="destructive" className="shrink-0">
-                          Baja
-                        </Badge>
-                      )}
                     </div>
 
+                    {getServiceStatus(person) === "SIN_PRESTACION" && getServiceDetail(person) && (
+                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{getServiceDetail(person)}</p>
+                    )}
                     <div className="grid grid-cols-1 gap-3 text-sm">
                       <div className="rounded-xl bg-muted/35 p-3">
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -803,15 +804,17 @@ export function PersonnelTable({
                          </TableCell>
 
                         <TableCell className="px-2 py-2">
-                          {person.activo ? (
-                            <Badge variant="default">
-                              Activo
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive">
-                              Baja
-                            </Badge>
-                          )}
+                          <div className="space-y-1">
+                              <Badge
+                                variant={getServiceStatus(person) === "BAJA" ? "destructive" : getServiceStatus(person) === "SIN_PRESTACION" ? "secondary" : "default"}
+                                className={getServiceStatus(person) === "SIN_PRESTACION" ? "border-amber-200 bg-amber-100 text-amber-900" : ""}
+                              >
+                                {getServiceStatusLabel(person)}
+                              </Badge>
+                              {getServiceStatus(person) === "SIN_PRESTACION" && getServiceDetail(person) && (
+                                <p className="max-w-[190px] whitespace-normal text-[10px] text-muted-foreground">{getServiceDetail(person)}</p>
+                              )}
+                            </div>
                         </TableCell>
 
                         {!isReadOnly && (
