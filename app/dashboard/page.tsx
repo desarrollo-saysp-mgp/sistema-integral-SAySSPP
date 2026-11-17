@@ -83,8 +83,8 @@ export default async function DashboardRouter() {
 
   const modules: string[] = Array.isArray(profile.modules)
     ? profile.modules.filter(
-        (module): module is string => typeof module === "string",
-      )
+      (module): module is string => typeof module === "string",
+    )
     : [];
 
   const defaultModule =
@@ -187,7 +187,10 @@ export default async function DashboardRouter() {
    * Secretaría Privada entra directamente
    * al módulo Personal.
    */
-  if (profile.role === "SecretariaPrivada") {
+  if (
+    profile.role === "SecretariaPrivada" ||
+    profile.role === "Personal"
+  ) {
     redirect("/dashboard/personnel");
   }
 
