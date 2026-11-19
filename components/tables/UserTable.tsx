@@ -2,29 +2,17 @@
 
 import { useMemo, useState } from "react";
 import type { User } from "@/types";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Search } from "lucide-react";
 
 const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
 const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
+const MATIAS_CALMELS_EMAIL = "matiascvet@gmail.com";
 
 interface UserTableProps {
   users: User[];
@@ -35,200 +23,60 @@ interface UserTableProps {
   loading?: boolean;
 }
 
-export function UserTable({
-  users,
-  onEdit,
-  onDelete,
-  onSearchChange,
-  onRoleFilter,
-  loading = false,
-}: UserTableProps) {
+export function UserTable({ users, onEdit, onDelete, onSearchChange, onRoleFilter, loading = false }: UserTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getDisplayRole = (user: User) => {
-    const email = String(user.email || "")
-      .trim()
-      .toLowerCase();
-
-    if (email === DIRECTOR_GIRSU_EMAIL) {
-      return "DirectorGIRSU";
-    }
-
-    if (email === LUCAS_BELLIARDO_EMAIL) {
-      return "DirectorArbolado";
-    }
-
-    if (email === DIRECTOR_SERVICIOS_PUBLICOS_EMAIL) {
-      return "DirectorServiciosPublicos";
-    }
-
+  const getDisplayRole = (user: User): string => {
+    const email = String(user.email || "").trim().toLowerCase();
+    if (email === DIRECTOR_GIRSU_EMAIL) return "DirectorGIRSU";
+    if (email === LUCAS_BELLIARDO_EMAIL) return "DirectorArbolado";
+    if (email === DIRECTOR_SERVICIOS_PUBLICOS_EMAIL) return "DirectorServiciosPublicos";
+    if (email === MATIAS_CALMELS_EMAIL) return "DirectorZyV";
     return user.role;
   };
 
-  const availableRoles = useMemo(() => {
-    return Array.from(
-      new Set(users.map((user) => user.role).filter(Boolean)),
-    ).sort((a, b) => a.localeCompare(b));
-  }, [users]);
-
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-    onSearchChange(value);
-  };
-
-  const handleRoleFilterChange = (value: string) => {
-    onRoleFilter(value === "all" ? undefined : value);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-AR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  };
-
-  const getRoleBadgeVariant = (role: string) => {
-    return role === "Admin" ? "default" : "secondary";
-  };
+  const availableRoles = useMemo(() => Array.from(new Set(users.map((user) => user.role).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [users]);
+  const handleSearchChange = (value: string) => { setSearchTerm(value); onSearchChange(value); };
+  const handleRoleFilterChange = (value: string) => onRoleFilter(value === "all" ? undefined : value);
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("es-AR", { year: "numeric", month: "2-digit", day: "2-digit" });
+  const getRoleBadgeVariant = (role: string) => role === "Admin" ? "default" : "secondary";
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-          <Input
-            placeholder="Buscar por nombre o email..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Buscar por nombre o email..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="pl-9" />
         </div>
-
-        <Select
-          onValueChange={handleRoleFilterChange}
-          defaultValue="all"
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filtrar por rol" />
-          </SelectTrigger>
-
-          <SelectContent>
-            <SelectItem value="all">
-              Todos los roles
-            </SelectItem>
-
-            {availableRoles.map((role) => (
-              <SelectItem key={role} value={role}>
-                {role}
-              </SelectItem>
-            ))}
-          </SelectContent>
+        <Select onValueChange={handleRoleFilterChange} defaultValue="all">
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filtrar por rol" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">Todos los roles</SelectItem>{availableRoles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent>
         </Select>
       </div>
-
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre completo</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Fecha de creación</TableHead>
-              <TableHead className="text-right">
-                Acciones
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-
+          <TableHeader><TableRow><TableHead>Nombre completo</TableHead><TableHead>Email</TableHead><TableHead>Rol</TableHead><TableHead>Fecha de creación</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-24 text-center"
-                >
-                  <div className="flex items-center justify-center">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-
-                    <span className="ml-2 text-muted-foreground">
-                      Cargando usuarios...
-                    </span>
-                  </div>
-                </TableCell>
-              </TableRow>
+              <TableRow><TableCell colSpan={5} className="h-24 text-center"><div className="flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /><span className="ml-2 text-muted-foreground">Cargando usuarios...</span></div></TableCell></TableRow>
             ) : users.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No se encontraron usuarios
-                </TableCell>
+              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No se encontraron usuarios</TableCell></TableRow>
+            ) : users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell className="font-medium">{user.full_name}</TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell><Badge variant={getRoleBadgeVariant(user.role)}>{getDisplayRole(user)}</Badge></TableCell>
+                <TableCell>{formatDate(user.created_at)}</TableCell>
+                <TableCell className="text-right"><div className="flex items-center justify-end gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => onEdit(user)} title="Editar usuario"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => onDelete(user)} title="Eliminar usuario" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                </div></TableCell>
               </TableRow>
-            ) : (
-              users.map((user) => {
-                const displayRole = getDisplayRole(user);
-
-                return (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.full_name}
-                    </TableCell>
-
-                    <TableCell>
-                      {user.email}
-                    </TableCell>
-
-                    <TableCell>
-                      <Badge
-                        variant={getRoleBadgeVariant(user.role)}
-                      >
-                        {displayRole}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      {formatDate(user.created_at)}
-                    </TableCell>
-
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onEdit(user)}
-                          title="Editar usuario"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onDelete(user)}
-                          title="Eliminar usuario"
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
-
-      {!loading && users.length > 0 && (
-        <div className="text-sm text-muted-foreground">
-          Mostrando {users.length}{" "}
-          {users.length === 1 ? "usuario" : "usuarios"}
-        </div>
-      )}
+      {!loading && users.length > 0 && <div className="text-sm text-muted-foreground">Mostrando {users.length} {users.length === 1 ? "usuario" : "usuarios"}</div>}
     </div>
   );
 }

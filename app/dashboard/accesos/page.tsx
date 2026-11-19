@@ -21,7 +21,8 @@ type ModuleKey =
   | "sweeping_map"
   | "grading_map"
   | "surveys"
-  | "intervention_requests";
+  | "intervention_requests"
+  | "complaints_map";
 
 type AccessItem = {
   key: ModuleKey;
@@ -115,6 +116,14 @@ const MODULE_CONFIG: Record<ModuleKey, AccessItem> = {
     href: "/dashboard/solicitud-intervenciones",
     available: true,
   },
+  complaints_map: {
+    key: "complaints_map",
+    title: "Mapa de Reclamos",
+    description:
+      "Visualización georreferenciada, filtros y seguimiento de reclamos por servicio.",
+    href: "/dashboard/mapa-reclamos",
+    available: true,
+  },
   surveys: {
     key: "surveys",
     title: "Encuestas",
@@ -133,6 +142,7 @@ const GIRSU_EMAILS = [
 const ARBOLADO_EMAILS = ["arqbelliardolucas@gmail.com"];
 
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const MATIAS_CALMELS_EMAIL = "matiascvet@gmail.com";
 
 const SERVICIOS_PUBLICOS_EMAILS = [
   "adm.serviciospublicos.mgp@gmail.com",
@@ -181,6 +191,19 @@ export default async function AccesosPage() {
     redirect("/login");
   }
 
+  // Permiso independiente del rol: únicamente las cuentas autorizadas
+  // en complaint_map_access pueden ver la tarjeta del nuevo mapa.
+  const { data: mapAccess, error: mapAccessError } = await supabase
+    .from("complaint_map_access")
+    .select("area")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const canAccessComplaintsMap =
+    !mapAccessError &&
+    mapAccess !== null &&
+    ["GENERAL", "ZYV", "SP", "GIRSU", "AYPU"].includes(mapAccess.area);
+
   const allowedRoles = ["admin", "adminlectura"];
 
   const userRole = normalizeText(profile.role);
@@ -196,6 +219,10 @@ export default async function AccesosPage() {
 
   const isLucasBelliardo =
     userEmail === normalizeText(LUCAS_BELLIARDO_EMAIL);
+
+  // Acceso adicional individual a Planta Vehicular, sin cambiar su rol ZyV.
+  const isMatiasCalmels =
+    userEmail === normalizeText(MATIAS_CALMELS_EMAIL);
 
   const isServiciosPublicosUser =
     SERVICIOS_PUBLICOS_EMAILS
@@ -218,7 +245,9 @@ export default async function AccesosPage() {
       ? "DirectorServiciosPublicos"
       : isLucasBelliardo
         ? "DirectorArbolado"
-        : profile.role;
+        : isMatiasCalmels
+          ? "DirectorZyV"
+          : profile.role;
 
   const isTallerUser = userRole === "taller";
   const isSuministrosUser = userRole === "suministros";
@@ -261,6 +290,20 @@ export default async function AccesosPage() {
     );
 
   const accesses = [...baseAccesses];
+
+  // Estos usuarios deben poder elegir entre Reclamos y Mapa de Reclamos.
+  // La autorización del mapa sigue dependiendo de complaint_map_access.
+  const needsComplaintsChoice =
+    canAccessComplaintsMap &&
+    (userRole === "reclamoszyv" ||
+      userEmail === normalizeText("serviciospublicosreclamos2@gmail.com"));
+
+  if (
+    needsComplaintsChoice &&
+    !accesses.some((item) => item.key === "complaints")
+  ) {
+    accesses.push(MODULE_CONFIG.complaints);
+  }
 
   const alreadyHasDashboard = accesses.some(
     (item) => item.key === "general_dashboard",
@@ -359,12 +402,14 @@ export default async function AccesosPage() {
    * - Director Arbolado
    * - Director GIRSU
    * - Director Servicios Públicos
+   * - Matías Calmels (ReclamosZyV)
    */
   if (
     (
       hasAllowedRole ||
       isTallerUser ||
       isLucasBelliardo ||
+      isMatiasCalmels ||
       isDirectorGirsu ||
       isDirectorServiciosPublicos
     ) &&
@@ -424,12 +469,26 @@ export default async function AccesosPage() {
     accesses.push(MODULE_CONFIG.intervention_requests);
   }
 
+  // El mapa se agrega por autorización en BD, no por rol o users.modules.
+  if (
+    canAccessComplaintsMap &&
+    !accesses.some((item) => item.key === "complaints_map")
+  ) {
+    accesses.push(MODULE_CONFIG.complaints_map);
+  }
+
   const filteredAccesses =
     accesses.filter((item) => {
       // Ocultar Tablero General (Power BI) sin alterar los otros permisos.
       // String() evita estrechar el tipo discriminado en las ramas siguientes.
       if (String(item.key) === "general_dashboard") {
         return false;
+      }
+
+      // Evaluar antes de las restricciones especiales de Taller, directores, etc.
+      // También bloquea cualquier asignación manual en users.modules.
+      if (item.key === "complaints_map") {
+        return canAccessComplaintsMap;
       }
 
       // La tarjeta de intervenciones es exclusiva de los roles/cuenta indicados,
@@ -619,14 +678,14 @@ export default async function AccesosPage() {
 
       /*
        * Planta Vehicular:
-       * solamente Admin y AdminLectura
-       * en esta rama.
+       * Admin, AdminLectura y Matías Calmels.
+       * Las excepciones de Taller y directores se atienden antes.
        */
       if (
         item.key ===
         "vehicle_fleet"
       ) {
-        return hasAllowedRole;
+        return hasAllowedRole || isMatiasCalmels;
       }
 
       /*

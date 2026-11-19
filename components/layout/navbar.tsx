@@ -98,6 +98,7 @@ const GIRSU_EMAILS = [
 const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const MATIAS_CALMELS_EMAIL = "matiascvet@gmail.com";
 
 const normalizeEmail = (value?: string | null) =>
 
@@ -125,6 +126,51 @@ export function Navbar() {
 
   const [loadingStats, setLoadingStats] = useState(false);
 
+  // Permiso independiente de los roles y de users.modules.
+  const [canAccessComplaintsMap, setCanAccessComplaintsMap] = useState(false);
+
+  // Consultamos la autorización real del mapa para que todos los usuarios
+  // habilitados puedan volver a Accesos desde el navbar.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!profile?.email) {
+      setCanAccessComplaintsMap(false);
+      return;
+    }
+
+    const checkMapAccess = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error: authError } =
+          await supabase.auth.getUser();
+
+        if (authError || !user) {
+          if (!cancelled) setCanAccessComplaintsMap(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("complaint_map_access")
+          .select("area")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!cancelled) {
+          setCanAccessComplaintsMap(
+            !error && !!data &&
+            ["GENERAL", "ZYV", "SP", "GIRSU", "AYPU"].includes(data.area)
+          );
+        }
+      } catch {
+        if (!cancelled) setCanAccessComplaintsMap(false);
+      }
+    };
+
+    void checkMapAccess();
+    return () => { cancelled = true; };
+  }, [profile?.email]);
+
   const normalizedProfileEmail = normalizeEmail(profile?.email);
 
   const isServiciosPublicosUser =
@@ -145,6 +191,8 @@ export function Navbar() {
 
     normalizedProfileEmail === normalizeEmail(LUCAS_BELLIARDO_EMAIL);
 
+  const isMatiasCalmels = normalizedProfileEmail === normalizeEmail(MATIAS_CALMELS_EMAIL);
+
   const displayRole =
     isDirectorGirsu
       ? "DirectorGIRSU"
@@ -152,7 +200,9 @@ export function Navbar() {
         ? "DirectorArbolado"
         : isServiciosPublicosUser
           ? "DirectorServiciosPublicos"
-          : profile?.role || "";
+          : isMatiasCalmels
+            ? "DirectorZyV"
+            : profile?.role || "";
 
   const canCreateComplaints = !isServiciosPublicosUser && !isGirsuUser;
 
@@ -232,7 +282,13 @@ export function Navbar() {
 
     profile?.role === "Admin" || profile?.role === "AdminLectura";
 
-  const isAccessProfile = isAdmin || isGirsuUser || isServiciosPublicosUser;
+  // ReclamosArbolado ahora dispone de Reclamos y Solicitud de Intervenciones.
+  // Debe poder volver a Accesos desde cualquiera de los módulos.
+  const isReclamosArbolado =
+    String(profile?.role || "").trim().toLowerCase() === "reclamosarbolado";
+
+  const isAccessProfile =
+    isAdmin || isGirsuUser || isServiciosPublicosUser || isReclamosArbolado;
 
   const modules = Array.isArray(profile?.modules) ? profile.modules : [];
 
@@ -240,7 +296,7 @@ export function Navbar() {
 
   const showAccesses =
 
-    isAdmin ||
+    isAccessProfile ||
 
     hasMultipleModules ||
 
@@ -248,7 +304,9 @@ export function Navbar() {
 
     isServiciosPublicosUser ||
 
-    isLucasBelliardo;
+    isLucasBelliardo ||
+
+    canAccessComplaintsMap;
 
   const currentModule = getCurrentModule(pathname);
 
@@ -276,7 +334,7 @@ export function Navbar() {
 
   const logoHref =
 
-    isAccessProfile || isLucasBelliardo
+    showAccesses
 
       ? "/dashboard/accesos"
 
@@ -338,7 +396,7 @@ export function Navbar() {
 
           <div className="hidden items-center gap-2 md:flex">
 
-            {!isAccessProfile && !isAccessesPage(pathname) && (
+            {!showAccesses && !isAccessesPage(pathname) && (
 
               <Link href={inicioHref}>
 
@@ -910,7 +968,7 @@ export function Navbar() {
 
             <div className="space-y-2 px-4 py-4">
 
-              {!isAccessProfile && !isAccessesPage(pathname) && (
+              {!showAccesses && !isAccessesPage(pathname) && (
 
                 <Link
 
