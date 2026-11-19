@@ -7,7 +7,8 @@ const GIRSU_EMAILS = [
   "direccióngirsupico@gmail.com",
 ];
 
-const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
+const DIRECTOR_GIRSU_EMAIL =
+  "direcciongirsupico@gmail.com";
 
 const ARBOLADO_EMAILS = [
   "arqbelliardolucas@gmail.com",
@@ -29,6 +30,9 @@ function getModuleRoute(moduleKey: string) {
   switch (moduleKey) {
     case "complaints":
       return "/dashboard/complaints/home";
+
+    case "complaints_map":
+      return "/dashboard/mapa-reclamos";
 
     case "purchase_requests":
       return "/dashboard/solicitud-compra";
@@ -62,6 +66,10 @@ function getModuleRoute(moduleKey: string) {
 export default async function DashboardRouter() {
   const supabase = await createClient();
 
+  // ==========================================
+  // 1. VERIFICAR AUTENTICACIÓN
+  // ==========================================
+
   const {
     data: { user },
     error: authError,
@@ -71,20 +79,28 @@ export default async function DashboardRouter() {
     redirect("/login");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role, email, modules, default_module")
-    .eq("id", user.id)
-    .single();
+  // ==========================================
+  // 2. OBTENER PERFIL DEL USUARIO
+  // ==========================================
+
+  const { data: profile, error: profileError } =
+    await supabase
+      .from("users")
+      .select("role, email, modules, default_module")
+      .eq("id", user.id)
+      .single();
 
   if (profileError || !profile) {
     redirect("/login");
   }
 
-  const modules: string[] = Array.isArray(profile.modules)
+  const modules: string[] = Array.isArray(
+    profile.modules
+  )
     ? profile.modules.filter(
-      (module): module is string => typeof module === "string",
-    )
+        (module): module is string =>
+          typeof module === "string"
+      )
     : [];
 
   const defaultModule =
@@ -93,54 +109,102 @@ export default async function DashboardRouter() {
       : null;
 
   const userEmail = normalizeText(
-    profile.email || user.email,
+    profile.email || user.email
   );
 
   const userRole = normalizeText(profile.role);
 
-  const isGirsuUser =
-    GIRSU_EMAILS
-      .map(normalizeText)
-      .includes(userEmail);
+  // ==========================================
+  // 3. VERIFICAR PERMISO MAPA DE RECLAMOS
+  // ==========================================
+
+  // Este permiso es independiente del rol.
+  // Solamente se consideran las cuentas que
+  // figuran en complaint_map_access.
+
+  const {
+    data: mapAccess,
+    error: mapAccessError,
+  } = await supabase
+    .from("complaint_map_access")
+    .select("area")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const canAccessComplaintsMap =
+    !mapAccessError &&
+    mapAccess !== null &&
+    ["GENERAL", "ZYV", "SP", "GIRSU", "AYPU"].includes(
+      mapAccess.area
+    );
+
+  // ==========================================
+  // 4. IDENTIFICAR PERFILES ESPECIALES
+  // ==========================================
+
+  const isGirsuUser = GIRSU_EMAILS
+    .map(normalizeText)
+    .includes(userEmail);
 
   const isDirectorGirsu =
-    userEmail === normalizeText(DIRECTOR_GIRSU_EMAIL);
+    userEmail ===
+    normalizeText(DIRECTOR_GIRSU_EMAIL);
 
-  const isArboladoUser =
-    ARBOLADO_EMAILS
-      .map(normalizeText)
-      .includes(userEmail);
+  const isArboladoUser = ARBOLADO_EMAILS
+    .map(normalizeText)
+    .includes(userEmail);
 
   const isDirectorServiciosPublicos =
     DIRECTOR_SERVICIOS_PUBLICOS_EMAILS
       .map(normalizeText)
       .includes(userEmail);
 
+  // ==========================================
+  // 5. NUEVA REGLA - RECLAMOS Y RECLAMOS ZYV
+  // ==========================================
+
   /*
-   * Perfiles especiales que tienen más de un acceso
-   * deben entrar siempre a /dashboard/accesos.
+   * Los usuarios Reclamos y ReclamosZyV
+   * que tengan permiso de Mapa de Reclamos
+   * deben ingresar primero a Accesos.
    *
-   * GIRSU:
-   * - Reclamos GIRSU
-   * - Tablero GIRSU
+   * Desde allí pueden elegir:
    *
-   * Director GIRSU:
-   * - Reclamos GIRSU
-   * - Tablero GIRSU
-   * - Planta Vehicular
+   * - Reclamos
+   * - Mapa de Reclamos
    *
-   * Director Arbolado:
-   * - Reclamos Arbolado
-   * - Planta Vehicular
-   * - RNU
-   * - Solicitud de Intervenciones
+   * Incluye:
+   * - Rebeca Rementeria
+   * - Ana Giunchi
+   * - Usuarios ZyV autorizados
    *
-   * Director Servicios Públicos:
-   * - Reclamos Servicios Públicos
-   * - Planta Vehicular
-   * - Mapa de Barrido
-   * - Mapa de Motonivelación
+   * Los usuarios sin permiso del mapa
+   * mantienen su comportamiento anterior.
+   *
+   * Esta validación debe ejecutarse ANTES
+   * de default_module.
    */
+
+  if (
+    canAccessComplaintsMap &&
+    (
+      userRole === "reclamos" ||
+      userRole === "reclamoszyv"
+    )
+  ) {
+    redirect("/dashboard/accesos");
+  }
+
+  // ==========================================
+  // 6. PERFILES ESPECIALES
+  // ==========================================
+
+  /*
+   * GIRSU, Director GIRSU, Director Arbolado
+   * y Director Servicios Públicos tienen
+   * múltiples accesos.
+   */
+
   if (
     isGirsuUser ||
     isDirectorGirsu ||
@@ -150,19 +214,19 @@ export default async function DashboardRouter() {
     redirect("/dashboard/accesos");
   }
 
+  // ==========================================
+  // 7. ADMINISTRADORES Y ARBOLADO
+  // ==========================================
+
   /*
-   * Admin y AdminLectura:
-   * siempre ingresan a la pantalla de Accesos.
+   * Admin y AdminLectura ingresan a Accesos.
    *
-   * ReclamosArbolado:
-   * ahora tiene dos módulos:
-   *
-   * - Reclamos de Arbolado
+   * ReclamosArbolado tiene:
+   * - Reclamos Arbolado
    * - Solicitud de Intervenciones
-   *
-   * Por eso también debe ingresar siempre a Accesos,
-   * sin importar su módulo predeterminado.
+   * - Mapa de Reclamos, cuando está autorizado
    */
+
   if (
     userRole === "admin" ||
     userRole === "adminlectura" ||
@@ -171,86 +235,101 @@ export default async function DashboardRouter() {
     redirect("/dashboard/accesos");
   }
 
+  // ==========================================
+  // 8. TALLER
+  // ==========================================
+
   /*
    * Taller tiene:
-   *
    * - Órdenes de Trabajo
    * - Planta Vehicular
    *
-   * Por eso entra siempre a Accesos.
+   * Los permisos adicionales del mapa
+   * se mantienen en la pantalla de Accesos.
    */
-  if (profile.role === "Taller") {
+
+  if (userRole === "taller") {
     redirect("/dashboard/accesos");
   }
 
+  // ==========================================
+  // 9. SECRETARÍA PRIVADA Y PERSONAL
+  // ==========================================
+
   /*
-   * Secretaría Privada entra directamente
-   * al módulo Personal.
+   * Estos roles siguen ingresando
+   * directamente al módulo Personal.
    */
+
   if (
-    profile.role === "SecretariaPrivada" ||
-    profile.role === "Personal"
+    userRole === "secretariaprivada" ||
+    userRole === "personal"
   ) {
     redirect("/dashboard/personnel");
   }
 
+  // ==========================================
+  // 10. MÓDULO PREDETERMINADO
+  // ==========================================
+
   /*
-   * Si tiene un módulo predeterminado,
-   * entra directamente.
-   *
-   * ReclamosArbolado y los perfiles especiales
-   * ya fueron tratados anteriormente.
+   * Solo llegamos acá si el usuario
+   * no está contemplado en las reglas
+   * especiales anteriores.
    */
+
   if (defaultModule) {
     redirect(
-      getModuleRoute(defaultModule),
+      getModuleRoute(defaultModule)
     );
   }
 
-  /*
-   * Si tiene un solo módulo,
-   * entra directamente.
-   */
+  // ==========================================
+  // 11. UN SOLO MÓDULO
+  // ==========================================
+
   if (modules.length === 1) {
     redirect(
-      getModuleRoute(modules[0]),
+      getModuleRoute(modules[0])
     );
   }
 
-  /*
-   * Si tiene varios módulos,
-   * entra a Accesos.
-   */
+  // ==========================================
+  // 12. VARIOS MÓDULOS
+  // ==========================================
+
   if (modules.length > 1) {
     redirect("/dashboard/accesos");
   }
 
+  // ==========================================
+  // 13. FALLBACK SEGÚN ROL
+  // ==========================================
+
   /*
-   * Fallback temporal según rol.
-   *
-   * ReclamosArbolado ya fue tratado arriba,
-   * para que siempre pueda elegir sus dos módulos.
-   *
-   * Reclamos y ReclamosZyV mantienen
-   * su comportamiento actual.
+   * Usuarios Reclamos y ReclamosZyV
+   * sin autorización para el mapa:
+   * mantienen la redirección tradicional.
    */
+
   if (
-    profile.role === "Reclamos" ||
-    profile.role === "ReclamosZyV"
+    userRole === "reclamos" ||
+    userRole === "reclamoszyv"
   ) {
     redirect("/dashboard/complaints/home");
   }
 
-  if (profile.role === "Suministros") {
+  if (userRole === "suministros") {
     redirect("/dashboard/suministros");
   }
 
-  if (profile.role === "RNU") {
+  if (userRole === "rnu") {
     redirect("/dashboard/rnu");
   }
 
-  /*
-   * Último fallback.
-   */
+  // ==========================================
+  // 14. ÚLTIMO FALLBACK
+  // ==========================================
+
   redirect("/dashboard/accesos");
 }

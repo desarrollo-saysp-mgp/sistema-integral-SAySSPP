@@ -150,6 +150,7 @@ const DIRECTORES_READONLY_EMAILS = [
   "arqbelliardolucas@gmail.com",
   "waldaquin84@gmail.com",
   "direcciongirsupico@gmail.com",
+  "matiascvet@gmail.com",
 ];
 
 const canAccessTaller = (profile: {

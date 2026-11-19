@@ -40,6 +40,7 @@ import {
 
 const DIRECTOR_GIRSU_EMAIL = "direcciongirsupico@gmail.com";
 const LUCAS_BELLIARDO_EMAIL = "arqbelliardolucas@gmail.com";
+const MATIAS_CALMELS_EMAIL = "matiascvet@gmail.com";
 const DIRECTOR_SERVICIOS_PUBLICOS_EMAIL = "waldaquin84@gmail.com";
 
 const normalizeEmail = (value: unknown) =>
@@ -103,13 +104,17 @@ export function UserForm({
   const isDirectorServiciosPublicos =
     normalizeEmail(user?.email) === DIRECTOR_SERVICIOS_PUBLICOS_EMAIL;
 
+  const isMatiasCalmels = normalizeEmail(user?.email) === MATIAS_CALMELS_EMAIL;
+
   const specialDisplayRole = isDirectorGirsu
     ? "DirectorGIRSU"
     : isLucasBelliardo
       ? "DirectorArbolado"
       : isDirectorServiciosPublicos
         ? "DirectorServiciosPublicos"
-        : null;
+        : isMatiasCalmels
+          ? "DirectorZyV"
+          : null;
 
   const [formData, setFormData] = useState<FormState>({
 
